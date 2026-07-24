@@ -16,6 +16,41 @@ Le costanti di corsa sulle basi sono in `TUNING` (`constants.ts`): probabilità 
 GIDP, di segnare dalla terza su out, di segnare dalla seconda su singolo, di
 arrivare in terza dalla prima, bonus/penalità di platoon, affaticamento.
 
+## Tattiche interattive (Fase 1) e loro calibrazione
+
+Il motore è una **macchina a stati** (`LiveGame` in `game.ts`): `simulateGame`
+non è che `quickSim` con la CPU su entrambe le squadre. Il turno "swing" consuma
+l'RNG **esattamente** come in Fase 0 (cambio-lanciatore automatico → `resolveAtBat`
+→ `applyEvent`), quindi la calibrazione è intatta. Le tattiche manuali consumano
+RNG solo quando vengono scelte: non entrano mai nella simulazione CPU e non
+spostano gli aggregati di lega.
+
+- **Rubata** (`stealSuccessProb`, `attemptSteal`) — attiva **Velocità** del
+  corridore, **Braccio** del ricevitore e **Difesa/hold** del lanciatore:
+  `p = base + speed·perSpeed − arm·perArm − hold·perHold − (rubata di 3a? pen.)`,
+  in sigma `(rating−50)/10`, poi clamp `[min,max]`. Costanti in `TUNING.steal`
+  (default: base .70, riuscita ~95% per il fulmine contro braccio debole, ~43%
+  per il lento contro braccio forte). La rubata **non consuma il turno**.
+- **Bunt di sacrificio** (`buntOutcomeProbs`, `buntAtBat`) — attiva la **Difesa**
+  del lanciatore e la **Velocità** del battitore. Ripartizione dell'esito:
+  `hit` (bunt valido) / `fail` (corridore di testa eliminato) / `pop` /
+  `sac` (riuscito, il resto). Costanti in `TUNING.bunt`. Il sacrificio riuscito
+  **non addebita l'AB** (non intacca la media); il bunt valido sì (è una hit).
+- **Base intenzionale** (`intentionalWalk`) — avanzamento forzato deterministico
+  (nessun RNG); conta come BB.
+- **Cambio lanciatore** (`changePitcher` manuale / `autoManagePitcher` per la CPU)
+  — porta in pedana un rilievo e ne registra `enteredDiff` (per i save).
+
+## Decisioni W/L/SV (Fase 1)
+
+Coerenti col principio "**ERA e W sono risultati**": la **W** va al lanciatore in
+pedana quando la sua squadra prende il **vantaggio decisivo** (ultimo cambio di
+leadership che regge fino alla fine) → dipende dal supporto offensivo, non
+dall'ERA. La **L** va al lanciatore avversario che ha concesso quel run. Un
+partente vincente che **non completa 5 inning** (`outs < 15`) cede la W al rilievo
+più efficace (più out, poi meno ER). Il **save** va al finisher della vincente,
+diverso dal vincitore, entrato con vantaggio 1-3. Vedi `computeDecisions`.
+
 ## Epoca target: "alta offesa anni '90/2000"
 
 Non la MLB spenta recente. Aggregati di lega desiderati (misurati su molte

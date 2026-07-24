@@ -40,8 +40,11 @@ sessione tocca quell'argomento (vedi la mappa in fondo).
 
 ## Stato attuale
 
-**Fase 0 completata** (motore + UI base) e **live**:
-https://st80dev.github.io/MLBSim/ — dettaglio in `docs/roadmap-and-status.md`.
+**Fase 0** (motore + UI base) **live**: https://st80dev.github.io/MLBSim/.
+**Fase 1 — turno interattivo (nucleo) completata**: motore unificato a stati,
+gestisci una squadra vs CPU (Swing/Bunt/Rubata + cambio lanciatore/base
+intenzionale), quick-sim, decisioni W/L/SV. Dettaglio in
+`docs/roadmap-and-status.md`.
 
 ## Mappa della documentazione — leggi SOLO ciò che serve
 

@@ -10,17 +10,24 @@
     score/cronaca/rose. Test verdi (determinismo + realismo + cime).
   - Calibrazione "alta offesa anni '90/2000" (vedi `docs/engine-calibration.md`).
 
-## Roadmap
+- **Fase 1 — Turno interattivo: COMPLETATA (nucleo).**
+  - Motore **unificato a stati** (`createLiveGame` + azioni + `quickSim`):
+    `simulateGame` è ora un caso particolare CPU-vs-CPU dello stesso codice, con
+    **l'ordine dell'RNG preservato** (calibrazione Fase 0 invariata).
+  - **Gestisci una squadra vs CPU**, decidendo ai tuoi turni. Toggle
+    **quick-sim** ("Salta a fine partita").
+  - Tattiche del **nucleo**: in attacco Swing / Bunt di sacrificio / Rubata; in
+    difesa cambio lanciatore manuale e base intenzionale.
+  - Doti prima dormienti ora **attive**: Velocità del corridore + Braccio del
+    ricevitore + Difesa (hold) del lanciatore sulle rubate; Difesa del lanciatore
+    sui bunt.
+  - **Decisioni W/L/SV** tracciate (pitcher of record sul vantaggio decisivo,
+    regola dei 5 inning del partente, save al finisher con vantaggio ≤3). Le W
+    restano guidate dal **supporto offensivo**, non dall'ERA.
+  - **Rimandato** a una rifinitura successiva (non nel nucleo): Hit-and-run,
+    Pinch-hit, difesa avanzata (interni dentro).
 
-- **Fase 1 — Turno interattivo** (il cuore giocabile)
-  - Gestisci una squadra e decidi **ad ogni turno**: Swing / Bunt / Rubata /
-    Hit-and-run / Pinch-hit; in difesa: cambio lanciatore, base intenzionale,
-    difesa avanzata.
-  - Toggle **quick-sim** per macinare le partite veloci.
-  - Attiva le doti finora "dormienti": Velocità/Braccio (rubate), Difesa
-    lanciatore (bunt/ritorni/tenere i corridori).
-  - Inizia a **tracciare le decisioni W/L/SV** dei lanciatori (W guidate dal
-    supporto offensivo, non dall'ERA).
+## Roadmap
 - **Fase 2 — Costruzione squadra & import storico**
   - Editor di lineup/rotazione; import di **giocatori e franchigie storiche
     reali** (database Lahman, pubblico).
