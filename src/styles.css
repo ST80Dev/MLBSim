@@ -1745,3 +1745,201 @@ table {
   font-size: 22px;
   line-height: 1.05;
 }
+
+/* =========================================================================
+   Ritocchi: barra azioni compatta su una riga, pannello calibrazione campo,
+   celle "forza squadra" a riquadro (sigla sopra / valore sotto).
+   ========================================================================= */
+
+/* --- Barra azioni compatta (una riga, bassa) -------------------------- */
+.btn.sm {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.actionbar.compact {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 7px 12px;
+}
+.actionbar.compact .turn-tag {
+  align-self: center;
+  margin: 0;
+  white-space: nowrap;
+}
+/* Piu' larghezza (una riga di comandi) e piu' spazio a casa base */
+.controls-overlay {
+  width: max-content;
+  max-width: 92%;
+}
+.controls-overlay .actionbar.compact {
+  margin: 0 auto;
+}
+
+/* --- Celle forza squadra (riquadro: sigla sopra, valore sotto) --------- */
+.ts-id {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ts-name {
+  margin: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.ts-strength {
+  gap: 6px;
+  margin-top: 0;
+}
+.ts-str {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 42px;
+  padding: 3px 6px 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(8, 14, 26, 0.4);
+}
+.ts-str-k {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.ts-str-v {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 15px;
+  color: #fff;
+  min-width: 26px;
+  text-align: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* --- Pannello di calibrazione campo (drawer a destra) ------------------ */
+.cal-panel {
+  position: fixed;
+  top: 60px;
+  right: 12px;
+  width: 300px;
+  max-height: calc(100vh - 76px);
+  overflow-y: auto;
+  z-index: 30;
+  padding: 10px 12px 14px;
+  background: rgba(8, 14, 26, 0.97);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cal-title {
+  font-weight: 800;
+  font-size: 14px;
+}
+.cal-note {
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(79, 157, 255, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 7px;
+  margin-bottom: 8px;
+}
+.cal-note code,
+.cal-hint code {
+  color: var(--accent);
+  font-family: var(--mono);
+}
+.cal-group {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  margin: 10px 0 5px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2px;
+}
+.cal-row {
+  margin-bottom: 7px;
+}
+.cal-row-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.cal-label {
+  color: var(--muted);
+}
+.cal-val {
+  font-family: var(--mono);
+  font-weight: 800;
+}
+.cal-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-ctrl input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+.cal-step {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  color: var(--text);
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 800;
+  line-height: 1;
+}
+.cal-step:hover {
+  border-color: var(--accent);
+}
+.cal-actions {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+.cal-actions .btn {
+  flex: 1;
+}
+.cal-out {
+  width: 100%;
+  height: 54px;
+  resize: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.35;
+  color: #c3cfe6;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px;
+}
+.cal-hint {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 5px;
+}

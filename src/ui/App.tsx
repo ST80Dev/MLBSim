@@ -21,6 +21,14 @@ import type { Alignment } from '../engine/positions';
 import { teamStrength } from '../engine/strength';
 import { formatIp } from '../engine/boxscore';
 import { generateMatchup } from '../data/generator';
+import { stadiumImage } from '../data/stadiumImages';
+import {
+  getCalibration,
+  DEFAULT_CALIBRATION,
+  CALIBRATION_RANGE,
+  CALIBRATION_LABEL,
+} from '../data/stadiumCalibration';
+import type { FieldCalibration } from '../data/stadiumCalibration';
 import { gameSeed, newRandomSeed, ratingColor, stars } from './format';
 import { Diamond } from './Diamond';
 import {
@@ -41,6 +49,7 @@ export function App() {
   const [view, setView] = useState<View>('game');
   const [statsMode, setStatsMode] = useState<StatsMode>('game');
   const [recapOpen, setRecapOpen] = useState(false);
+  const [calOpen, setCalOpen] = useState(false);
   const [, forceTick] = useReducer((x) => x + 1, 0);
   // Schieramenti difensivi modificabili nella scheda "Rose" (id -> ruolo attivo).
   // Strumento di editing del roster; azzerati quando cambiano le squadre.
@@ -63,6 +72,13 @@ export function App() {
   }
   const live = ref.current.game;
   const teams = ref.current.teams;
+  // Calibrazione dei marker sulla foto-stadio (perno = casa base). E' per stadio
+  // di casa: si reimposta ai valori salvati quando cambia la squadra di casa.
+  const homeId = teams.home.id;
+  const [cal, setCal] = useState<FieldCalibration>(() => getCalibration(homeId));
+  useEffect(() => {
+    setCal(getCalibration(homeId));
+  }, [homeId]);
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
@@ -119,6 +135,15 @@ export function App() {
         </nav>
 
         <div className="actions">
+          {view === 'game' && (
+            <button
+              className={calOpen ? 'btn active' : 'btn'}
+              onClick={() => setCalOpen((o) => !o)}
+              title="Calibra i marker del campo sulla foto-stadio"
+            >
+              🎯 Calibra campo
+            </button>
+          )}
           <button className="btn" onClick={() => setRecapOpen(true)}>
             Recap partita
           </button>
@@ -147,7 +172,7 @@ export function App() {
           />
 
           <div className="gamefield">
-            <Diamond home={result.home} away={result.away} background bases={sit.bases} />
+            <Diamond home={result.home} away={result.away} background bases={sit.bases} cal={cal} />
 
             <div className="cronaca-corner left">
               <CronacaTeam result={result} side="away" />
@@ -220,6 +245,16 @@ export function App() {
           statsMode={statsMode}
           setStatsMode={setStatsMode}
           onClose={() => setRecapOpen(false)}
+        />
+      )}
+
+      {view === 'game' && calOpen && (
+        <CalibrationPanel
+          team={teams.home}
+          hasPhoto={!!stadiumImage(homeId)}
+          cal={cal}
+          setCal={setCal}
+          onClose={() => setCalOpen(false)}
         />
       )}
     </div>
@@ -383,6 +418,125 @@ function StatsToggle({ mode, setMode }: { mode: StatsMode; setMode: (m: StatsMod
   );
 }
 
+// ---------------------------------------------------------------------------
+// Pannello di calibrazione: sposta/allarga/allunga i marker rispetto alla foto
+// di sfondo (perno = casa base) e zooma/pan la foto. Live, con output JSON da
+// incollare in src/data/stadiumCalibration.ts. Solo UI, non tocca il motore.
+// ---------------------------------------------------------------------------
+
+const CAL_FIELD_KEYS: (keyof FieldCalibration)[] = ['homeX', 'homeY', 'spreadX', 'depthY', 'fan'];
+const CAL_PHOTO_KEYS: (keyof FieldCalibration)[] = ['bgZoom', 'bgX', 'bgY'];
+
+function fmtCalNum(v: number, step: number): string {
+  return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
+}
+
+function calEntry(id: string, cal: FieldCalibration): string {
+  const r0 = (n: number) => Math.round(n);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return `  ${id}: { homeX: ${r0(cal.homeX)}, homeY: ${r0(cal.homeY)}, spreadX: ${r2(
+    cal.spreadX,
+  )}, depthY: ${r2(cal.depthY)}, fan: ${r2(cal.fan)}, bgZoom: ${r2(cal.bgZoom)}, bgX: ${r0(
+    cal.bgX,
+  )}, bgY: ${r0(cal.bgY)} },`;
+}
+
+function CalibrationPanel({
+  team,
+  hasPhoto,
+  cal,
+  setCal,
+  onClose,
+}: {
+  team: Team;
+  hasPhoto: boolean;
+  cal: FieldCalibration;
+  setCal: (c: FieldCalibration) => void;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const set = (k: keyof FieldCalibration, val: number) => {
+    const rng = CALIBRATION_RANGE[k];
+    const clamped = Math.max(rng.min, Math.min(rng.max, val));
+    const dec = rng.step >= 1 ? 0 : 2;
+    const p = Math.pow(10, dec);
+    setCal({ ...cal, [k]: Math.round(clamped * p) / p });
+    setCopied(false);
+  };
+
+  const entry = calEntry(team.id, cal);
+  const copy = () => {
+    navigator.clipboard?.writeText(entry).then(
+      () => setCopied(true),
+      () => setCopied(false),
+    );
+  };
+
+  const row = (k: keyof FieldCalibration) => {
+    const rng = CALIBRATION_RANGE[k];
+    const v = cal[k];
+    const nudge = rng.step * 10;
+    return (
+      <div className="cal-row" key={k}>
+        <div className="cal-row-top">
+          <span className="cal-label">{CALIBRATION_LABEL[k]}</span>
+          <span className="cal-val">{fmtCalNum(v, rng.step)}</span>
+        </div>
+        <div className="cal-ctrl">
+          <button className="cal-step" onClick={() => set(k, v - nudge)} aria-label="diminuisci">
+            −
+          </button>
+          <input
+            type="range"
+            min={rng.min}
+            max={rng.max}
+            step={rng.step}
+            value={v}
+            onChange={(e) => set(k, parseFloat(e.target.value))}
+          />
+          <button className="cal-step" onClick={() => set(k, v + nudge)} aria-label="aumenta">
+            +
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="cal-panel">
+      <div className="cal-head">
+        <span className="cal-title">🎯 Calibra campo · {team.abbrev}</span>
+        <button className="modal-close" onClick={onClose} aria-label="Chiudi">
+          ✕
+        </button>
+      </div>
+      {!hasPhoto && (
+        <div className="cal-note">
+          Nessuna foto per questo stadio: stai calibrando sul campo generato. Aggiungi
+          <code> public/stadiums/{team.id}.jpg</code> per lo sfondo reale.
+        </div>
+      )}
+      <div className="cal-group">Campo (perno = casa base)</div>
+      {CAL_FIELD_KEYS.map(row)}
+      <div className="cal-group">Foto di sfondo</div>
+      {CAL_PHOTO_KEYS.map(row)}
+      <div className="cal-actions">
+        <button className="btn" onClick={() => setCal({ ...DEFAULT_CALIBRATION })}>
+          Azzera
+        </button>
+        <button className="btn primary" onClick={copy}>
+          {copied ? 'Copiato ✓' : 'Copia JSON'}
+        </button>
+      </div>
+      <textarea className="cal-out" readOnly value={entry} onFocus={(e) => e.target.select()} />
+      <div className="cal-hint">
+        Incolla la riga in <code>STADIUM_CALIBRATION</code> (src/data/stadiumCalibration.ts).
+      </div>
+    </div>
+  );
+}
+
 function ActionBar({
   live,
   sit,
@@ -393,46 +547,56 @@ function ActionBar({
   act: (fn: (g: LiveGame) => void) => void;
 }) {
   return sit.controlledBatting ? (
-    <div className="card actionbar">
-      <div className="turn-tag off">Tocca a te — attacco · {sit.battingTeam.abbrev}</div>
-      <div className="btn-row">
-        <button className="btn primary big" onClick={() => act((g) => playOffense(g, 'swing'))}>
-          Battuta
-        </button>
+    <div className="card actionbar compact">
+      <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
+      <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
+        Battuta
+      </button>
+      <button
+        className="btn sm"
+        disabled={!sit.canBunt}
+        onClick={() => act((g) => playOffense(g, 'bunt'))}
+        title={sit.canBunt ? 'Bunt di sacrificio' : 'Bunt inutile con 2 out'}
+      >
+        Bunt
+      </button>
+      {sit.stealFrom.includes(1) && (
         <button
-          className="btn big"
-          disabled={!sit.canBunt}
-          onClick={() => act((g) => playOffense(g, 'bunt'))}
-          title={sit.canBunt ? 'Bunt di sacrificio' : 'Bunt inutile con 2 out'}
+          className="btn sm"
+          onClick={() => act((g) => attemptSteal(g, 1))}
+          title="La rubata non consuma il turno: puoi tentarla e poi battere"
         >
-          Bunt
+          Ruba 2ª
         </button>
-        {sit.stealFrom.includes(1) && (
-          <button className="btn big" onClick={() => act((g) => attemptSteal(g, 1))}>
-            Ruba la 2ª
-          </button>
-        )}
-        {sit.stealFrom.includes(2) && (
-          <button className="btn big" onClick={() => act((g) => attemptSteal(g, 2))}>
-            Ruba la 3ª
-          </button>
-        )}
-      </div>
-      <div className="hint">La rubata non consuma il turno: puoi tentarla e poi battere.</div>
+      )}
+      {sit.stealFrom.includes(2) && (
+        <button
+          className="btn sm"
+          onClick={() => act((g) => attemptSteal(g, 2))}
+          title="La rubata non consuma il turno: puoi tentarla e poi battere"
+        >
+          Ruba 3ª
+        </button>
+      )}
     </div>
   ) : (
-    <div className="card actionbar">
-      <div className="turn-tag def">Tocca a te — difesa · {sit.fieldingTeam.abbrev}</div>
-      <div className="btn-row">
-        <button className="btn primary big" onClick={() => act((g) => playOffense(g, 'swing'))}>
-          Lancia ▸
-        </button>
-        <button className="btn big" onClick={() => act((g) => intentionalWalk(g))}>
-          Base intenzionale
-        </button>
-        <PitcherChange live={live} act={act} />
-      </div>
-      <div className="hint">La CPU decide la battuta: premi «Lancia» per risolvere.</div>
+    <div className="card actionbar compact">
+      <span className="turn-tag def">DIFESA · {sit.fieldingTeam.abbrev}</span>
+      <button
+        className="btn primary sm"
+        onClick={() => act((g) => playOffense(g, 'swing'))}
+        title="La CPU decide la battuta: premi «Lancia» per risolvere"
+      >
+        Lancia ▸
+      </button>
+      <button
+        className="btn sm"
+        onClick={() => act((g) => intentionalWalk(g))}
+        title="Base intenzionale"
+      >
+        Base int.
+      </button>
+      <PitcherChange live={live} act={act} />
     </div>
   );
 }
@@ -450,8 +614,8 @@ function PitcherChange({
   if (relievers.length === 0) return null;
   return (
     <div className="pchange">
-      <button className="btn" onClick={() => setOpen((o) => !o)}>
-        Cambio lanciatore ▾
+      <button className="btn sm" onClick={() => setOpen((o) => !o)}>
+        Cambio lanc. ▾
       </button>
       {open && (
         <div className="pchange-menu">

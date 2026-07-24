@@ -20,13 +20,13 @@ export const FRANCHISES: Franchise[] = [
   { id: 'BAL', abbrev: 'BAL', city: 'Baltimore', name: 'Baltimore Orioles', league: 'AL', division: 'E', primaryColor: '#DF4601', secondaryColor: '#000000', ballpark: 'Oriole Park at Camden Yards' },
   { id: 'BOS', abbrev: 'BOS', city: 'Boston', name: 'Boston Red Sox', league: 'AL', division: 'E', primaryColor: '#BD3039', secondaryColor: '#0C2340', ballpark: 'Fenway Park' },
   { id: 'NYY', abbrev: 'NYY', city: 'New York', name: 'New York Yankees', league: 'AL', division: 'E', primaryColor: '#0C2340', secondaryColor: '#C4CED4', ballpark: 'Yankee Stadium' },
-  { id: 'TB', abbrev: 'TB', city: 'Tampa Bay', name: 'Tampa Bay Rays', league: 'AL', division: 'E', primaryColor: '#092C5C', secondaryColor: '#8FBCE6', ballpark: 'Tropicana Field' },
+  { id: 'TBR', abbrev: 'TBR', city: 'Tampa Bay', name: 'Tampa Bay Rays', league: 'AL', division: 'E', primaryColor: '#092C5C', secondaryColor: '#8FBCE6', ballpark: 'Tropicana Field' },
   { id: 'TOR', abbrev: 'TOR', city: 'Toronto', name: 'Toronto Blue Jays', league: 'AL', division: 'E', primaryColor: '#134A8E', secondaryColor: '#1D2D5C', ballpark: 'Rogers Centre' },
   // AL Central
   { id: 'CWS', abbrev: 'CWS', city: 'Chicago', name: 'Chicago White Sox', league: 'AL', division: 'C', primaryColor: '#27251F', secondaryColor: '#C4CED4', ballpark: 'Guaranteed Rate Field' },
   { id: 'CLE', abbrev: 'CLE', city: 'Cleveland', name: 'Cleveland Guardians', league: 'AL', division: 'C', primaryColor: '#0C2340', secondaryColor: '#E31937', ballpark: 'Progressive Field' },
   { id: 'DET', abbrev: 'DET', city: 'Detroit', name: 'Detroit Tigers', league: 'AL', division: 'C', primaryColor: '#0C2340', secondaryColor: '#FA4616', ballpark: 'Comerica Park' },
-  { id: 'KC', abbrev: 'KC', city: 'Kansas City', name: 'Kansas City Royals', league: 'AL', division: 'C', primaryColor: '#004687', secondaryColor: '#BD9B60', ballpark: 'Kauffman Stadium' },
+  { id: 'KCR', abbrev: 'KCR', city: 'Kansas City', name: 'Kansas City Royals', league: 'AL', division: 'C', primaryColor: '#004687', secondaryColor: '#BD9B60', ballpark: 'Kauffman Stadium' },
   { id: 'MIN', abbrev: 'MIN', city: 'Minnesota', name: 'Minnesota Twins', league: 'AL', division: 'C', primaryColor: '#002B5C', secondaryColor: '#D31145', ballpark: 'Target Field' },
   // AL West
   { id: 'HOU', abbrev: 'HOU', city: 'Houston', name: 'Houston Astros', league: 'AL', division: 'W', primaryColor: '#002D62', secondaryColor: '#EB6E1F', ballpark: 'Minute Maid Park' },
@@ -50,8 +50,8 @@ export const FRANCHISES: Franchise[] = [
   { id: 'ARI', abbrev: 'ARI', city: 'Arizona', name: 'Arizona Diamondbacks', league: 'NL', division: 'W', primaryColor: '#A71930', secondaryColor: '#E3D4AD', ballpark: 'Chase Field' },
   { id: 'COL', abbrev: 'COL', city: 'Colorado', name: 'Colorado Rockies', league: 'NL', division: 'W', primaryColor: '#333366', secondaryColor: '#C4CED4', ballpark: 'Coors Field' },
   { id: 'LAD', abbrev: 'LAD', city: 'Los Angeles', name: 'Los Angeles Dodgers', league: 'NL', division: 'W', primaryColor: '#005A9C', secondaryColor: '#EF3E42', ballpark: 'Dodger Stadium' },
-  { id: 'SD', abbrev: 'SD', city: 'San Diego', name: 'San Diego Padres', league: 'NL', division: 'W', primaryColor: '#2F241D', secondaryColor: '#FFC425', ballpark: 'Petco Park' },
-  { id: 'SF', abbrev: 'SF', city: 'San Francisco', name: 'San Francisco Giants', league: 'NL', division: 'W', primaryColor: '#FD5A1E', secondaryColor: '#27251F', ballpark: 'Oracle Park' },
+  { id: 'SDP', abbrev: 'SDP', city: 'San Diego', name: 'San Diego Padres', league: 'NL', division: 'W', primaryColor: '#2F241D', secondaryColor: '#FFC425', ballpark: 'Petco Park' },
+  { id: 'SFG', abbrev: 'SFG', city: 'San Francisco', name: 'San Francisco Giants', league: 'NL', division: 'W', primaryColor: '#FD5A1E', secondaryColor: '#27251F', ballpark: 'Oracle Park' },
 ];
 
 export function franchiseById(id: string): Franchise | undefined {
