@@ -3,9 +3,12 @@ import type { Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
 import { simulateGame } from '../engine/game';
 import { batterOverall, pitcherOverall } from '../engine/ratings';
+import { teamStrength } from '../engine/strength';
+import type { TeamStrength } from '../engine/strength';
 import { formatIp, formatAvg } from '../engine/boxscore';
 import { generateMatchup } from '../data/generator';
 import { gameSeed, newRandomSeed, ratingColor, stars, teamAccent } from './format';
+import { Diamond } from './Diamond';
 
 type View = 'game' | 'roster';
 
@@ -57,6 +60,8 @@ export function App() {
 
       {view === 'game' ? (
         <>
+          <Diamond home={result.home} away={result.away} />
+          <StrengthPanel away={result.away} home={result.home} />
           <LineScore result={result} />
           <div className="grid2">
             <BoxScore team={result.away} stats={result.awayStats} />
@@ -99,9 +104,61 @@ function TeamBadge({ team, size = 46 }: { team: Team; size?: number }) {
   );
 }
 
-function teamOffenseOverall(team: Team): number {
-  const sum = team.lineup.reduce((a, b) => a + batterOverall(b.ratings), 0);
-  return Math.round(sum / team.lineup.length);
+function strengthColor(v: number): string {
+  const t = Math.max(0, Math.min(1, (v - 30) / 45));
+  return `hsl(${Math.round(t * 125)} 60% 46%)`;
+}
+
+function StrengthPanel({ away, home }: { away: Team; home: Team }) {
+  const rows: { team: Team; s: TeamStrength }[] = [
+    { team: away, s: teamStrength(away) },
+    { team: home, s: teamStrength(home) },
+  ];
+  const cols: { key: keyof TeamStrength; label: string; title: string }[] = [
+    { key: 'total', label: 'TOT', title: 'Forza totale' },
+    { key: 'attack', label: 'ATT', title: 'Attacco' },
+    { key: 'defense', label: 'DIF', title: 'Difesa' },
+    { key: 'pitching', label: 'LAN', title: 'Lancio' },
+  ];
+  return (
+    <div className="card strength-card">
+      <div className="card-title">Forza squadre</div>
+      <table className="strength">
+        <thead>
+          <tr>
+            <th className="l">Squadra</th>
+            {cols.map((c) => (
+              <th key={c.key} title={c.title}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ team, s }) => (
+            <tr key={team.id}>
+              <td className="l">
+                <span className="pill" style={{ background: team.primaryColor }}>
+                  {team.abbrev}
+                </span>{' '}
+                {team.name}
+              </td>
+              {cols.map((c) => (
+                <td key={c.key}>
+                  <span
+                    className={c.key === 'total' ? 'str-val str-total' : 'str-val'}
+                    style={{ background: strengthColor(s[c.key]) }}
+                  >
+                    {s[c.key]}
+                  </span>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function Scoreboard({ result }: { result: GameResult }) {
@@ -140,7 +197,7 @@ function TeamScore({
       <div className="tinfo">
         <div className="tname">{team.name}</div>
         <div className="tsub">
-          {team.league} {team.division} · off. {teamOffenseOverall(team)}
+          {team.league} {team.division} · forza {teamStrength(team).total}
         </div>
       </div>
       <div className="runs">{score}</div>

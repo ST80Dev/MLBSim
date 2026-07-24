@@ -27,13 +27,20 @@ Caratteristiche (20-80)  ──derive──►  Statistiche di conteggio  ──
   - `game.ts` — macchina a stati della partita (inning, basi, out, punteggio,
     cambi lanciatore, walk-off, extra inning) + play-by-play.
   - `boxscore.ts` — righe di tabellino e formattazione (IP, media…).
+  - `strength.ts` — forza squadra (TOT/ATT/DIF/LAN) da lineup+bench+staff.
   - `index.ts` — barrel dell'API pubblica.
   - `__tests__/` — test Vitest (determinismo, realismo, cime di eccellenza).
 - `src/data/` — generazione procedurale e dati.
-  - `generator.ts` — genera giocatori/rose da caratteristiche + franchigie.
+  - `generator.ts` — genera giocatori/rose da caratteristiche + franchigie;
+    `makeNameFactory` pesca nomi per **origine** (peso ~ demografia MLB) evitando
+    doppioni di nome/cognome nella stessa squadra.
   - `franchises.ts` — le 30 franchigie MLB reali (dati fattuali).
-  - `names.ts` — pool di nomi per la generazione.
-- `src/ui/` — React: `App.tsx` (tutto in-file), `format.ts` (helper), `styles.css`.
+  - `names.ts` — pool di nomi per **origine** (`NAME_ORIGINS`: nordamericana,
+    latina, giapponese, coreana, varie) con pesi.
+  - `stadiumImages.ts` — override opzionale foto-stadio *in locale* (mappa vuota
+    di default; nessun asset ufficiale nel repo).
+- `src/ui/` — React: `App.tsx`, `Diamond.tsx` (campo/stadio generato),
+  `format.ts` (helper), `styles.css`.
 - `src/main.tsx` — entry React.
 
 ## Determinismo
