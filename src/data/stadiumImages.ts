@@ -54,9 +54,41 @@ export const STADIUM_IMAGES: Record<string, string> = {
   SFG: 'stadiums/SFG.jpg',
 };
 
-/** URL assoluto (con base path del sito) della foto-stadio, se presente. */
+/** Prepende il base path del sito a un percorso relativo di public/. */
+export function assetUrl(path: string): string {
+  return import.meta.env.BASE_URL + path;
+}
+
+/** URL assoluto (con base path del sito) della foto-stadio principale, se presente. */
 export function stadiumImage(teamId: string): string | undefined {
   const path = STADIUM_IMAGES[teamId];
   if (!path) return undefined;
-  return import.meta.env.BASE_URL + path;
+  return assetUrl(path);
+}
+
+// Suffissi delle varianti: `` = principale (`<ID>.jpg`), poi `<ID>2.jpg`,
+// `<ID>3.jpg`, … Il pannello di calibrazione prova a caricarle e mostra solo
+// quelle che esistono davvero nel repository.
+const VARIANT_SUFFIXES = ['', '2', '3', '4', '5'];
+
+export interface StadiumImageCandidate {
+  /** Etichetta leggibile (Principale / Alt 2 / …). */
+  label: string;
+  /** Percorso relativo dentro public/ (da salvare in `image`). */
+  path: string;
+  /** URL assoluto per caricare/provare l'immagine. */
+  url: string;
+}
+
+/** Candidate foto-stadio (principale + eventuali alternative XXX2/XXX3/…). */
+export function stadiumImageCandidates(teamId: string): StadiumImageCandidate[] {
+  const base = STADIUM_IMAGES[teamId];
+  if (!base) return [];
+  const dot = base.lastIndexOf('.');
+  const stem = dot < 0 ? base : base.slice(0, dot);
+  const ext = dot < 0 ? '.jpg' : base.slice(dot);
+  return VARIANT_SUFFIXES.map((s, i) => {
+    const path = `${stem}${s}${ext}`;
+    return { label: i === 0 ? 'Principale' : `Alt ${s}`, path, url: assetUrl(path) };
+  });
 }

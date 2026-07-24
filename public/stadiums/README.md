@@ -42,6 +42,13 @@ foto, usando **casa base come perno**:
 Copia il JSON prodotto e incollalo in `STADIUM_CALIBRATION`
 (`src/data/stadiumCalibration.ts`), una voce per stadio.
 
+### Foto alternative dello stesso stadio
+
+Puoi tenere più foto dello stesso stadio nominandole `<ID>2.jpg`, `<ID>3.jpg`
+(es. `SFG2.jpg`, `SFG3.jpg`). Il pannello di calibrazione le rileva da solo e
+mostra i chip **Principale / Alt 2 / Alt 3**: scegli quella che preferisci e la
+scelta viene salvata nel campo `image` del JSON di calibrazione.
+
 ## Avvertenze
 
 - **Deploy su GitHub Pages**: perché le immagini si vedano nel gioco pubblicato

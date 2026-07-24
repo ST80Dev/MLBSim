@@ -37,6 +37,9 @@ export interface FieldCalibration {
   bgX: number;
   /** Traslazione verticale della foto di sfondo (unita' viewBox). */
   bgY: number;
+  /** Foto scelta (percorso relativo in public/): se assente usa la principale
+   *  `<ID>.jpg`. Serve a preferire un'alternativa `<ID>2.jpg`/`<ID>3.jpg`/…. */
+  image?: string;
 }
 
 /** Valori neutri: identita' della proiezione (campo generato non deformato). */
@@ -51,9 +54,20 @@ export const DEFAULT_CALIBRATION: FieldCalibration = {
   bgY: 0,
 };
 
+/** Chiavi numeriche (con slider) della calibrazione — esclude `image`. */
+export type NumericCalKey =
+  | 'homeX'
+  | 'homeY'
+  | 'spreadX'
+  | 'depthY'
+  | 'fan'
+  | 'bgZoom'
+  | 'bgX'
+  | 'bgY';
+
 /** Limiti degli slider del pannello di calibrazione. */
 export const CALIBRATION_RANGE: Record<
-  keyof FieldCalibration,
+  NumericCalKey,
   { min: number; max: number; step: number }
 > = {
   homeX: { min: 200, max: 700, step: 1 },
@@ -67,7 +81,7 @@ export const CALIBRATION_RANGE: Record<
 };
 
 /** Etichette leggibili degli slider. */
-export const CALIBRATION_LABEL: Record<keyof FieldCalibration, string> = {
+export const CALIBRATION_LABEL: Record<NumericCalKey, string> = {
   homeX: 'Casa base — orizzontale',
   homeY: 'Casa base — verticale',
   spreadX: 'Larghezza campo',

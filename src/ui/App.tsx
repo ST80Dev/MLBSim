@@ -21,14 +21,15 @@ import type { Alignment } from '../engine/positions';
 import { teamStrength } from '../engine/strength';
 import { formatIp } from '../engine/boxscore';
 import { generateMatchup } from '../data/generator';
-import { stadiumImage } from '../data/stadiumImages';
+import { stadiumImage, stadiumImageCandidates } from '../data/stadiumImages';
+import type { StadiumImageCandidate } from '../data/stadiumImages';
 import {
   getCalibration,
   DEFAULT_CALIBRATION,
   CALIBRATION_RANGE,
   CALIBRATION_LABEL,
 } from '../data/stadiumCalibration';
-import type { FieldCalibration } from '../data/stadiumCalibration';
+import type { FieldCalibration, NumericCalKey } from '../data/stadiumCalibration';
 import { gameSeed, newRandomSeed, ratingColor, stars } from './format';
 import { Diamond } from './Diamond';
 import {
@@ -424,8 +425,8 @@ function StatsToggle({ mode, setMode }: { mode: StatsMode; setMode: (m: StatsMod
 // incollare in src/data/stadiumCalibration.ts. Solo UI, non tocca il motore.
 // ---------------------------------------------------------------------------
 
-const CAL_FIELD_KEYS: (keyof FieldCalibration)[] = ['homeX', 'homeY', 'spreadX', 'depthY', 'fan'];
-const CAL_PHOTO_KEYS: (keyof FieldCalibration)[] = ['bgZoom', 'bgX', 'bgY'];
+const CAL_FIELD_KEYS: NumericCalKey[] = ['homeX', 'homeY', 'spreadX', 'depthY', 'fan'];
+const CAL_PHOTO_KEYS: NumericCalKey[] = ['bgZoom', 'bgX', 'bgY'];
 
 function fmtCalNum(v: number, step: number): string {
   return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
@@ -434,11 +435,12 @@ function fmtCalNum(v: number, step: number): string {
 function calEntry(id: string, cal: FieldCalibration): string {
   const r0 = (n: number) => Math.round(n);
   const r2 = (n: number) => Math.round(n * 100) / 100;
+  const img = cal.image ? `, image: '${cal.image}'` : '';
   return `  ${id}: { homeX: ${r0(cal.homeX)}, homeY: ${r0(cal.homeY)}, spreadX: ${r2(
     cal.spreadX,
   )}, depthY: ${r2(cal.depthY)}, fan: ${r2(cal.fan)}, bgZoom: ${r2(cal.bgZoom)}, bgX: ${r0(
     cal.bgX,
-  )}, bgY: ${r0(cal.bgY)} },`;
+  )}, bgY: ${r0(cal.bgY)}${img} },`;
 }
 
 function CalibrationPanel({
@@ -456,12 +458,45 @@ function CalibrationPanel({
 }) {
   const [copied, setCopied] = useState(false);
 
-  const set = (k: keyof FieldCalibration, val: number) => {
+  // Rileva le varianti-foto presenti nel repo (principale + XXX2/XXX3/…):
+  // prova a caricarle e tiene solo quelle che esistono.
+  const [variants, setVariants] = useState<StadiumImageCandidate[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const cands = stadiumImageCandidates(team.id);
+    if (cands.length === 0) {
+      setVariants([]);
+      return;
+    }
+    Promise.all(
+      cands.map(
+        (c) =>
+          new Promise<boolean>((res) => {
+            const img = new Image();
+            img.onload = () => res(true);
+            img.onerror = () => res(false);
+            img.src = c.url;
+          }),
+      ),
+    ).then((oks) => {
+      if (alive) setVariants(cands.filter((_, i) => oks[i]));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [team.id]);
+
+  const set = (k: NumericCalKey, val: number) => {
     const rng = CALIBRATION_RANGE[k];
     const clamped = Math.max(rng.min, Math.min(rng.max, val));
     const dec = rng.step >= 1 ? 0 : 2;
     const p = Math.pow(10, dec);
     setCal({ ...cal, [k]: Math.round(clamped * p) / p });
+    setCopied(false);
+  };
+
+  const pickImage = (path: string | undefined) => {
+    setCal({ ...cal, image: path });
     setCopied(false);
   };
 
@@ -473,7 +508,7 @@ function CalibrationPanel({
     );
   };
 
-  const row = (k: keyof FieldCalibration) => {
+  const row = (k: NumericCalKey) => {
     const rng = CALIBRATION_RANGE[k];
     const v = cal[k];
     const nudge = rng.step * 10;
@@ -517,12 +552,36 @@ function CalibrationPanel({
           <code> public/stadiums/{team.id}.jpg</code> per lo sfondo reale.
         </div>
       )}
+      {variants.length > 1 && (
+        <>
+          <div className="cal-group">Foto dello stadio ({variants.length})</div>
+          <div className="cal-variants">
+            {variants.map((c, i) => {
+              const active = i === 0 ? !cal.image : cal.image === c.path;
+              return (
+                <button
+                  key={c.path}
+                  className={`cal-var${active ? ' active' : ''}`}
+                  title={c.path}
+                  onClick={() => pickImage(i === 0 ? undefined : c.path)}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
       <div className="cal-group">Campo (perno = casa base)</div>
       {CAL_FIELD_KEYS.map(row)}
       <div className="cal-group">Foto di sfondo</div>
       {CAL_PHOTO_KEYS.map(row)}
       <div className="cal-actions">
-        <button className="btn" onClick={() => setCal({ ...DEFAULT_CALIBRATION })}>
+        <button
+          className="btn"
+          onClick={() => setCal({ ...DEFAULT_CALIBRATION, image: cal.image })}
+          title="Azzera la geometria (mantiene la foto scelta)"
+        >
           Azzera
         </button>
         <button className="btn primary" onClick={copy}>

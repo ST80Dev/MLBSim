@@ -1943,3 +1943,27 @@ table {
   color: var(--muted);
   margin-top: 5px;
 }
+.cal-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.cal-var {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cal-var:hover {
+  border-color: var(--accent);
+}
+.cal-var.active {
+  background: rgba(79, 157, 255, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
