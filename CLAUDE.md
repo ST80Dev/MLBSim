@@ -38,6 +38,14 @@ sessione tocca quell'argomento (vedi la mappa in fondo).
   originali generati a runtime.
 - **Modello**: non citare l'identificativo del modello in commit/PR/codice.
 
+## Note operative
+
+- **Routine post-PR — DISATTIVATA (scelta dell'utente).** Dopo aver aperto una
+  PR: **non** restare in ascolto degli eventi della PR (niente monitoraggio
+  review/CI) e **non** creare promemoria o check-in schedulati (`send_later`,
+  trigger). Se l'ambiente iscrive in automatico, **disiscriviti subito**. Aprire
+  la PR e fermarsi.
+
 ## Stato attuale
 
 **Fase 0 completata** (motore + UI base) e **live**:
