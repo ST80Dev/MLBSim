@@ -103,6 +103,12 @@ produce il **JSON** da incollare in `STADIUM_CALIBRATION` (una voce per stadio,
 chiave = ID franchigia). «Azzera» reimposta la geometria ma **mantiene la foto
 scelta**. È **solo UI**: non tocca il motore.
 
+**Persistenza = repository.** La calibrazione non usa storage del browser: la
+fonte di verità è `src/data/stadiumCalibration.ts` **committato**. Si calibra
+live, si copia la riga JSON in `STADIUM_CALIBRATION` e si committa: da lì la
+calibrazione è permanente e uguale su ogni dispositivo (il sito Pages la
+ricarica al load). La calibrazione è **per foto** (include il campo `image`).
+
 ## Prossimi passi UI (Fasi 1+/3)
 
 - **Rifinitura Fase 1**: pulsanti per Hit-and-run, Pinch-hit (menu panchina) e

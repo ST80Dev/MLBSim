@@ -76,6 +76,7 @@ export function App() {
   // Calibrazione dei marker sulla foto-stadio (perno = casa base). E' per stadio
   // di casa: si reimposta ai valori salvati quando cambia la squadra di casa.
   const homeId = teams.home.id;
+  // Calibrazione dal repository (STADIUM_CALIBRATION, committato) o default.
   const [cal, setCal] = useState<FieldCalibration>(() => getCalibration(homeId));
   useEffect(() => {
     setCal(getCalibration(homeId));
@@ -307,10 +308,12 @@ function StatBar({
         score={result.final.away}
         involved={involvedFor(result, sit, 'away')}
         mode={statsMode}
+        setMode={setStatsMode}
         win={decided && sit.winner === 'away'}
       />
 
       <div className="statbar-center">
+        <LineScore result={result} />
         <div className="sb-situation">
           <span className="sb-inning">
             {arrow} {sit.inning}° <span className="sb-half">{halfLabel}</span>
@@ -318,8 +321,6 @@ function StatBar({
           <BaseDiamond bases={sit.bases} />
           <OutsDots outs={sit.outs} />
         </div>
-        <LineScore result={result} />
-        <StatsToggle mode={statsMode} setMode={setStatsMode} />
       </div>
 
       <TeamStatSide
@@ -328,6 +329,7 @@ function StatBar({
         score={result.final.home}
         involved={involvedFor(result, sit, 'home')}
         mode={statsMode}
+        setMode={setStatsMode}
         win={decided && sit.winner === 'home'}
       />
     </div>
@@ -340,6 +342,7 @@ function TeamStatSide({
   score,
   involved,
   mode,
+  setMode,
   win,
 }: {
   side: Side;
@@ -347,6 +350,7 @@ function TeamStatSide({
   score: number;
   involved: Involved;
   mode: StatsMode;
+  setMode: (m: StatsMode) => void;
   win: boolean;
 }) {
   const s = teamStrength(team);
@@ -385,6 +389,7 @@ function TeamStatSide({
           {involved.kind === 'batter' ? 'ALLA BATTUTA' : 'SUL MONTE'}
         </span>
         <span className="ts-pname">{player.name}</span>
+        <StatsToggle mode={mode} setMode={setMode} />
       </div>
       <div className="ts-line">
         {items.map((it) => (
@@ -590,7 +595,9 @@ function CalibrationPanel({
       </div>
       <textarea className="cal-out" readOnly value={entry} onFocus={(e) => e.target.select()} />
       <div className="cal-hint">
-        Incolla la riga in <code>STADIUM_CALIBRATION</code> (src/data/stadiumCalibration.ts).
+        La calibrazione è <b>per foto</b>. Incolla la riga in <code>STADIUM_CALIBRATION</code>
+        (<code>src/data/stadiumCalibration.ts</code>) e committala: resta nel <b>repository</b> e
+        viene richiamata ogni volta, su qualsiasi dispositivo.
       </div>
     </div>
   );
