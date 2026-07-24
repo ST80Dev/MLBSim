@@ -5,6 +5,16 @@ di un GM manager completo. Tutto ciò che segue è **design per fasi successive*
 (non ancora implementato in Fase 0); i campi base esistono già nel modello
 (`CareerProfile`: `age`, `potential`, `salary`, `retired`, `twoWay`).
 
+## Finestra di gestione (tra le partite di calendario)
+
+Il gioco gestisce **una sola squadra** (quella dell'utente). Roster e
+**lineup/rotazione** si modificano nel **tempo di gestione fra una partita e la
+successiva** in calendario (non durante la partita, non nella preview d'esibizione
+di Fase 0). Le altre squadre avanzano da sole, **simulate giorno per giorno**.
+
+Quindi la persistenza di formazione/schieramento appartiene a **questo** momento:
+si prepara la squadra, si conferma, si gioca la partita, poi di nuovo gestione.
+
 ## Stipendi
 
 - **Un solo stipendio annuale** per giocatore, **rinnovato automaticamente**.
