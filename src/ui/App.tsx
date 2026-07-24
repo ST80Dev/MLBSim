@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { Team } from '../engine/types';
+import type { Team, Batter, Position } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
 import { simulateGame } from '../engine/game';
 import { batterOverall, pitcherOverall } from '../engine/ratings';
+import { ratingsAtPosition } from '../engine/positions';
 import { teamStrength } from '../engine/strength';
 import type { TeamStrength } from '../engine/strength';
 import { formatIp, formatAvg } from '../engine/boxscore';
@@ -401,6 +402,38 @@ function Rating({ v }: { v: number }) {
   );
 }
 
+function LineupRow({ b }: { b: Batter }) {
+  const [pos, setPos] = useState<Position>(b.position);
+  const moved = pos !== b.position;
+  const r = ratingsAtPosition(b, pos);
+  // Etichetta del pulsante = il ruolo verso cui si passerebbe cliccando.
+  const target = moved ? b.position : b.secondaryPosition;
+  return (
+    <tr className={moved ? 'moved' : undefined}>
+      <td className="l">
+        <span className={moved ? 'pos moved' : 'pos'}>{pos}</span> {b.name}
+        {b.secondaryPosition && (
+          <button
+            className="posbtn"
+            title={moved ? 'Torna al ruolo naturale' : `Prova come ${b.secondaryPosition}`}
+            onClick={() => setPos(moved ? b.position : (b.secondaryPosition as Position))}
+          >
+            ⇄ {target}
+          </button>
+        )}
+      </td>
+      <td>{b.age}</td>
+      <Rating v={r.contact} />
+      <Rating v={r.power} />
+      <Rating v={r.eye} />
+      <Rating v={r.speed} />
+      <Rating v={r.fielding} />
+      <Rating v={r.arm} />
+      <td className="ovr">{stars(batterOverall(r))}</td>
+    </tr>
+  );
+}
+
 function RosterRatings({ team }: { team: Team }) {
   const rotation = team.rotation.slice(0, 3);
   return (
@@ -424,19 +457,7 @@ function RosterRatings({ team }: { team: Team }) {
         </thead>
         <tbody>
           {team.lineup.map((b) => (
-            <tr key={b.id}>
-              <td className="l">
-                <span className="pos">{b.position}</span> {b.name}
-              </td>
-              <td>{b.age}</td>
-              <Rating v={b.ratings.contact} />
-              <Rating v={b.ratings.power} />
-              <Rating v={b.ratings.eye} />
-              <Rating v={b.ratings.speed} />
-              <Rating v={b.ratings.fielding} />
-              <Rating v={b.ratings.arm} />
-              <td className="ovr">{stars(batterOverall(b.ratings))}</td>
-            </tr>
+            <LineupRow key={b.id} b={b} />
           ))}
         </tbody>
       </table>

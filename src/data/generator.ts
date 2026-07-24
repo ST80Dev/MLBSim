@@ -20,8 +20,12 @@ import {
 } from '../engine/ratings';
 import type { Rng } from '../engine/rng';
 import { makeRng } from '../engine/rng';
+import { SECONDARY_OPTIONS } from '../engine/positions';
 import { NAME_ORIGINS } from './names';
 import { FRANCHISES, Franchise } from './franchises';
+
+// Quota di giocatori (non tutti!) con una seconda posizione difensiva.
+const SECONDARY_CHANCE = 0.35;
 
 const LINEUP_POSITIONS: Position[] = [
   'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH',
@@ -127,16 +131,27 @@ function makePitcherRatings(rng: Rng, role: PitcherRole): PitcherRatings {
   };
 }
 
+function pickSecondary(rng: Rng, primary: Position): Position | undefined {
+  const opts = SECONDARY_OPTIONS[primary];
+  if (!opts || opts.length === 0) return undefined;
+  // Estraggo sempre (per non spostare lo stream RNG in modo condizionale),
+  // poi tengo la seconda posizione solo entro la quota voluta.
+  const choice = rng.pick(opts);
+  return rng.next() < SECONDARY_CHANCE ? choice : undefined;
+}
+
 function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position): Batter {
   const ratings = makeBatterRatings(rng, position);
   const stats = deriveBatterStats(ratings);
   const age = rng.int(21, 37);
   const ovr = batterOverall(ratings);
+  const secondaryPosition = pickSecondary(rng, position);
   return {
     id,
     name: names.next(),
     bats: batHand(rng),
     position,
+    ...(secondaryPosition ? { secondaryPosition } : {}),
     ratings,
     stats,
     age,

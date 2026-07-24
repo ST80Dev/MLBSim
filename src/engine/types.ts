@@ -84,7 +84,13 @@ export interface Batter extends CareerProfile {
   id: string;
   name: string;
   bats: Hand;
-  position: Position;
+  position: Position; // ruolo naturale (principale)
+  /**
+   * Seconda posizione difensiva, SOLO per alcuni giocatori. Se schierato qui, le
+   * doti difensive si rivalutano come se fosse il suo ruolo (vedi
+   * `ratingsAtPosition`). L'assenza = giocatore mono-ruolo.
+   */
+  secondaryPosition?: Position;
   ratings: BatterRatings;
   stats: BatterStats; // derivate dalle ratings
 }

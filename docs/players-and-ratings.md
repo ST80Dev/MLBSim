@@ -39,6 +39,24 @@ Raro giocatore che batte **e** lancia: flag `twoWay` in `CareerProfile`; porta
 entrambi i blocchi di caratteristiche e compare sia nel lineup sia nello staff.
 (Non ancora generato in Fase 0 — probabilità bassissima, ~1%.)
 
+## Seconda posizione difensiva
+
+Campo opzionale `secondaryPosition` sul `Batter`: **solo alcuni** giocatori
+(~35%) hanno un secondo ruolo, scelto da un insieme **fisso** di coppie
+plausibili (`SECONDARY_OPTIONS` in `src/engine/positions.ts`) — niente "ovunque".
+
+Se schierato nella seconda posizione, cambia **solo la difesa** (fielding): è una
+skill legata al ruolo, mentre contatto/potenza/occhio/velocità/braccio sono del
+giocatore e restano. La variazione dipende dalla *domanda difensiva* del ruolo
+(`ratingsAtPosition`): verso un ruolo più facile la difesa può anche salire,
+verso uno più duro scende, meno una penalità fissa di adattamento (fuori ruolo
+naturale). Quindi "variata, non per forza in calo".
+
+In UI (scheda *Rose & caratteristiche*) i giocatori idonei mostrano un toggle
+`⇄ <ruolo>`: al clic il ruolo attivo cambia e DIF/OVR si aggiornano subito, così
+si vede la variazione e si decide se tenerla. L'impatto sul motore di gioco
+arriverà quando la difesa conterà davvero (Fase 4).
+
 ## Derivazione caratteristiche → statistiche
 
 In `src/engine/ratings.ts`:
