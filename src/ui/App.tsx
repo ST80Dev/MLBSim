@@ -133,21 +133,41 @@ export function App() {
       </nav>
 
       {view === 'game' ? (
-        <>
-          {final ? (
-            <FinalBanner result={result} controlled={controlled} />
-          ) : (
-            <ControlPanel live={live} sit={sit} act={act} />
-          )}
-          <Diamond home={result.home} away={result.away} />
-          <StrengthPanel away={result.away} home={result.home} />
+        <div className="cockpit">
           <LineScore result={result} />
+
+          <div className="ck-main">
+            <LineupSide side="away" team={result.away} stats={result.awayStats} sit={sit} />
+            <div className="ck-center">
+              <Diamond home={result.home} away={result.away} />
+              {final ? (
+                <FinalBanner result={result} controlled={controlled} />
+              ) : (
+                <AtBatPanel sit={sit} />
+              )}
+            </div>
+            <LineupSide side="home" team={result.home} stats={result.homeStats} sit={sit} />
+          </div>
+
+          <div className="ck-bottom">
+            <div className="ck-actions">
+              {final ? (
+                <button className="btn primary big" onClick={() => setGameNo((g) => g + 1)}>
+                  Nuova partita ▸
+                </button>
+              ) : (
+                <ActionBar live={live} sit={sit} act={act} />
+              )}
+            </div>
+            <PlayByPlay result={result} />
+          </div>
+
+          <StrengthPanel away={result.away} home={result.home} />
           <div className="grid2">
             <BoxScore team={result.away} stats={result.awayStats} />
             <BoxScore team={result.home} stats={result.homeStats} />
           </div>
-          <PlayByPlay result={result} />
-        </>
+        </div>
       ) : (
         <div className="grid2">
           <RosterRatings
@@ -181,7 +201,47 @@ export function App() {
 // Pannello di controllo interattivo
 // ---------------------------------------------------------------------------
 
-function ControlPanel({
+function AtBatPanel({ sit }: { sit: LiveSituation }) {
+  const arrow = sit.half === 'top' ? '▲' : '▼';
+  const halfLabel = sit.half === 'top' ? 'attacco' : 'chiusura';
+  return (
+    <div className="card atbat">
+      <div className="situation">
+        <div className="inning-badge">
+          {arrow} {sit.inning}°
+          <span className="half">{halfLabel}</span>
+        </div>
+        <BaseDiamond bases={sit.bases} />
+        <OutsDots outs={sit.outs} />
+      </div>
+      <div className="matchup-mini">
+        <MiniPlayer
+          label={`Al piatto · ${sit.battingTeam.abbrev}`}
+          player={sit.batter}
+          ratings={[
+            ['CON', sit.batter.ratings.contact],
+            ['POT', sit.batter.ratings.power],
+            ['OCC', sit.batter.ratings.eye],
+            ['VEL', sit.batter.ratings.speed],
+          ]}
+        />
+        <div className="vs">vs</div>
+        <MiniPlayer
+          label={`In pedana · ${sit.fieldingTeam.abbrev}`}
+          player={sit.pitcher}
+          ratings={[
+            ['DOM', sit.pitcher.ratings.stuff],
+            ['CTR', sit.pitcher.ratings.control],
+            ['MOV', sit.pitcher.ratings.movement],
+            ['DIF', sit.pitcher.ratings.fielding],
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ActionBar({
   live,
   sit,
   act,
@@ -190,86 +250,47 @@ function ControlPanel({
   sit: LiveSituation;
   act: (fn: (g: LiveGame) => void) => void;
 }) {
-  const arrow = sit.half === 'top' ? '▲' : '▼';
-  const halfLabel = sit.half === 'top' ? 'attacco' : 'chiusura';
-  return (
-    <div className="card control">
-      <div className="control-top">
-        <div className="situation">
-          <div className="inning-badge">
-            {arrow} {sit.inning}°
-            <span className="half">{halfLabel}</span>
-          </div>
-          <BaseDiamond bases={sit.bases} />
-          <OutsDots outs={sit.outs} />
-        </div>
-        <div className="matchup-mini">
-          <MiniPlayer
-            label={`Al piatto · ${sit.battingTeam.abbrev}`}
-            player={sit.batter}
-            ratings={[
-              ['CON', sit.batter.ratings.contact],
-              ['POT', sit.batter.ratings.power],
-              ['VEL', sit.batter.ratings.speed],
-            ]}
-          />
-          <MiniPlayer
-            label={`In pedana · ${sit.fieldingTeam.abbrev}`}
-            player={sit.pitcher}
-            ratings={[
-              ['DOM', sit.pitcher.ratings.stuff],
-              ['CTR', sit.pitcher.ratings.control],
-              ['DIF', sit.pitcher.ratings.fielding],
-            ]}
-          />
-        </div>
+  return sit.controlledBatting ? (
+    <div className="card actionbar">
+      <div className="turn-tag off">Tocca a te — attacco · {sit.battingTeam.abbrev}</div>
+      <div className="btn-row">
+        <button className="btn primary big" onClick={() => act((g) => playOffense(g, 'swing'))}>
+          Battuta
+        </button>
+        <button
+          className="btn big"
+          disabled={!sit.canBunt}
+          onClick={() => act((g) => playOffense(g, 'bunt'))}
+          title={sit.canBunt ? 'Bunt di sacrificio' : 'Bunt inutile con 2 out'}
+        >
+          Bunt
+        </button>
+        {sit.stealFrom.includes(1) && (
+          <button className="btn big" onClick={() => act((g) => attemptSteal(g, 1))}>
+            Ruba la 2ª
+          </button>
+        )}
+        {sit.stealFrom.includes(2) && (
+          <button className="btn big" onClick={() => act((g) => attemptSteal(g, 2))}>
+            Ruba la 3ª
+          </button>
+        )}
       </div>
-
-      {sit.controlledBatting ? (
-        <div className="control-actions">
-          <div className="turn-tag off">Tocca a te — attacco</div>
-          <div className="btn-row">
-            <button className="btn primary" onClick={() => act((g) => playOffense(g, 'swing'))}>
-              Battuta
-            </button>
-            <button
-              className="btn"
-              disabled={!sit.canBunt}
-              onClick={() => act((g) => playOffense(g, 'bunt'))}
-              title={sit.canBunt ? 'Bunt di sacrificio' : 'Bunt inutile con 2 out'}
-            >
-              Bunt
-            </button>
-            {sit.stealFrom.includes(1) && (
-              <button className="btn" onClick={() => act((g) => attemptSteal(g, 1))}>
-                Ruba la 2ª
-              </button>
-            )}
-            {sit.stealFrom.includes(2) && (
-              <button className="btn" onClick={() => act((g) => attemptSteal(g, 2))}>
-                Ruba la 3ª
-              </button>
-            )}
-          </div>
-          <div className="hint">
-            La rubata non consuma il turno: puoi tentarla e poi battere.
-          </div>
-        </div>
-      ) : (
-        <div className="control-actions">
-          <div className="turn-tag def">Tocca a te — difesa</div>
-          <div className="btn-row">
-            <button className="btn primary" onClick={() => act((g) => playOffense(g, 'swing'))}>
-              Lancia ▸
-            </button>
-            <button className="btn" onClick={() => act((g) => intentionalWalk(g))}>
-              Base intenzionale
-            </button>
-            <PitcherChange live={live} act={act} />
-          </div>
-          <div className="hint">La CPU decide la battuta: premi «Lancia» per risolvere.</div>
-        </div>
-      )}
+      <div className="hint">La rubata non consuma il turno: puoi tentarla e poi battere.</div>
+    </div>
+  ) : (
+    <div className="card actionbar">
+      <div className="turn-tag def">Tocca a te — difesa · {sit.fieldingTeam.abbrev}</div>
+      <div className="btn-row">
+        <button className="btn primary big" onClick={() => act((g) => playOffense(g, 'swing'))}>
+          Lancia ▸
+        </button>
+        <button className="btn big" onClick={() => act((g) => intentionalWalk(g))}>
+          Base intenzionale
+        </button>
+        <PitcherChange live={live} act={act} />
+      </div>
+      <div className="hint">La CPU decide la battuta: premi «Lancia» per risolvere.</div>
     </div>
   );
 }
@@ -464,6 +485,78 @@ function StrengthPanel({ away, home }: { away: Team; home: Team }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function lastName(name: string): string {
+  const i = name.indexOf(' ');
+  return i < 0 ? name : name.slice(i + 1);
+}
+
+function LineupSide({
+  team,
+  stats,
+  side,
+  sit,
+}: {
+  team: Team;
+  stats: TeamGameStats;
+  side: Side;
+  sit: LiveSituation;
+}) {
+  const isBatting = sit.offenseSide === side && sit.status === 'live';
+  const currentId = isBatting ? sit.batter.id : null;
+  // Lanciatore attualmente in pedana per questa squadra (ultima riga usata).
+  const curP = stats.pitching[stats.pitching.length - 1];
+  return (
+    <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>
+      <div className="ls-head">
+        <TeamBadge team={team} size={24} />
+        <span className="ls-name">{team.name}</span>
+        <span className={`ls-role ${side}`}>{side === 'away' ? 'ospite' : 'casa'}</span>
+      </div>
+      <table className="ls-table">
+        <thead>
+          <tr>
+            <th className="l">#</th>
+            <th className="l">Battitore</th>
+            <th>AB</th>
+            <th>H</th>
+            <th>RBI</th>
+            <th>BB</th>
+            <th>SO</th>
+            <th>AVG</th>
+          </tr>
+        </thead>
+        <tbody>
+          {stats.batting.map((l, i) => (
+            <tr key={l.id} className={l.id === currentId ? 'at-bat' : undefined}>
+              <td className="l num">{i + 1}</td>
+              <td className="l bname">
+                <span className="pos">{l.position}</span> {lastName(l.name)}
+                {l.id === currentId && <span className="atbat-dot">●</span>}
+              </td>
+              <td>{l.ab}</td>
+              <td>{l.h}</td>
+              <td>{l.rbi}</td>
+              <td>{l.bb}</td>
+              <td>{l.so}</td>
+              <td className="avg">{formatAvg(l.ab ? l.h / l.ab : 0)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {curP && (
+        <div className="ls-pit">
+          <span className="ls-pit-tag">LANC.</span>
+          <span className="ls-pit-name">{lastName(curP.name)}</span>
+          <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
+          <span className="ls-pit-stat">{curP.so} SO</span>
+          <span className="ls-pit-stat">{curP.er} ER</span>
+          {curP.dec && <span className={`dec dec-${curP.dec}`}>{decLabel(curP.dec)}</span>}
+        </div>
+      )}
     </div>
   );
 }
