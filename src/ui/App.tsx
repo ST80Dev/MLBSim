@@ -346,7 +346,7 @@ function TeamStatSide({
       </div>
       <div className="ts-player">
         <span className={`ts-role ${involved.kind}`}>
-          {involved.kind === 'batter' ? 'AL PIATTO' : 'IN PEDANA'}
+          {involved.kind === 'batter' ? 'ALLA BATTUTA' : 'SUL MONTE'}
         </span>
         <span className="ts-pname">{player.name}</span>
       </div>

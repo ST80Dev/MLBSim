@@ -1680,3 +1680,64 @@ table {
   bottom: 8px;
   max-height: 46%;
 }
+
+/* --- Scoreboard piu' grande e info giocatore coinvolto a tutta larghezza --- */
+.statbar {
+  padding: 10px 14px;
+  gap: 14px;
+}
+.statbar-center {
+  min-width: 480px;
+}
+.statbar-center .linescore td,
+.statbar-center .linescore th {
+  padding: 5px 12px;
+  font-size: 16px;
+}
+.statbar-center .linescore th {
+  font-size: 13px;
+}
+.statbar-center .linescore .tot {
+  font-size: 18px;
+}
+.statbar-center .linescore .pill {
+  font-size: 14px;
+  padding: 3px 10px;
+}
+.sb-inning {
+  font-size: 19px;
+}
+
+/* Il giocatore in gioco deve leggersi bene: font grandi, riga a tutta larghezza. */
+.ts-score {
+  font-size: 40px;
+}
+.ts-name {
+  font-size: 17px;
+}
+.ts-player {
+  gap: 12px;
+  margin-top: 2px;
+  width: 100%;
+}
+.ts-role {
+  font-size: 12px;
+  padding: 3px 9px;
+}
+.ts-pname {
+  font-size: 21px;
+  font-weight: 800;
+}
+.ts-line {
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+.ts-stat-k {
+  font-size: 12px;
+}
+.ts-stat-v {
+  font-size: 22px;
+  line-height: 1.05;
+}
