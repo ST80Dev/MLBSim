@@ -19,14 +19,15 @@ import { batterOverall, pitcherOverall } from '../engine/ratings';
 import { ratingsAtPosition, activePos, computeSwap } from '../engine/positions';
 import type { Alignment } from '../engine/positions';
 import { teamStrength } from '../engine/strength';
-import { formatIp, formatAvg } from '../engine/boxscore';
+import { formatIp } from '../engine/boxscore';
 import { generateMatchup } from '../data/generator';
 import { gameSeed, newRandomSeed, ratingColor, stars } from './format';
 import { Diamond } from './Diamond';
 import {
   batterStatLine,
   pitcherStatLine,
-  STATS_MODE_LABEL,
+  STATS_MODE_SHORT,
+  STATS_MODE_TITLE,
 } from './statlines';
 import type { StatItem, StatsMode } from './statlines';
 
@@ -40,7 +41,6 @@ export function App() {
   const [view, setView] = useState<View>('game');
   const [statsMode, setStatsMode] = useState<StatsMode>('game');
   const [recapOpen, setRecapOpen] = useState(false);
-  const [cronacaOpen, setCronacaOpen] = useState(true);
   const [, forceTick] = useReducer((x) => x + 1, 0);
   // Schieramenti difensivi modificabili nella scheda "Rose" (id -> ruolo attivo).
   // Strumento di editing del roster; azzerati quando cambiano le squadre.
@@ -149,17 +149,32 @@ export function App() {
           <div className="gamefield">
             <Diamond home={result.home} away={result.away} background bases={sit.bases} />
 
-            <CronacaOverlay
-              result={result}
-              open={cronacaOpen}
-              onToggle={() => setCronacaOpen((o) => !o)}
-            />
+            <div className="cronaca-corner left">
+              <CronacaTeam result={result} side="away" />
+            </div>
+            <div className="cronaca-corner right">
+              <CronacaTeam result={result} side="home" />
+            </div>
 
             <div className="lineup-corner left">
-              <LineupSide side="away" team={result.away} stats={result.awayStats} sit={sit} />
+              <LineupSide
+                side="away"
+                team={result.away}
+                stats={result.awayStats}
+                sit={sit}
+                mode={statsMode}
+                setMode={setStatsMode}
+              />
             </div>
             <div className="lineup-corner right">
-              <LineupSide side="home" team={result.home} stats={result.homeStats} sit={sit} />
+              <LineupSide
+                side="home"
+                team={result.home}
+                stats={result.homeStats}
+                sit={sit}
+                mode={statsMode}
+                setMode={setStatsMode}
+              />
             </div>
 
             <div className="controls-overlay">
@@ -347,24 +362,21 @@ function TeamStatSide({
   );
 }
 
+const STATS_MODES: StatsMode[] = ['game', 'season', 'last'];
+
+/** Toggle compatto G/S/C (Game/Season/Career), condiviso ovunque. */
 function StatsToggle({ mode, setMode }: { mode: StatsMode; setMode: (m: StatsMode) => void }) {
-  const modes: StatsMode[] = ['game', 'season', 'last'];
-  const title: Record<StatsMode, string> = {
-    game: 'Statistiche di questa partita',
-    season: 'Proiezione di stagione dalle doti',
-    last: 'Disponibile con lo storico (Fase 4)',
-  };
   return (
     <div className="stats-toggle" role="group" aria-label="Modalità statistiche">
-      {modes.map((m) => (
+      {STATS_MODES.map((m) => (
         <button
           key={m}
           className={`st-btn${mode === m ? ' active' : ''}`}
           disabled={m === 'last'}
-          title={title[m]}
+          title={STATS_MODE_TITLE[m]}
           onClick={() => setMode(m)}
         >
-          {STATS_MODE_LABEL[m]}
+          {STATS_MODE_SHORT[m]}
         </button>
       ))}
     </div>
@@ -567,50 +579,54 @@ function LineupSide({
   stats,
   side,
   sit,
+  mode,
+  setMode,
 }: {
   team: Team;
   stats: TeamGameStats;
   side: Side;
   sit: LiveSituation;
+  mode: StatsMode;
+  setMode: (m: StatsMode) => void;
 }) {
   const isBatting = sit.offenseSide === side && sit.status === 'live';
   const currentId = isBatting ? sit.batter.id : null;
+  const batById = new Map(team.lineup.map((b) => [b.id, b]));
+  const rows = stats.batting.map((l) => ({
+    line: l,
+    items: batterStatLine(mode, l, batById.get(l.id)),
+  }));
+  const head = rows[0]?.items.map((i) => i.k) ?? [];
   // Lanciatore attualmente in pedana per questa squadra (ultima riga usata).
   const curP = stats.pitching[stats.pitching.length - 1];
   return (
     <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>
       <div className="ls-head">
-        <TeamBadge team={team} size={24} />
+        <TeamBadge team={team} size={22} />
         <span className="ls-name">{team.name}</span>
-        <span className={`ls-role ${side}`}>{side === 'away' ? 'ospite' : 'casa'}</span>
+        <StatsToggle mode={mode} setMode={setMode} />
       </div>
       <table className="ls-table">
         <thead>
           <tr>
             <th className="l">#</th>
             <th className="l">Battitore</th>
-            <th>AB</th>
-            <th>H</th>
-            <th>RBI</th>
-            <th>BB</th>
-            <th>SO</th>
-            <th>AVG</th>
+            {head.map((k) => (
+              <th key={k}>{k}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {stats.batting.map((l, i) => (
-            <tr key={l.id} className={l.id === currentId ? 'at-bat' : undefined}>
+          {rows.map((r, i) => (
+            <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
               <td className="l num">{i + 1}</td>
               <td className="l bname">
-                <span className="pos">{l.position}</span> {lastName(l.name)}
-                {l.id === currentId && <span className="atbat-dot">●</span>}
+                <span className="pos">{r.line.position}</span> {lastName(r.line.name)}
+                {r.line.id === currentId && <span className="atbat-dot">●</span>}
               </td>
-              <td>{l.ab}</td>
-              <td>{l.h}</td>
-              <td>{l.rbi}</td>
-              <td>{l.bb}</td>
-              <td>{l.so}</td>
-              <td className="avg">{formatAvg(l.ab ? l.h / l.ab : 0)}</td>
+              {r.items.map((it) => (
+                <td key={it.k}>{it.v}</td>
+              ))}
             </tr>
           ))}
         </tbody>
@@ -795,54 +811,45 @@ function groupPlays(result: GameResult): CronacaGroup[] {
   return groups;
 }
 
-function CronacaOverlay({
-  result,
-  open,
-  onToggle,
-}: {
-  result: GameResult;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const groups = groupPlays(result);
-  const last = result.play[result.play.length - 1];
+/** Cronaca di UNA squadra (ospite = mezzi alti; casa = mezzi bassi). Sempre
+ *  visibile, scorre verso l'ultimo evento. */
+function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
+  const half = side === 'away' ? 'top' : 'bottom';
+  const groups = groupPlays(result).filter((g) => g.key.endsWith(half));
+  const team = side === 'away' ? result.away : result.home;
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (open && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-  }, [result.play.length, open]);
+    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [result.play.length]);
 
   return (
-    <div className={`cronaca-overlay${open ? ' open' : ' collapsed'}`}>
-      <button className="cr-head" onClick={onToggle}>
-        <span className="cr-title">📣 Cronaca</span>
-        <span className="cr-toggle">{open ? '▾' : '▸'}</span>
-      </button>
-      {open ? (
-        <div className="cr-body" ref={bodyRef}>
-          {groups.length === 0 && <div className="cr-empty">La partita sta per cominciare…</div>}
-          {groups.map((g) => (
-            <div key={g.key} className="cr-inning">
-              <div className="cr-inhead">
-                <span>{g.header}</span>
-                <span className="cr-score">
-                  {g.events[g.events.length - 1].away}–{g.events[g.events.length - 1].home}
-                </span>
-              </div>
-              <ul>
-                {g.events.map((ev, i) => (
-                  <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
-                    {ev.text}
-                  </li>
-                ))}
-              </ul>
+    <div className="cronaca-team" style={{ ['--tc' as string]: team.primaryColor }}>
+      <div className="crt-head">
+        <span className="pill" style={{ background: team.primaryColor }}>
+          {team.abbrev}
+        </span>
+        <span className="crt-title">Cronaca {side === 'away' ? 'ospite' : 'casa'}</span>
+      </div>
+      <div className="crt-body" ref={bodyRef}>
+        {groups.length === 0 && <div className="cr-empty">In attesa…</div>}
+        {groups.map((g) => (
+          <div key={g.key} className="cr-inning">
+            <div className="cr-inhead">
+              <span>{g.header}</span>
+              <span className="cr-score">
+                {g.events[g.events.length - 1].away}–{g.events[g.events.length - 1].home}
+              </span>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="cr-collapsed-line">
-          {last ? last.text : 'La partita sta per cominciare…'}
-        </div>
-      )}
+            <ul>
+              {g.events.map((ev, i) => (
+                <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
+                  {ev.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

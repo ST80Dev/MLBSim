@@ -20,7 +20,20 @@ export interface StatItem {
 export const STATS_MODE_LABEL: Record<StatsMode, string> = {
   game: 'Partita',
   season: 'Stagione',
-  last: 'Scorsa',
+  last: 'Carriera',
+};
+
+/** Iniziale per i pulsantini G/S/C. */
+export const STATS_MODE_SHORT: Record<StatsMode, string> = {
+  game: 'G',
+  season: 'S',
+  last: 'C',
+};
+
+export const STATS_MODE_TITLE: Record<StatsMode, string> = {
+  game: 'Partita — statistiche di questa gara',
+  season: 'Stagione — proiezione dalle doti',
+  last: 'Carriera — disponibile con lo storico (Fase 4)',
 };
 
 /** Riga statistica di un battitore per la modalita' scelta. */
