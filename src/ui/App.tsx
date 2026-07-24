@@ -1,7 +1,8 @@
-import { useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Batter, Pitcher, Position, Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
 import type { LiveGame, LiveSituation } from '../engine/game';
+import type { BattingLine, PitchingLine } from '../engine/boxscore';
 import {
   createLiveGame,
   situation,
@@ -18,11 +19,17 @@ import { batterOverall, pitcherOverall } from '../engine/ratings';
 import { ratingsAtPosition, activePos, computeSwap } from '../engine/positions';
 import type { Alignment } from '../engine/positions';
 import { teamStrength } from '../engine/strength';
-import type { TeamStrength } from '../engine/strength';
-import { formatIp, formatAvg } from '../engine/boxscore';
+import { formatIp } from '../engine/boxscore';
 import { generateMatchup } from '../data/generator';
-import { gameSeed, newRandomSeed, ratingColor, stars, teamAccent } from './format';
+import { gameSeed, newRandomSeed, ratingColor, stars } from './format';
 import { Diamond } from './Diamond';
+import {
+  batterStatLine,
+  pitcherStatLine,
+  STATS_MODE_SHORT,
+  STATS_MODE_TITLE,
+} from './statlines';
+import type { StatItem, StatsMode } from './statlines';
 
 type View = 'game' | 'roster';
 type Side = 'away' | 'home';
@@ -32,6 +39,8 @@ export function App() {
   const [gameNo, setGameNo] = useState(1);
   const [controlled, setControlled] = useState<Side>('home');
   const [view, setView] = useState<View>('game');
+  const [statsMode, setStatsMode] = useState<StatsMode>('game');
+  const [recapOpen, setRecapOpen] = useState(false);
   const [, forceTick] = useReducer((x) => x + 1, 0);
   // Schieramenti difensivi modificabili nella scheda "Rose" (id -> ruolo attivo).
   // Strumento di editing del roster; azzerati quando cambiano le squadre.
@@ -73,13 +82,46 @@ export function App() {
   };
 
   return (
-    <div className="app">
+    <div className={view === 'game' ? 'app app-game' : 'app'}>
       <header className="topbar">
         <div className="brand">
           <span className="logo">⚾</span> MLBSim
-          <span className="phase">Fase 1 · turno interattivo</span>
+          <span className="phase">Fase 1</span>
         </div>
+
+        <div className="hdr-manage">
+          <span className="manage-label">Gestisci</span>
+          <div className="seg">
+            {(['away', 'home'] as Side[]).map((s) => (
+              <button
+                key={s}
+                className={`seg-btn${controlled === s ? ' active' : ''}`}
+                onClick={() => setControlled(s)}
+                title="Cambiare squadra riavvia questa gara"
+              >
+                {(s === 'away' ? teams.away : teams.home).abbrev}
+                <span className="seg-sub">{s === 'away' ? 'ospite' : 'casa'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <nav className="tabs inline">
+          <button className={view === 'game' ? 'tab active' : 'tab'} onClick={() => setView('game')}>
+            Partita
+          </button>
+          <button
+            className={view === 'roster' ? 'tab active' : 'tab'}
+            onClick={() => setView('roster')}
+          >
+            Rose
+          </button>
+        </nav>
+
         <div className="actions">
+          <button className="btn" onClick={() => setRecapOpen(true)}>
+            Recap partita
+          </button>
           <button className="btn" onClick={newTeams}>
             Nuove squadre
           </button>
@@ -89,99 +131,259 @@ export function App() {
             </button>
           ) : (
             <button className="btn" onClick={() => act((g) => quickSim(g))}>
-              Salta a fine partita ⏩
+              Salta a fine ⏩
             </button>
           )}
         </div>
       </header>
 
-      <div className="managebar">
-        <span className="manage-label">Gestisci</span>
-        <div className="seg">
-          {(['away', 'home'] as Side[]).map((s) => (
-            <button
-              key={s}
-              className={`seg-btn${controlled === s ? ' active' : ''}`}
-              onClick={() => setControlled(s)}
-              title="Cambiare squadra riavvia questa gara"
-            >
-              {(s === 'away' ? ref.current!.teams.away : ref.current!.teams.home).abbrev}
-              <span className="seg-sub">{s === 'away' ? 'ospite' : 'casa'}</span>
-            </button>
-          ))}
-        </div>
-        <span className="manage-hint">
-          decidi ai tuoi turni · la CPU guida l'altra squadra
-        </span>
-      </div>
-
-      <Scoreboard result={result} decided={final} />
-
-      <nav className="tabs">
-        <button className={view === 'game' ? 'tab active' : 'tab'} onClick={() => setView('game')}>
-          Partita
-        </button>
-        <button
-          className={view === 'roster' ? 'tab active' : 'tab'}
-          onClick={() => setView('roster')}
-        >
-          Rose &amp; caratteristiche
-        </button>
-        <span className="seed">
-          seed squadre {teamSeed} · gara #{gameNo}
-        </span>
-      </nav>
-
       {view === 'game' ? (
-        <>
-          {final ? (
-            <FinalBanner result={result} controlled={controlled} />
-          ) : (
-            <ControlPanel live={live} sit={sit} act={act} />
-          )}
-          <Diamond home={result.home} away={result.away} />
-          <StrengthPanel away={result.away} home={result.home} />
-          <LineScore result={result} />
-          <div className="grid2">
-            <BoxScore team={result.away} stats={result.awayStats} />
-            <BoxScore team={result.home} stats={result.homeStats} />
+        <div className="game-screen">
+          <StatBar
+            result={result}
+            sit={sit}
+            statsMode={statsMode}
+            setStatsMode={setStatsMode}
+          />
+
+          <div className="gamefield">
+            <Diamond home={result.home} away={result.away} background bases={sit.bases} />
+
+            <div className="cronaca-corner left">
+              <CronacaTeam result={result} side="away" />
+            </div>
+            <div className="cronaca-corner right">
+              <CronacaTeam result={result} side="home" />
+            </div>
+
+            <div className="lineup-corner left">
+              <LineupSide
+                side="away"
+                team={result.away}
+                stats={result.awayStats}
+                sit={sit}
+                mode={statsMode}
+                setMode={setStatsMode}
+              />
+            </div>
+            <div className="lineup-corner right">
+              <LineupSide
+                side="home"
+                team={result.home}
+                stats={result.homeStats}
+                sit={sit}
+                mode={statsMode}
+                setMode={setStatsMode}
+              />
+            </div>
+
+            <div className="controls-overlay">
+              {final ? (
+                <FinalOverlay
+                  result={result}
+                  controlled={controlled}
+                  onNew={() => setGameNo((g) => g + 1)}
+                  onRecap={() => setRecapOpen(true)}
+                />
+              ) : (
+                <ActionBar live={live} sit={sit} act={act} />
+              )}
+            </div>
           </div>
-          <PlayByPlay result={result} />
-        </>
+        </div>
       ) : (
-        <div className="grid2">
-          <RosterRatings
-            team={teams.away}
-            alignment={alignAway}
-            onSwap={(id, pos) => {
-              const next = computeSwap(teams.away, alignAway, id, pos);
-              if (next) setAlignAway(next);
-            }}
-          />
-          <RosterRatings
-            team={teams.home}
-            alignment={alignHome}
-            onSwap={(id, pos) => {
-              const next = computeSwap(teams.home, alignHome, id, pos);
-              if (next) setAlignHome(next);
-            }}
-          />
+        <div className="roster-view">
+          <div className="grid2">
+            <RosterRatings
+              team={teams.away}
+              alignment={alignAway}
+              onSwap={(id, pos) => {
+                const next = computeSwap(teams.away, alignAway, id, pos);
+                if (next) setAlignAway(next);
+              }}
+            />
+            <RosterRatings
+              team={teams.home}
+              alignment={alignHome}
+              onSwap={(id, pos) => {
+                const next = computeSwap(teams.home, alignHome, id, pos);
+                if (next) setAlignHome(next);
+              }}
+            />
+          </div>
         </div>
       )}
 
-      <footer className="foot">
-        Motore probabilistico Log5 · caratteristiche scala 20–80 · rubata, bunt,
-        base intenzionale e cambio lanciatore attivi in Fase 1.
-      </footer>
+      {recapOpen && (
+        <RecapModal
+          result={result}
+          statsMode={statsMode}
+          setStatsMode={setStatsMode}
+          onClose={() => setRecapOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Pannello di controllo interattivo
+// Barra stat (sotto l'header, fuori dallo sfondo stadio): info squadre + forza,
+// giocatori coinvolti nell'azione, line score, toggle stat.
 // ---------------------------------------------------------------------------
 
-function ControlPanel({
+interface Involved {
+  kind: 'batter' | 'pitcher';
+  batter?: Batter;
+  pitcher?: Pitcher;
+  batLine?: BattingLine;
+  pitLine?: PitchingLine;
+}
+
+function involvedFor(result: GameResult, sit: LiveSituation, side: Side): Involved {
+  const stats = side === 'away' ? result.awayStats : result.homeStats;
+  if (sit.offenseSide === side) {
+    const b = sit.batter;
+    return { kind: 'batter', batter: b, batLine: stats.batting.find((l) => l.id === b.id) };
+  }
+  const p = sit.pitcher;
+  return { kind: 'pitcher', pitcher: p, pitLine: stats.pitching.find((l) => l.id === p.id) };
+}
+
+function StatBar({
+  result,
+  sit,
+  statsMode,
+  setStatsMode,
+}: {
+  result: GameResult;
+  sit: LiveSituation;
+  statsMode: StatsMode;
+  setStatsMode: (m: StatsMode) => void;
+}) {
+  const arrow = sit.half === 'top' ? '▲' : '▼';
+  const halfLabel = sit.half === 'top' ? 'attacco' : 'chiusura';
+  const decided = sit.status === 'final';
+  return (
+    <div className="statbar">
+      <TeamStatSide
+        side="away"
+        team={result.away}
+        score={result.final.away}
+        involved={involvedFor(result, sit, 'away')}
+        mode={statsMode}
+        win={decided && sit.winner === 'away'}
+      />
+
+      <div className="statbar-center">
+        <div className="sb-situation">
+          <span className="sb-inning">
+            {arrow} {sit.inning}° <span className="sb-half">{halfLabel}</span>
+          </span>
+          <BaseDiamond bases={sit.bases} />
+          <OutsDots outs={sit.outs} />
+        </div>
+        <LineScore result={result} />
+        <StatsToggle mode={statsMode} setMode={setStatsMode} />
+      </div>
+
+      <TeamStatSide
+        side="home"
+        team={result.home}
+        score={result.final.home}
+        involved={involvedFor(result, sit, 'home')}
+        mode={statsMode}
+        win={decided && sit.winner === 'home'}
+      />
+    </div>
+  );
+}
+
+function TeamStatSide({
+  side,
+  team,
+  score,
+  involved,
+  mode,
+  win,
+}: {
+  side: Side;
+  team: Team;
+  score: number;
+  involved: Involved;
+  mode: StatsMode;
+  win: boolean;
+}) {
+  const s = teamStrength(team);
+  const items: StatItem[] =
+    involved.kind === 'batter'
+      ? batterStatLine(mode, involved.batLine, involved.batter!)
+      : pitcherStatLine(mode, involved.pitLine, involved.pitcher!);
+  const player = involved.kind === 'batter' ? involved.batter! : involved.pitcher!;
+  const strength: [string, number][] = [
+    ['TOT', s.total],
+    ['ATT', s.attack],
+    ['DIF', s.defense],
+    ['LAN', s.pitching],
+  ];
+  return (
+    <div className={`team-stat ${side}${win ? ' win' : ''}`} style={{ ['--tc' as string]: team.primaryColor }}>
+      <div className="ts-head">
+        <TeamBadge team={team} size={30} />
+        <div className="ts-id">
+          <div className="ts-name">{team.name}</div>
+          <div className="ts-strength">
+            {strength.map(([k, v]) => (
+              <span key={k} className="ts-str">
+                <span className="ts-str-k">{k}</span>
+                <span className="ts-str-v" style={{ background: strengthColor(v) }}>
+                  {v}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="ts-score">{score}</div>
+      </div>
+      <div className="ts-player">
+        <span className={`ts-role ${involved.kind}`}>
+          {involved.kind === 'batter' ? 'ALLA BATTUTA' : 'SUL MONTE'}
+        </span>
+        <span className="ts-pname">{player.name}</span>
+      </div>
+      <div className="ts-line">
+        {items.map((it) => (
+          <span key={it.k} className="ts-stat">
+            <span className="ts-stat-k">{it.k}</span>
+            <span className="ts-stat-v">{it.v}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const STATS_MODES: StatsMode[] = ['game', 'season', 'last'];
+
+/** Toggle compatto G/S/C (Game/Season/Career), condiviso ovunque. */
+function StatsToggle({ mode, setMode }: { mode: StatsMode; setMode: (m: StatsMode) => void }) {
+  return (
+    <div className="stats-toggle" role="group" aria-label="Modalità statistiche">
+      {STATS_MODES.map((m) => (
+        <button
+          key={m}
+          className={`st-btn${mode === m ? ' active' : ''}`}
+          disabled={m === 'last'}
+          title={STATS_MODE_TITLE[m]}
+          onClick={() => setMode(m)}
+        >
+          {STATS_MODE_SHORT[m]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ActionBar({
   live,
   sit,
   act,
@@ -190,86 +392,47 @@ function ControlPanel({
   sit: LiveSituation;
   act: (fn: (g: LiveGame) => void) => void;
 }) {
-  const arrow = sit.half === 'top' ? '▲' : '▼';
-  const halfLabel = sit.half === 'top' ? 'attacco' : 'chiusura';
-  return (
-    <div className="card control">
-      <div className="control-top">
-        <div className="situation">
-          <div className="inning-badge">
-            {arrow} {sit.inning}°
-            <span className="half">{halfLabel}</span>
-          </div>
-          <BaseDiamond bases={sit.bases} />
-          <OutsDots outs={sit.outs} />
-        </div>
-        <div className="matchup-mini">
-          <MiniPlayer
-            label={`Al piatto · ${sit.battingTeam.abbrev}`}
-            player={sit.batter}
-            ratings={[
-              ['CON', sit.batter.ratings.contact],
-              ['POT', sit.batter.ratings.power],
-              ['VEL', sit.batter.ratings.speed],
-            ]}
-          />
-          <MiniPlayer
-            label={`In pedana · ${sit.fieldingTeam.abbrev}`}
-            player={sit.pitcher}
-            ratings={[
-              ['DOM', sit.pitcher.ratings.stuff],
-              ['CTR', sit.pitcher.ratings.control],
-              ['DIF', sit.pitcher.ratings.fielding],
-            ]}
-          />
-        </div>
+  return sit.controlledBatting ? (
+    <div className="card actionbar">
+      <div className="turn-tag off">Tocca a te — attacco · {sit.battingTeam.abbrev}</div>
+      <div className="btn-row">
+        <button className="btn primary big" onClick={() => act((g) => playOffense(g, 'swing'))}>
+          Battuta
+        </button>
+        <button
+          className="btn big"
+          disabled={!sit.canBunt}
+          onClick={() => act((g) => playOffense(g, 'bunt'))}
+          title={sit.canBunt ? 'Bunt di sacrificio' : 'Bunt inutile con 2 out'}
+        >
+          Bunt
+        </button>
+        {sit.stealFrom.includes(1) && (
+          <button className="btn big" onClick={() => act((g) => attemptSteal(g, 1))}>
+            Ruba la 2ª
+          </button>
+        )}
+        {sit.stealFrom.includes(2) && (
+          <button className="btn big" onClick={() => act((g) => attemptSteal(g, 2))}>
+            Ruba la 3ª
+          </button>
+        )}
       </div>
-
-      {sit.controlledBatting ? (
-        <div className="control-actions">
-          <div className="turn-tag off">Tocca a te — attacco</div>
-          <div className="btn-row">
-            <button className="btn primary" onClick={() => act((g) => playOffense(g, 'swing'))}>
-              Battuta
-            </button>
-            <button
-              className="btn"
-              disabled={!sit.canBunt}
-              onClick={() => act((g) => playOffense(g, 'bunt'))}
-              title={sit.canBunt ? 'Bunt di sacrificio' : 'Bunt inutile con 2 out'}
-            >
-              Bunt
-            </button>
-            {sit.stealFrom.includes(1) && (
-              <button className="btn" onClick={() => act((g) => attemptSteal(g, 1))}>
-                Ruba la 2ª
-              </button>
-            )}
-            {sit.stealFrom.includes(2) && (
-              <button className="btn" onClick={() => act((g) => attemptSteal(g, 2))}>
-                Ruba la 3ª
-              </button>
-            )}
-          </div>
-          <div className="hint">
-            La rubata non consuma il turno: puoi tentarla e poi battere.
-          </div>
-        </div>
-      ) : (
-        <div className="control-actions">
-          <div className="turn-tag def">Tocca a te — difesa</div>
-          <div className="btn-row">
-            <button className="btn primary" onClick={() => act((g) => playOffense(g, 'swing'))}>
-              Lancia ▸
-            </button>
-            <button className="btn" onClick={() => act((g) => intentionalWalk(g))}>
-              Base intenzionale
-            </button>
-            <PitcherChange live={live} act={act} />
-          </div>
-          <div className="hint">La CPU decide la battuta: premi «Lancia» per risolvere.</div>
-        </div>
-      )}
+      <div className="hint">La rubata non consuma il turno: puoi tentarla e poi battere.</div>
+    </div>
+  ) : (
+    <div className="card actionbar">
+      <div className="turn-tag def">Tocca a te — difesa · {sit.fieldingTeam.abbrev}</div>
+      <div className="btn-row">
+        <button className="btn primary big" onClick={() => act((g) => playOffense(g, 'swing'))}>
+          Lancia ▸
+        </button>
+        <button className="btn big" onClick={() => act((g) => intentionalWalk(g))}>
+          Base intenzionale
+        </button>
+        <PitcherChange live={live} act={act} />
+      </div>
+      <div className="hint">La CPU decide la battuta: premi «Lancia» per risolvere.</div>
     </div>
   );
 }
@@ -336,44 +499,34 @@ function OutsDots({ outs }: { outs: number }) {
   );
 }
 
-function MiniPlayer({
-  label,
-  player,
-  ratings,
+function FinalOverlay({
+  result,
+  controlled,
+  onNew,
+  onRecap,
 }: {
-  label: string;
-  player: Batter | Pitcher;
-  ratings: [string, number][];
+  result: GameResult;
+  controlled: Side;
+  onNew: () => void;
+  onRecap: () => void;
 }) {
-  return (
-    <div className="mini">
-      <div className="mini-label">{label}</div>
-      <div className="mini-name">{player.name}</div>
-      <div className="mini-rats">
-        {ratings.map(([k, v]) => (
-          <span key={k} className="mini-rat">
-            <span className="mini-rat-k">{k}</span>
-            <span className="mini-rat-v" style={{ background: ratingColor(v) }}>
-              {v}
-            </span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FinalBanner({ result, controlled }: { result: GameResult; controlled: Side }) {
   const youWon = result.winner === controlled;
   const winTeam = result.winner === 'away' ? result.away : result.home;
   return (
-    <div className={`card final-banner ${youWon ? 'won' : 'lost'}`}>
-      <div className="final-title">
-        {youWon ? '🏆 Hai vinto!' : 'Sconfitta'} — {winTeam.name} vince{' '}
-        {result.final.away}–{result.final.home}
+    <div className={`final-overlay ${youWon ? 'won' : 'lost'}`}>
+      <div className="final-title">{youWon ? '🏆 Hai vinto!' : 'Sconfitta'}</div>
+      <div className="final-line">
+        {winTeam.name} {result.final.away}–{result.final.home}
         {result.innings > 9 && <span className="final-extra"> · {result.innings} inning</span>}
       </div>
-      <div className="final-sub">Guarda il tabellino e la cronaca qui sotto.</div>
+      <div className="final-btns">
+        <button className="btn" onClick={onRecap}>
+          Recap partita
+        </button>
+        <button className="btn primary big" onClick={onNew}>
+          Nuova partita ▸
+        </button>
+      </div>
     </div>
   );
 }
@@ -416,109 +569,78 @@ function strengthColor(v: number): string {
   return `hsl(${Math.round(t * 125)} 60% 46%)`;
 }
 
-function StrengthPanel({ away, home }: { away: Team; home: Team }) {
-  const rows: { team: Team; s: TeamStrength }[] = [
-    { team: away, s: teamStrength(away) },
-    { team: home, s: teamStrength(home) },
-  ];
-  const cols: { key: keyof TeamStrength; label: string; title: string }[] = [
-    { key: 'total', label: 'TOT', title: 'Forza totale' },
-    { key: 'attack', label: 'ATT', title: 'Attacco' },
-    { key: 'defense', label: 'DIF', title: 'Difesa' },
-    { key: 'pitching', label: 'LAN', title: 'Lancio' },
-  ];
+function lastName(name: string): string {
+  const i = name.indexOf(' ');
+  return i < 0 ? name : name.slice(i + 1);
+}
+
+function LineupSide({
+  team,
+  stats,
+  side,
+  sit,
+  mode,
+  setMode,
+}: {
+  team: Team;
+  stats: TeamGameStats;
+  side: Side;
+  sit: LiveSituation;
+  mode: StatsMode;
+  setMode: (m: StatsMode) => void;
+}) {
+  const isBatting = sit.offenseSide === side && sit.status === 'live';
+  const currentId = isBatting ? sit.batter.id : null;
+  const batById = new Map(team.lineup.map((b) => [b.id, b]));
+  const rows = stats.batting.map((l) => ({
+    line: l,
+    items: batterStatLine(mode, l, batById.get(l.id)),
+  }));
+  const head = rows[0]?.items.map((i) => i.k) ?? [];
+  // Lanciatore attualmente in pedana per questa squadra (ultima riga usata).
+  const curP = stats.pitching[stats.pitching.length - 1];
   return (
-    <div className="card strength-card">
-      <div className="card-title">Forza squadre</div>
-      <table className="strength">
+    <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>
+      <div className="ls-head">
+        <TeamBadge team={team} size={22} />
+        <span className="ls-name">{team.name}</span>
+        <StatsToggle mode={mode} setMode={setMode} />
+      </div>
+      <table className="ls-table">
         <thead>
           <tr>
-            <th className="l">Squadra</th>
-            {cols.map((c) => (
-              <th key={c.key} title={c.title}>
-                {c.label}
-              </th>
+            <th className="l">#</th>
+            <th className="l">Battitore</th>
+            {head.map((k) => (
+              <th key={k}>{k}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ team, s }) => (
-            <tr key={team.id}>
-              <td className="l">
-                <span className="pill" style={{ background: team.primaryColor }}>
-                  {team.abbrev}
-                </span>{' '}
-                {team.name}
+          {rows.map((r, i) => (
+            <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
+              <td className="l num">{i + 1}</td>
+              <td className="l bname">
+                <span className="pos">{r.line.position}</span> {lastName(r.line.name)}
+                {r.line.id === currentId && <span className="atbat-dot">●</span>}
               </td>
-              {cols.map((c) => (
-                <td key={c.key}>
-                  <span
-                    className={c.key === 'total' ? 'str-val str-total' : 'str-val'}
-                    style={{ background: strengthColor(s[c.key]) }}
-                  >
-                    {s[c.key]}
-                  </span>
-                </td>
+              {r.items.map((it) => (
+                <td key={it.k}>{it.v}</td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function Scoreboard({ result, decided }: { result: GameResult; decided: boolean }) {
-  const { away, home, final, winner } = result;
-  return (
-    <section className="scoreboard">
-      <TeamScore
-        team={away}
-        score={final.away}
-        win={decided && winner === 'away'}
-        align="right"
-      />
-      <div className="mid">
-        <div className="at">@</div>
-        <div className="ballpark">🏟 {home.ballpark}</div>
-        {result.innings > 9 && <div className="extra">{result.innings} inning</div>}
-      </div>
-      <TeamScore
-        team={home}
-        score={final.home}
-        win={decided && winner === 'home'}
-        align="left"
-      />
-    </section>
-  );
-}
-
-function TeamScore({
-  team,
-  score,
-  win,
-  align,
-}: {
-  team: Team;
-  score: number;
-  win: boolean;
-  align: 'left' | 'right';
-}) {
-  const accent = teamAccent(team.name);
-  return (
-    <div
-      className={`teamscore ${align}${win ? ' win' : ''}`}
-      style={{ ['--accent' as string]: team.primaryColor || accent }}
-    >
-      {align === 'left' && <TeamBadge team={team} />}
-      <div className="tinfo">
-        <div className="tname">{team.name}</div>
-        <div className="tsub">
-          {team.league} {team.division} · forza {teamStrength(team).total}
+      {curP && (
+        <div className="ls-pit">
+          <span className="ls-pit-tag">LANC.</span>
+          <span className="ls-pit-name">{lastName(curP.name)}</span>
+          <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
+          <span className="ls-pit-stat">{curP.so} SO</span>
+          <span className="ls-pit-stat">{curP.er} ER</span>
+          {curP.dec && <span className={`dec dec-${curP.dec}`}>{decLabel(curP.dec)}</span>}
         </div>
-      </div>
-      <div className="runs">{score}</div>
-      {align === 'right' && <TeamBadge team={team} />}
+      )}
     </div>
   );
 }
@@ -580,19 +702,33 @@ function LineRow({
   );
 }
 
-function BoxScore({ team, stats }: { team: Team; stats: TeamGameStats }) {
-  const totals = stats.batting.reduce(
-    (a, l) => ({
-      ab: a.ab + l.ab,
-      r: a.r + l.r,
-      h: a.h + l.h,
-      rbi: a.rbi + l.rbi,
-      bb: a.bb + l.bb,
-      so: a.so + l.so,
-    }),
-    { ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0 },
-  );
-  const teamSb = stats.batting.reduce((a, l) => a + l.sb, 0);
+function BoxScore({
+  team,
+  stats,
+  mode,
+}: {
+  team: Team;
+  stats: TeamGameStats;
+  mode: StatsMode;
+}) {
+  const batById = new Map(team.lineup.map((b) => [b.id, b]));
+  const pitById = new Map([...team.rotation, ...team.bullpen].map((p) => [p.id, p]));
+
+  const batRows = stats.batting.map((l) => ({
+    id: l.id,
+    label: l.position,
+    name: l.name,
+    items: batterStatLine(mode, l, batById.get(l.id)),
+  }));
+  const pitRows = stats.pitching.map((l) => ({
+    id: l.id,
+    name: l.name,
+    dec: l.dec,
+    items: pitcherStatLine(mode, l, pitById.get(l.id)),
+  }));
+  const batHead = batRows[0]?.items.map((i) => i.k) ?? [];
+  const pitHead = pitRows[0]?.items.map((i) => i.k) ?? [];
+
   return (
     <div className="card">
       <div className="card-title" style={{ borderColor: team.primaryColor }}>
@@ -602,43 +738,22 @@ function BoxScore({ team, stats }: { team: Team; stats: TeamGameStats }) {
         <thead>
           <tr>
             <th className="l">Battitore</th>
-            <th>AB</th>
-            <th>R</th>
-            <th>H</th>
-            <th>RBI</th>
-            <th>BB</th>
-            <th>SO</th>
-            <th>SB</th>
-            <th>AVG</th>
+            {batHead.map((k) => (
+              <th key={k}>{k}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {stats.batting.map((l) => (
-            <tr key={l.id}>
+          {batRows.map((r) => (
+            <tr key={r.id}>
               <td className="l">
-                <span className="pos">{l.position}</span> {l.name}
+                <span className="pos">{r.label}</span> {r.name}
               </td>
-              <td>{l.ab}</td>
-              <td>{l.r}</td>
-              <td>{l.h}</td>
-              <td>{l.rbi}</td>
-              <td>{l.bb}</td>
-              <td>{l.so}</td>
-              <td>{l.sb || ''}</td>
-              <td>{formatAvg(l.ab ? l.h / l.ab : 0)}</td>
+              {r.items.map((it) => (
+                <td key={it.k}>{it.v}</td>
+              ))}
             </tr>
           ))}
-          <tr className="totrow">
-            <td className="l">Totali</td>
-            <td>{totals.ab}</td>
-            <td>{totals.r}</td>
-            <td>{totals.h}</td>
-            <td>{totals.rbi}</td>
-            <td>{totals.bb}</td>
-            <td>{totals.so}</td>
-            <td>{teamSb || ''}</td>
-            <td></td>
-          </tr>
         </tbody>
       </table>
 
@@ -646,28 +761,22 @@ function BoxScore({ team, stats }: { team: Team; stats: TeamGameStats }) {
         <thead>
           <tr>
             <th className="l">Lanciatore</th>
-            <th>IP</th>
-            <th>H</th>
-            <th>R</th>
-            <th>ER</th>
-            <th>BB</th>
-            <th>SO</th>
-            <th>HR</th>
-            <th>Dec</th>
+            {pitHead.map((k) => (
+              <th key={k}>{k}</th>
+            ))}
+            {mode === 'game' && <th>Dec</th>}
           </tr>
         </thead>
         <tbody>
-          {stats.pitching.map((p) => (
-            <tr key={p.id}>
-              <td className="l">{p.name}</td>
-              <td>{formatIp(p.outs)}</td>
-              <td>{p.h}</td>
-              <td>{p.r}</td>
-              <td>{p.er}</td>
-              <td>{p.bb}</td>
-              <td>{p.so}</td>
-              <td>{p.hr}</td>
-              <td>{p.dec ? <span className={`dec dec-${p.dec}`}>{decLabel(p.dec)}</span> : ''}</td>
+          {pitRows.map((r) => (
+            <tr key={r.id}>
+              <td className="l">{r.name}</td>
+              {r.items.map((it) => (
+                <td key={it.k}>{it.v}</td>
+              ))}
+              {mode === 'game' && (
+                <td>{r.dec ? <span className={`dec dec-${r.dec}`}>{decLabel(r.dec)}</span> : ''}</td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -680,30 +789,54 @@ function decLabel(d: 'W' | 'L' | 'SV'): string {
   return d === 'W' ? 'V' : d === 'L' ? 'P' : 'SV';
 }
 
-function PlayByPlay({ result }: { result: GameResult }) {
-  const groups: { key: string; header: string; events: PlayEvent[] }[] = [];
-  let cur: { key: string; header: string; events: PlayEvent[] } | null = null;
+interface CronacaGroup {
+  key: string;
+  header: string;
+  events: PlayEvent[];
+}
+
+function groupPlays(result: GameResult): CronacaGroup[] {
+  const groups: CronacaGroup[] = [];
+  let cur: CronacaGroup | null = null;
   for (const ev of result.play) {
     const key = `${ev.inning}-${ev.half}`;
     if (!cur || cur.key !== key) {
       const batting = ev.half === 'top' ? result.away : result.home;
       const arrow = ev.half === 'top' ? '▲' : '▼';
-      cur = { key, header: `${ev.inning}° ${arrow} attacco ${batting.name}`, events: [] };
+      cur = { key, header: `${ev.inning}° ${arrow} ${batting.abbrev}`, events: [] };
       groups.push(cur);
     }
     cur.events.push(ev);
   }
+  return groups;
+}
+
+/** Cronaca di UNA squadra (ospite = mezzi alti; casa = mezzi bassi). Sempre
+ *  visibile, scorre verso l'ultimo evento. */
+function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
+  const half = side === 'away' ? 'top' : 'bottom';
+  const groups = groupPlays(result).filter((g) => g.key.endsWith(half));
+  const team = side === 'away' ? result.away : result.home;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [result.play.length]);
 
   return (
-    <div className="card pbp-card">
-      <div className="card-title">Cronaca</div>
-      <div className="pbp">
-        {groups.length === 0 && <div className="pbp-empty">La partita sta per cominciare…</div>}
+    <div className="cronaca-team" style={{ ['--tc' as string]: team.primaryColor }}>
+      <div className="crt-head">
+        <span className="pill" style={{ background: team.primaryColor }}>
+          {team.abbrev}
+        </span>
+        <span className="crt-title">Cronaca {side === 'away' ? 'ospite' : 'casa'}</span>
+      </div>
+      <div className="crt-body" ref={bodyRef}>
+        {groups.length === 0 && <div className="cr-empty">In attesa…</div>}
         {groups.map((g) => (
-          <div key={g.key} className="pbp-inning">
-            <div className="pbp-head">
-              {g.header}
-              <span className="pbp-score">
+          <div key={g.key} className="cr-inning">
+            <div className="cr-inhead">
+              <span>{g.header}</span>
+              <span className="cr-score">
                 {g.events[g.events.length - 1].away}–{g.events[g.events.length - 1].home}
               </span>
             </div>
@@ -716,6 +849,50 @@ function PlayByPlay({ result }: { result: GameResult }) {
             </ul>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function RecapModal({
+  result,
+  statsMode,
+  setStatsMode,
+  onClose,
+}: {
+  result: GameResult;
+  statsMode: StatsMode;
+  setStatsMode: (m: StatsMode) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal recap" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">
+            Recap · {result.away.abbrev} {result.final.away} – {result.final.home}{' '}
+            {result.home.abbrev}
+          </div>
+          <StatsToggle mode={statsMode} setMode={setStatsMode} />
+          <button className="modal-close" onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="modal-body">
+          <LineScore result={result} />
+          <div className="grid2">
+            <BoxScore team={result.away} stats={result.awayStats} mode={statsMode} />
+            <BoxScore team={result.home} stats={result.homeStats} mode={statsMode} />
+          </div>
+        </div>
       </div>
     </div>
   );

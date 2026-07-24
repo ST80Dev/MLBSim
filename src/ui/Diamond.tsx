@@ -2,9 +2,10 @@ import type { Team, Position } from '../engine/types';
 import { stadiumImage } from '../data/stadiumImages';
 
 // Campo + stadio ORIGINALI generati a runtime (nessuna foto/logo ufficiale).
-// I giocatori della difesa di casa sono posizionati sul diamante con etichetta.
-// Piccole variazioni per stadio (tetto, torri-faro, tinte) sono seedate dal
-// nome del ballpark: ogni parco ha un'identita' visiva sua, senza immagini reali.
+// Vista IN PROSPETTIVA da dietro casa base (come dagli spalti): casa base in
+// basso vicina, il campo si allarga salendo verso il muro e le tribune in alto.
+// viewBox panoramico 900x420 per riempire bene la larghezza. Se l'utente
+// fornisce una foto (stadiumImages) diventa lo sfondo pieno con soli i marker.
 
 interface Spot {
   pos: Position;
@@ -12,24 +13,27 @@ interface Spot {
   y: number;
 }
 
-// Posizioni difensive sul diamante (viewBox 420x400, casa base in basso).
-const DEFENSE: Spot[] = [
-  { pos: 'P', x: 210, y: 258 },
-  { pos: 'C', x: 210, y: 350 },
-  { pos: '1B', x: 298, y: 244 },
-  { pos: '2B', x: 250, y: 216 },
-  { pos: 'SS', x: 170, y: 216 },
-  { pos: '3B', x: 122, y: 244 },
-  { pos: 'LF', x: 106, y: 118 },
-  { pos: 'CF', x: 210, y: 84 },
-  { pos: 'RF', x: 314, y: 118 },
-];
+const VB = { w: 900, h: 420 };
+const HOME = { x: 450, y: 394 };
+const FIRST = { x: 612, y: 322 };
+const SECOND = { x: 450, y: 244 };
+const THIRD = { x: 288, y: 322 };
+const MOUND = { x: 450, y: 302 };
+const POLE_L = { x: 34, y: 168 };
+const POLE_R = { x: 866, y: 168 };
+const WALL_C = { x: 450, y: 50 };
 
-const HOME_PLATE = { x: 210, y: 330 };
-const FIRST = { x: 280, y: 260 };
-const SECOND = { x: 210, y: 190 };
-const THIRD = { x: 140, y: 260 };
-const MOUND = { x: 210, y: 260 };
+const DEFENSE: Spot[] = [
+  { pos: 'P', x: 450, y: 302 },
+  { pos: 'C', x: 450, y: 408 },
+  { pos: '1B', x: 604, y: 314 },
+  { pos: '2B', x: 512, y: 250 },
+  { pos: 'SS', x: 388, y: 250 },
+  { pos: '3B', x: 296, y: 314 },
+  { pos: 'LF', x: 198, y: 190 },
+  { pos: 'CF', x: 450, y: 126 },
+  { pos: 'RF', x: 702, y: 190 },
+];
 
 function hash(s: string): number {
   let h = 2166136261;
@@ -40,14 +44,20 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
+/** Punto sulla curva del muro (Bézier quadratica POLE_L → WALL_C → POLE_R). */
+function wallPoint(t: number): [number, number] {
+  const mt = 1 - t;
+  const x = mt * mt * POLE_L.x + 2 * mt * t * WALL_C.x + t * t * POLE_R.x;
+  const y = mt * mt * POLE_L.y + 2 * mt * t * WALL_C.y + t * t * POLE_R.y;
+  return [x, y];
+}
+
 function lastNameOf(name: string): string {
   const i = name.indexOf(' ');
   return i < 0 ? name : name.slice(i + 1);
 }
 
 function playerAt(team: Team, pos: Position): string {
-  // La difesa deriva dal lineup: si trova chi gioca in quel ruolo; il DH non
-  // difende, quindi il lanciatore partente copre 'P'.
   if (pos === 'P') return team.rotation[0]?.name ?? '';
   const b = team.lineup.find((p) => p.position === pos);
   return b?.name ?? '';
@@ -55,17 +65,16 @@ function playerAt(team: Team, pos: Position): string {
 
 function FielderLabel({ x, y, pos, name }: { x: number; y: number; pos: Position; name: string }) {
   const label = `${pos} ${lastNameOf(name)}`;
-  const w = Math.max(28, label.length * 5.4 + 10);
-  // Tiene l'etichetta dentro la cornice.
-  const lx = Math.min(414 - w / 2, Math.max(6 + w / 2, x));
+  const w = Math.max(40, label.length * 6.6 + 14);
+  const lx = Math.min(VB.w - 8 - w / 2, Math.max(8 + w / 2, x));
   const ly = y + 13;
   return (
     <g>
-      <circle cx={x} cy={y} r={7} fill="var(--fld)" stroke="var(--fld2)" strokeWidth={1.5} />
-      <circle cx={x} cy={y - 1.5} r={3} fill="rgba(255,255,255,0.55)" />
+      <circle cx={x} cy={y} r={7.5} fill="var(--fld)" stroke="var(--fld2)" strokeWidth={1.8} />
+      <circle cx={x} cy={y - 1.6} r={3} fill="rgba(255,255,255,0.55)" />
       <g transform={`translate(${lx}, ${ly})`}>
-        <rect x={-w / 2} y={0} width={w} height={14} rx={4} fill="rgba(6,12,24,0.82)" stroke="var(--fld2)" strokeWidth={0.6} />
-        <text x={0} y={10} textAnchor="middle" fontSize={9} fontWeight={700} fill="#eaf1ff" fontFamily="system-ui, sans-serif">
+        <rect x={-w / 2} y={0} width={w} height={17} rx={5} fill="rgba(6,12,24,0.82)" stroke="var(--fld2)" strokeWidth={0.7} />
+        <text x={0} y={12.5} textAnchor="middle" fontSize={11} fontWeight={700} fill="#eaf1ff" fontFamily="system-ui, sans-serif">
           {label}
         </text>
       </g>
@@ -73,19 +82,166 @@ function FielderLabel({ x, y, pos, name }: { x: number; y: number; pos: Position
   );
 }
 
-export function Diamond({ home, away }: { home: Team; away: Team }) {
+export function Diamond({
+  home,
+  away,
+  background,
+  bases,
+}: {
+  home: Team;
+  away: Team;
+  background?: boolean;
+  bases?: [boolean, boolean, boolean];
+}) {
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
   const bg = stadiumImage(home.id);
 
   const seed = hash(home.ballpark);
-  const towers = 2 + (seed % 2) * 2; // 2 o 4 torri-faro
-  const roof = seed % 3; // 0 aperto, 1 tettoia parziale, 2 cupola bassa
-  const clip = 'field-clip';
+  const towers = 2 + (seed % 2) * 2;
+  const roof = seed % 3;
+  const towerXs = towers === 2 ? [150, 750] : [110, 320, 580, 790];
 
-  // Torri-faro dietro le tribune, disposte simmetricamente.
-  const towerXs =
-    towers === 2 ? [95, 325] : [70, 150, 270, 350];
+  const fairPath = `M ${HOME.x} ${HOME.y} L ${POLE_L.x} ${POLE_L.y} Q ${WALL_C.x} ${WALL_C.y} ${POLE_R.x} ${POLE_R.y} Z`;
+  const wallPath = `M ${POLE_L.x} ${POLE_L.y} Q ${WALL_C.x} ${WALL_C.y} ${POLE_R.x} ${POLE_R.y}`;
+  const standsPath = `M ${POLE_L.x} ${POLE_L.y} Q ${WALL_C.x} ${WALL_C.y} ${POLE_R.x} ${POLE_R.y} L ${VB.w} 0 L 0 0 Z`;
+
+  const N = 11;
+  const wedges: string[] = [];
+  for (let i = 0; i < N; i++) {
+    const [x1, y1] = wallPoint(i / N);
+    const [x2, y2] = wallPoint((i + 1) / N);
+    wedges.push(`M ${HOME.x} ${HOME.y} L ${x1} ${y1} L ${x2} ${y2} Z`);
+  }
+
+  const infield = `M ${HOME.x} ${HOME.y} L ${FIRST.x} ${FIRST.y} L ${SECOND.x} ${SECOND.y} L ${THIRD.x} ${THIRD.y} Z`;
+
+  const generated = (
+    <>
+      <rect x="0" y="0" width={VB.w} height="210" fill="url(#sky)" />
+      {towerXs.map((tx, i) => (
+        <g key={i}>
+          <rect x={tx - 2} y={16} width={4} height={50} fill="#2a3550" />
+          <rect x={tx - 12} y={7} width={24} height={13} rx={2} fill="#26324c" />
+          {[0, 1, 2].map((c) => (
+            <circle key={c} cx={tx - 7 + c * 7} cy={13.5} r={2.2} fill="#ffe9a8" opacity={0.9} />
+          ))}
+        </g>
+      ))}
+      <path d={standsPath} fill={secondary} opacity={0.92} />
+      {[0.3, 0.46, 0.62, 0.78].map((f, i) => (
+        <path
+          key={i}
+          d={`M ${POLE_L.x - f * 34} ${POLE_L.y - f * 168} Q ${WALL_C.x} ${WALL_C.y - f * 100} ${POLE_R.x + f * 34} ${POLE_R.y - f * 168}`}
+          fill="none"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth={2}
+        />
+      ))}
+      {roof === 2 && (
+        <path d={`M 0 8 Q ${WALL_C.x} -20 ${VB.w} 8`} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth={7} />
+      )}
+
+      <clipPath id="fair-clip">
+        <path d={fairPath} />
+      </clipPath>
+      <path d={fairPath} fill="url(#grass)" />
+      <g clipPath="url(#fair-clip)">
+        {wedges.map((d, i) => (
+          <path key={i} d={d} fill={i % 2 === 0 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)'} />
+        ))}
+      </g>
+
+      <path d={wallPath} fill="none" stroke="#8a5a34" strokeWidth={11} opacity={0.85} />
+      <path d={wallPath} fill="none" stroke={primary} strokeWidth={6} />
+
+      <line x1={HOME.x} y1={HOME.y} x2={POLE_L.x} y2={POLE_L.y} stroke="rgba(255,255,255,0.7)" strokeWidth={1.8} />
+      <line x1={HOME.x} y1={HOME.y} x2={POLE_R.x} y2={POLE_R.y} stroke="rgba(255,255,255,0.7)" strokeWidth={1.8} />
+
+      <path d={infield} fill="rgba(180,120,70,0.22)" stroke="#b5764a" strokeWidth={13} strokeLinejoin="round" />
+      <circle cx={MOUND.x} cy={MOUND.y} r={16} fill="#b5764a" />
+      <circle cx={HOME.x} cy={HOME.y} r={22} fill="#b5764a" opacity={0.55} />
+    </>
+  );
+
+  const markers = (
+    <>
+      {[FIRST, SECOND, THIRD].map((b, i) => {
+        const on = !!bases && bases[i];
+        const s = on ? 8 : 5;
+        return (
+          <rect
+            key={i}
+            x={b.x - s}
+            y={b.y - s}
+            width={s * 2}
+            height={s * 2}
+            fill={on ? '#ffd15c' : '#f4f6fb'}
+            stroke={on ? '#b5764a' : 'none'}
+            strokeWidth={on ? 2 : 0}
+            transform={`rotate(45 ${b.x} ${b.y})`}
+          />
+        );
+      })}
+      <path
+        d={`M ${HOME.x - 6} ${HOME.y - 4} L ${HOME.x + 6} ${HOME.y - 4} L ${HOME.x + 6} ${HOME.y + 1} L ${HOME.x} ${HOME.y + 7} L ${HOME.x - 6} ${HOME.y + 1} Z`}
+        fill="#f4f6fb"
+      />
+      <rect x={MOUND.x - 6} y={MOUND.y - 2} width={12} height={4} rx={1.5} fill="#f4f6fb" />
+      <circle cx={HOME.x - 16} cy={HOME.y - 10} r={7.5} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.4} />
+
+      {DEFENSE.map((s) => (
+        <FielderLabel key={s.pos} x={s.x} y={s.y} pos={s.pos} name={playerAt(home, s.pos)} />
+      ))}
+    </>
+  );
+
+  const defs = (
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#20304f" />
+        <stop offset="60%" stopColor="#38507a" />
+        <stop offset="100%" stopColor="#8a6f52" />
+      </linearGradient>
+      <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#2f6b32" />
+        <stop offset="100%" stopColor="#429340" />
+      </linearGradient>
+    </defs>
+  );
+
+  const content = (
+    <>
+      {defs}
+      {bg ? (
+        <image href={bg} x="0" y="0" width={VB.w} height={VB.h} preserveAspectRatio="xMidYMid slice" />
+      ) : (
+        generated
+      )}
+      {markers}
+    </>
+  );
+
+  const style = {
+    ['--fld' as string]: primary,
+    ['--fld2' as string]: secondary,
+  };
+
+  if (background) {
+    return (
+      <div className="field-bg" style={style}>
+        <svg
+          viewBox={`0 0 ${VB.w} ${VB.h}`}
+          role="img"
+          aria-label={`Campo di ${home.ballpark}`}
+          className="field-bg-svg"
+          preserveAspectRatio="xMidYMid meet"
+        >
+          {content}
+        </svg>
+      </div>
+    );
+  }
 
   return (
     <div className="card diamond-card">
@@ -95,114 +251,9 @@ export function Diamond({ home, away }: { home: Team; away: Team }) {
           {away.abbrev} <span className="dm-at">@</span> {home.abbrev}
         </span>
       </div>
-      <div
-        className="field-wrap"
-        style={{
-          ['--fld' as string]: primary,
-          ['--fld2' as string]: secondary,
-        }}
-      >
-        <svg viewBox="0 0 420 400" role="img" aria-label={`Campo di ${home.ballpark}`} className="field-svg">
-          <defs>
-            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#20304f" />
-              <stop offset="55%" stopColor="#38507a" />
-              <stop offset="100%" stopColor="#8a6f52" />
-            </linearGradient>
-            <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2f6b32" />
-              <stop offset="100%" stopColor="#3f8b3e" />
-            </linearGradient>
-            <clipPath id={clip}>
-              {/* Territorio buono: cuneo da casa base al muro. */}
-              <path d="M 210 330 L 55 175 Q 210 -40 365 175 Z" />
-            </clipPath>
-          </defs>
-
-          {/* Cielo / sfondo */}
-          <rect x="0" y="0" width="420" height="200" fill="url(#sky)" />
-          {bg && (
-            <image href={bg} x="0" y="0" width="420" height="200" preserveAspectRatio="xMidYMid slice" />
-          )}
-
-          {/* Torri-faro */}
-          {!bg &&
-            towerXs.map((tx, i) => (
-              <g key={i}>
-                <rect x={tx - 1.5} y={40} width={3} height={70} fill="#2a3550" />
-                <rect x={tx - 11} y={28} width={22} height={14} rx={2} fill="#26324c" />
-                {[0, 1, 2].map((c) => (
-                  <circle key={c} cx={tx - 6 + c * 6} cy={35} r={2} fill="#ffe9a8" opacity={0.9} />
-                ))}
-              </g>
-            ))}
-
-          {/* Tribune dietro il muro (colore squadra) */}
-          {!bg && (
-            <g>
-              <path d="M 40 172 Q 210 -55 380 172 L 380 120 Q 210 -30 40 120 Z" fill={secondary} opacity={0.9} />
-              <path d="M 55 118 Q 210 -18 365 118 L 365 96 Q 210 -6 55 96 Z" fill={secondary} opacity={0.7} />
-              {/* Tetto/cupola variabile per stadio */}
-              {roof === 1 && (
-                <path d="M 60 96 Q 210 30 360 96 L 360 84 Q 210 20 60 84 Z" fill="rgba(0,0,0,0.35)" />
-              )}
-              {roof === 2 && (
-                <path d="M 70 100 Q 210 -30 350 100" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={6} />
-              )}
-            </g>
-          )}
-
-          {/* Erba (cuneo) + strisce di taglio */}
-          <g clipPath={`url(#${clip})`}>
-            <rect x="0" y="0" width="420" height="400" fill="url(#grass)" />
-            {Array.from({ length: 9 }, (_, i) => (
-              <rect
-                key={i}
-                x={i * 48}
-                y={0}
-                width={48}
-                height={400}
-                fill={i % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)'}
-              />
-            ))}
-            {/* Warning track lungo il muro */}
-            <path d="M 55 175 Q 210 -40 365 175" fill="none" stroke="#8a5a34" strokeWidth={10} opacity={0.85} />
-          </g>
-
-          {/* Muro esterno (colore squadra) */}
-          <path d="M 55 175 Q 210 -40 365 175" fill="none" stroke={primary} strokeWidth={5} />
-          {/* Pali di fallo */}
-          <line x1="210" y1="330" x2="55" y2="175" stroke="rgba(255,255,255,0.7)" strokeWidth={1.5} />
-          <line x1="210" y1="330" x2="365" y2="175" stroke="rgba(255,255,255,0.7)" strokeWidth={1.5} />
-
-          {/* Interno: linee delle basi (terra) */}
-          <path
-            d={`M ${HOME_PLATE.x} ${HOME_PLATE.y} L ${FIRST.x} ${FIRST.y} L ${SECOND.x} ${SECOND.y} L ${THIRD.x} ${THIRD.y} Z`}
-            fill="rgba(180,120,70,0.18)"
-            stroke="#b5764a"
-            strokeWidth={9}
-            strokeLinejoin="round"
-          />
-          {/* Zolla del monte e del piatto */}
-          <circle cx={MOUND.x} cy={MOUND.y} r={16} fill="#b5764a" />
-          <circle cx={HOME_PLATE.x} cy={HOME_PLATE.y} r={20} fill="#b5764a" opacity={0.55} />
-
-          {/* Basi */}
-          {[FIRST, SECOND, THIRD].map((b, i) => (
-            <rect key={i} x={b.x - 4} y={b.y - 4} width={8} height={8} fill="#f4f6fb" transform={`rotate(45 ${b.x} ${b.y})`} />
-          ))}
-          {/* Casa base */}
-          <path d={`M ${HOME_PLATE.x - 5} ${HOME_PLATE.y - 3} L ${HOME_PLATE.x + 5} ${HOME_PLATE.y - 3} L ${HOME_PLATE.x + 5} ${HOME_PLATE.y + 1} L ${HOME_PLATE.x} ${HOME_PLATE.y + 6} L ${HOME_PLATE.x - 5} ${HOME_PLATE.y + 1} Z`} fill="#f4f6fb" />
-          {/* Pedana di lancio */}
-          <rect x={MOUND.x - 5} y={MOUND.y - 1} width={10} height={3} rx={1} fill="#f4f6fb" />
-
-          {/* Battitore (colore squadra ospite) nel box */}
-          <circle cx={HOME_PLATE.x - 12} cy={HOME_PLATE.y - 6} r={6} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.2} />
-
-          {/* Difesa di casa con etichette */}
-          {DEFENSE.map((s) => (
-            <FielderLabel key={s.pos} x={s.x} y={s.y} pos={s.pos} name={playerAt(home, s.pos)} />
-          ))}
+      <div className="field-wrap" style={style}>
+        <svg viewBox={`0 0 ${VB.w} ${VB.h}`} role="img" aria-label={`Campo di ${home.ballpark}`} className="field-svg">
+          {content}
         </svg>
       </div>
     </div>

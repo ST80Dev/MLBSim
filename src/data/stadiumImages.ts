@@ -1,17 +1,19 @@
-// Override opzionale delle foto-stadio *in locale*.
+// Override delle foto-stadio (sfondo del campo).
 //
-// REGOLA DEL REPO: mai committare foto ufficiali degli stadi (immagini
-// protette). Di default questa mappa e' VUOTA e la UI disegna un campo/stadio
-// ORIGINALE generato a runtime (vedi src/ui/Diamond.tsx).
+// Di default questa mappa e' VUOTA e la UI disegna un campo/stadio ORIGINALE
+// generato a runtime (vedi src/ui/Diamond.tsx). Il progetto non include foto
+// ufficiali.
 //
-// Come usarla in locale (senza committare gli asset):
-//   1. metti le tue immagini in `public/stadiums/` (es. `NYY.jpg`);
-//   2. aggiungi qui la voce, es.  NYY: '/stadiums/NYY.jpg'
-//      (o un data-URL / import), chiavata sull'id franchigia.
+// L'UTENTE puo' aggiungere le proprie immagini (scelta esplicita, per il deploy
+// su GitHub Pages — vedi public/stadiums/README.md):
+//   1. mette i file in `public/stadiums/` (es. `NYY.jpg`), chiavati sull'id
+//      franchigia (codice a 3 lettere);
+//   2. aggiunge qui la voce, es.  NYY: '/stadiums/NYY.jpg'.
 // Se presente, il Diamond usa l'immagine come sfondo dietro il diamante.
 //
-// `public/stadiums/` e i file immagine restano fuori dal versionamento
-// (vedi .gitignore); tieni le tue voci fuori dai commit condivisi.
+// Nota: il sito Pages e' pubblico anche da repo privato → le immagini committate
+// sono accessibili pubblicamente. Le foto reali possono essere materiale
+// protetto: la responsabilita' della scelta e' di chi le aggiunge.
 
 export const STADIUM_IMAGES: Record<string, string> = {
   // NYY: '/stadiums/NYY.jpg',
