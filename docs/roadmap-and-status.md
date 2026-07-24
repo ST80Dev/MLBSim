@@ -50,6 +50,22 @@
   - Vedi `docs/franchise.md`: stipendi annuali, salary cap rigido, scambi a
     valore, draft semplice.
 
+## Modello di gioco a regime (bussola per Fasi 4/5)
+
+Il gioco ruota attorno a **una sola squadra scelta dall'utente**:
+
+- Si gioca il **calendario** partita per partita **solo** con la propria squadra.
+- Tra una partita e la successiva c'è una **finestra di gestione squadra &
+  franchigia**: è lì (e solo lì) che si modificano **roster e lineup/rotazione**,
+  scambi, ecc. Le modifiche valgono dalla partita successiva in poi.
+- Le partite delle **altre squadre** (non dell'utente) sono **simulate giorno per
+  giorno** (quick-sim) per far avanzare classifiche e statistiche di lega.
+
+> Nota di scope UI: la schermata Fase 0 (due squadre casuali, esibizione singola)
+> è **provvisoria**. NON vincolarle logiche di stagione/gestione: la persistenza
+> di roster/lineup vive nella finestra di gestione tra le partite di calendario,
+> non nella preview d'esibizione attuale.
+
 ## Principio di scope
 
 Divertirsi a **creare una squadra e giocare molte partite velocemente**,

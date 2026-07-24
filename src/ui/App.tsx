@@ -1,5 +1,5 @@
 import { useReducer, useRef, useState } from 'react';
-import type { Batter, Pitcher, Team } from '../engine/types';
+import type { Batter, Pitcher, Position, Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
 import type { LiveGame, LiveSituation } from '../engine/game';
 import {
@@ -15,9 +15,14 @@ import {
   quickSim,
 } from '../engine/game';
 import { batterOverall, pitcherOverall } from '../engine/ratings';
+import { ratingsAtPosition, activePos, computeSwap } from '../engine/positions';
+import type { Alignment } from '../engine/positions';
+import { teamStrength } from '../engine/strength';
+import type { TeamStrength } from '../engine/strength';
 import { formatIp, formatAvg } from '../engine/boxscore';
 import { generateMatchup } from '../data/generator';
 import { gameSeed, newRandomSeed, ratingColor, stars, teamAccent } from './format';
+import { Diamond } from './Diamond';
 
 type View = 'game' | 'roster';
 type Side = 'away' | 'home';
@@ -28,6 +33,10 @@ export function App() {
   const [controlled, setControlled] = useState<Side>('home');
   const [view, setView] = useState<View>('game');
   const [, forceTick] = useReducer((x) => x + 1, 0);
+  // Schieramenti difensivi modificabili nella scheda "Rose" (id -> ruolo attivo).
+  // Strumento di editing del roster; azzerati quando cambiano le squadre.
+  const [alignAway, setAlignAway] = useState<Alignment>({});
+  const [alignHome, setAlignHome] = useState<Alignment>({});
 
   // La partita interattiva e' mutabile e vive tra i render: la ricreo solo
   // quando cambiano squadre, numero di gara o squadra gestita.
@@ -44,6 +53,7 @@ export function App() {
     };
   }
   const live = ref.current.game;
+  const teams = ref.current.teams;
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
@@ -58,6 +68,8 @@ export function App() {
   const newTeams = () => {
     setTeamSeed(newRandomSeed());
     setGameNo(1);
+    setAlignAway({});
+    setAlignHome({});
   };
 
   return (
@@ -127,6 +139,8 @@ export function App() {
           ) : (
             <ControlPanel live={live} sit={sit} act={act} />
           )}
+          <Diamond home={result.home} away={result.away} />
+          <StrengthPanel away={result.away} home={result.home} />
           <LineScore result={result} />
           <div className="grid2">
             <BoxScore team={result.away} stats={result.awayStats} />
@@ -136,8 +150,22 @@ export function App() {
         </>
       ) : (
         <div className="grid2">
-          <RosterRatings team={result.away} />
-          <RosterRatings team={result.home} />
+          <RosterRatings
+            team={teams.away}
+            alignment={alignAway}
+            onSwap={(id, pos) => {
+              const next = computeSwap(teams.away, alignAway, id, pos);
+              if (next) setAlignAway(next);
+            }}
+          />
+          <RosterRatings
+            team={teams.home}
+            alignment={alignHome}
+            onSwap={(id, pos) => {
+              const next = computeSwap(teams.home, alignHome, id, pos);
+              if (next) setAlignHome(next);
+            }}
+          />
         </div>
       )}
 
@@ -383,9 +411,61 @@ function TeamBadge({ team, size = 46 }: { team: Team; size?: number }) {
   );
 }
 
-function teamOffenseOverall(team: Team): number {
-  const sum = team.lineup.reduce((a, b) => a + batterOverall(b.ratings), 0);
-  return Math.round(sum / team.lineup.length);
+function strengthColor(v: number): string {
+  const t = Math.max(0, Math.min(1, (v - 30) / 45));
+  return `hsl(${Math.round(t * 125)} 60% 46%)`;
+}
+
+function StrengthPanel({ away, home }: { away: Team; home: Team }) {
+  const rows: { team: Team; s: TeamStrength }[] = [
+    { team: away, s: teamStrength(away) },
+    { team: home, s: teamStrength(home) },
+  ];
+  const cols: { key: keyof TeamStrength; label: string; title: string }[] = [
+    { key: 'total', label: 'TOT', title: 'Forza totale' },
+    { key: 'attack', label: 'ATT', title: 'Attacco' },
+    { key: 'defense', label: 'DIF', title: 'Difesa' },
+    { key: 'pitching', label: 'LAN', title: 'Lancio' },
+  ];
+  return (
+    <div className="card strength-card">
+      <div className="card-title">Forza squadre</div>
+      <table className="strength">
+        <thead>
+          <tr>
+            <th className="l">Squadra</th>
+            {cols.map((c) => (
+              <th key={c.key} title={c.title}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ team, s }) => (
+            <tr key={team.id}>
+              <td className="l">
+                <span className="pill" style={{ background: team.primaryColor }}>
+                  {team.abbrev}
+                </span>{' '}
+                {team.name}
+              </td>
+              {cols.map((c) => (
+                <td key={c.key}>
+                  <span
+                    className={c.key === 'total' ? 'str-val str-total' : 'str-val'}
+                    style={{ background: strengthColor(s[c.key]) }}
+                  >
+                    {s[c.key]}
+                  </span>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function Scoreboard({ result, decided }: { result: GameResult; decided: boolean }) {
@@ -434,7 +514,7 @@ function TeamScore({
       <div className="tinfo">
         <div className="tname">{team.name}</div>
         <div className="tsub">
-          {team.league} {team.division} · off. {teamOffenseOverall(team)}
+          {team.league} {team.division} · forza {teamStrength(team).total}
         </div>
       </div>
       <div className="runs">{score}</div>
@@ -649,7 +729,59 @@ function Rating({ v }: { v: number }) {
   );
 }
 
-function RosterRatings({ team }: { team: Team }) {
+function LineupRow({
+  b,
+  pos,
+  target,
+  canSwitch,
+  onSwitch,
+}: {
+  b: Batter;
+  pos: Position;
+  target?: Position;
+  canSwitch: boolean;
+  onSwitch: () => void;
+}) {
+  const moved = pos !== b.position;
+  const r = ratingsAtPosition(b, pos);
+  const title = !target
+    ? undefined
+    : !canSwitch
+      ? `Scambio con ${target} non disponibile (nessun compagno idoneo)`
+      : moved
+        ? 'Torna al ruolo naturale'
+        : `Schiera come ${target}`;
+  return (
+    <tr className={moved ? 'moved' : undefined}>
+      <td className="l">
+        <span className={moved ? 'pos moved' : 'pos'}>{pos}</span> {b.name}
+        {target && (
+          <button className="posbtn" title={title} disabled={!canSwitch} onClick={onSwitch}>
+            ⇄ {target}
+          </button>
+        )}
+      </td>
+      <td>{b.age}</td>
+      <Rating v={r.contact} />
+      <Rating v={r.power} />
+      <Rating v={r.eye} />
+      <Rating v={r.speed} />
+      <Rating v={r.fielding} />
+      <Rating v={r.arm} />
+      <td className="ovr">{stars(batterOverall(r))}</td>
+    </tr>
+  );
+}
+
+function RosterRatings({
+  team,
+  alignment,
+  onSwap,
+}: {
+  team: Team;
+  alignment: Alignment;
+  onSwap: (playerId: string, targetPos: Position) => void;
+}) {
   const rotation = team.rotation.slice(0, 3);
   return (
     <div className="card">
@@ -671,21 +803,22 @@ function RosterRatings({ team }: { team: Team }) {
           </tr>
         </thead>
         <tbody>
-          {team.lineup.map((b) => (
-            <tr key={b.id}>
-              <td className="l">
-                <span className="pos">{b.position}</span> {b.name}
-              </td>
-              <td>{b.age}</td>
-              <Rating v={b.ratings.contact} />
-              <Rating v={b.ratings.power} />
-              <Rating v={b.ratings.eye} />
-              <Rating v={b.ratings.speed} />
-              <Rating v={b.ratings.fielding} />
-              <Rating v={b.ratings.arm} />
-              <td className="ovr">{stars(batterOverall(b.ratings))}</td>
-            </tr>
-          ))}
+          {team.lineup.map((b) => {
+            const pos = activePos(b, alignment);
+            const moved = pos !== b.position;
+            const target = moved ? b.position : b.secondaryPosition;
+            const canSwitch = !!target && computeSwap(team, alignment, b.id, target) !== null;
+            return (
+              <LineupRow
+                key={b.id}
+                b={b}
+                pos={pos}
+                target={target}
+                canSwitch={canSwitch}
+                onSwitch={() => target && onSwap(b.id, target)}
+              />
+            );
+          })}
         </tbody>
       </table>
 

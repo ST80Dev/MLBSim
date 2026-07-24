@@ -7,3 +7,6 @@ dist-ssr
 *.local
 .env
 .env.*
+
+# Foto-stadio reali tenute solo in locale (mai committare asset ufficiali)
+public/stadiums/

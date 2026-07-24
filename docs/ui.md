@@ -9,9 +9,10 @@ statistiche leggibili in monospace, rating colorati (rosso→verde). Testi in
 
 ## Stack
 
-React + TypeScript + Vite. In Fase 0 la UI è tutta in `src/ui/App.tsx` (con
-sotto-componenti in-file), più `src/ui/format.ts` (helper: colore rating, stelle,
-colore accento, seed) e `src/styles.css` (tema, variabili CSS, griglie).
+React + TypeScript + Vite. La UI principale è in `src/ui/App.tsx` (con
+sotto-componenti in-file), più `src/ui/Diamond.tsx` (campo/stadio generato),
+`src/ui/format.ts` (helper: colore rating, stelle, colore accento, seed) e
+`src/styles.css` (tema, variabili CSS, griglie).
 
 ## Componenti attuali
 
@@ -24,7 +25,14 @@ colore accento, seed) e `src/styles.css` (tema, variabili CSS, griglie).
   Cambio lanciatore** (menu dei rilievi). Fuori dal pannello, **quick-sim**
   ("Salta a fine partita") e, a partita finita, il **banner del risultato**.
 - **Scoreboard**: due squadre, badge, punteggio, stadio, indicatore vincitore
-  (evidenziato solo a partita conclusa).
+  (evidenziato solo a partita conclusa). Il sotto-titolo mostra la **forza
+  totale** della squadra.
+- **Diamante/campo** (`Diamond.tsx`): campo + stadio **originali** generati a
+  runtime (SVG). La difesa di casa è posizionata sul diamante con etichetta
+  (ruolo + cognome); piccole variazioni per stadio (tetto, torri-faro, tinte)
+  sono seedate dal nome del ballpark. Colori dalle tinte squadra.
+- **Forza squadre**: pannello comparativo con **TOT / ATT / DIF / LAN** per
+  entrambe le squadre (vedi `src/engine/strength.ts`).
 - **Line score** per inning (R/H/E), scrollabile in orizzontale.
 - **Box score**: tabellino battuta (AB R H RBI BB SO **SB** AVG) + lancio (IP H R
   ER BB SO HR **Dec** con V/P/SV) per entrambe le squadre.
@@ -39,10 +47,14 @@ cambio di quei parametri, e forza il re-render dopo ogni azione.
 ## Loghi e stadi (importante)
 
 - **Mai** loghi o foto-stadio ufficiali nel repo (marchi/immagini protette).
-- La UI genera un **badge originale** (SVG) coi colori squadra dall'abbreviazione.
+- La UI genera un **badge originale** (SVG) coi colori squadra dall'abbreviazione,
+  e un **campo/stadio originale** generato a runtime (`Diamond.tsx`).
 - Nomi, città, colori e nomi degli stadi reali sono dati fattuali ammessi
-  (`src/data/franchises.ts`). Un punto per asset reali *in locale* verrà
-  predisposto in Fase 3.
+  (`src/data/franchises.ts`).
+- **Foto-stadio reali in locale**: `src/data/stadiumImages.ts` espone una mappa
+  `id → url` **vuota di default**. Chi vuole può mettere le proprie immagini in
+  `public/stadiums/` (ignorata da git) e mappare la voce: il Diamond le usa come
+  sfondo. Nessun asset ufficiale finisce nel repo.
 
 ## Prossimi passi UI (Fasi 1+/3)
 
