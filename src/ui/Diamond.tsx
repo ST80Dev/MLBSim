@@ -1,12 +1,22 @@
+import { useState } from 'react';
 import type { Team, Position } from '../engine/types';
 import { stadiumImage } from '../data/stadiumImages';
+import { DEFAULT_CALIBRATION } from '../data/stadiumCalibration';
+import type { FieldCalibration } from '../data/stadiumCalibration';
 
-// Campo + stadio ORIGINALI generati a runtime (nessuna foto/logo ufficiale).
-// Vista IN PROSPETTIVA da dietro casa base (come dagli spalti): casa base in
-// basso vicina, il campo si allarga salendo verso il muro e le tribune in alto.
-// viewBox panoramico 900x420 per riempire bene la larghezza. Se l'utente
-// fornisce una foto (stadiumImages) diventa lo sfondo pieno con soli i marker.
+// Campo + marker ORIGINALI generati a runtime (nessun logo ufficiale). Vista IN
+// PROSPETTIVA da dietro casa base: il piatto in basso, il campo si allarga
+// salendo verso il muro. viewBox 900x420. Se l'utente fornisce una foto
+// (stadiumImages) diventa lo sfondo pieno con soli i marker sovrapposti.
+//
+// I marker si ri-proiettano con la CALIBRAZIONE (perno = casa base): vedi
+// src/data/stadiumCalibration.ts. Con i valori di default la proiezione e'
+// l'identita' (campo generato non deformato).
 
+interface Pt {
+  x: number;
+  y: number;
+}
 interface Spot {
   pos: Position;
   x: number;
@@ -14,14 +24,19 @@ interface Spot {
 }
 
 const VB = { w: 900, h: 420 };
-const HOME = { x: 450, y: 394 };
-const FIRST = { x: 612, y: 322 };
-const SECOND = { x: 450, y: 244 };
-const THIRD = { x: 288, y: 322 };
-const MOUND = { x: 450, y: 302 };
-const POLE_L = { x: 34, y: 168 };
-const POLE_R = { x: 866, y: 168 };
-const WALL_C = { x: 450, y: 50 };
+
+// Geometria BASE (calibrazione neutra). Casa base = perno.
+const BASE = {
+  HOME: { x: 450, y: 394 },
+  FIRST: { x: 612, y: 322 },
+  SECOND: { x: 450, y: 244 },
+  THIRD: { x: 288, y: 322 },
+  MOUND: { x: 450, y: 302 },
+  POLE_L: { x: 34, y: 168 },
+  POLE_R: { x: 866, y: 168 },
+  WALL_C: { x: 450, y: 50 },
+};
+const DEPTH_REF = BASE.HOME.y - BASE.WALL_C.y;
 
 const DEFENSE: Spot[] = [
   { pos: 'P', x: 450, y: 302 },
@@ -35,21 +50,14 @@ const DEFENSE: Spot[] = [
   { pos: 'RF', x: 702, y: 190 },
 ];
 
-function hash(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-/** Punto sulla curva del muro (Bézier quadratica POLE_L → WALL_C → POLE_R). */
-function wallPoint(t: number): [number, number] {
-  const mt = 1 - t;
-  const x = mt * mt * POLE_L.x + 2 * mt * t * WALL_C.x + t * t * POLE_R.x;
-  const y = mt * mt * POLE_L.y + 2 * mt * t * WALL_C.y + t * t * POLE_R.y;
-  return [x, y];
+/** Proietta un punto BASE nello spazio calibrato (perno = casa base). */
+function proj(p: Pt, cal: FieldCalibration): Pt {
+  const dx = p.x - BASE.HOME.x;
+  const depth = BASE.HOME.y - p.y;
+  const depthN = depth / DEPTH_REF;
+  const x = cal.homeX + dx * cal.spreadX * (1 + depthN * cal.fan);
+  const y = cal.homeY - depth * cal.depthY;
+  return { x, y };
 }
 
 function lastNameOf(name: string): string {
@@ -87,24 +95,42 @@ export function Diamond({
   away,
   background,
   bases,
+  cal = DEFAULT_CALIBRATION,
 }: {
   home: Team;
   away: Team;
   background?: boolean;
   bases?: [boolean, boolean, boolean];
+  cal?: FieldCalibration;
 }) {
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
   const bg = stadiumImage(home.id);
+  // Se la foto non e' (ancora) presente, si ripiega sul campo generato.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const useImage = !!bg && bg !== failedSrc;
 
-  const seed = hash(home.ballpark);
-  const towers = 2 + (seed % 2) * 2;
-  const roof = seed % 3;
-  const towerXs = towers === 2 ? [150, 750] : [110, 320, 580, 790];
+  // Punti calibrati.
+  const HOME = proj(BASE.HOME, cal);
+  const FIRST = proj(BASE.FIRST, cal);
+  const SECOND = proj(BASE.SECOND, cal);
+  const THIRD = proj(BASE.THIRD, cal);
+  const MOUND = proj(BASE.MOUND, cal);
+  const POLE_L = proj(BASE.POLE_L, cal);
+  const POLE_R = proj(BASE.POLE_R, cal);
+  const WALL_C = proj(BASE.WALL_C, cal);
+  const defense = DEFENSE.map((s) => ({ pos: s.pos, ...proj(s, cal) }));
+
+  /** Punto sulla curva del muro (Bézier POLE_L → WALL_C → POLE_R). */
+  const wallPoint = (t: number): [number, number] => {
+    const mt = 1 - t;
+    const x = mt * mt * POLE_L.x + 2 * mt * t * WALL_C.x + t * t * POLE_R.x;
+    const y = mt * mt * POLE_L.y + 2 * mt * t * WALL_C.y + t * t * POLE_R.y;
+    return [x, y];
+  };
 
   const fairPath = `M ${HOME.x} ${HOME.y} L ${POLE_L.x} ${POLE_L.y} Q ${WALL_C.x} ${WALL_C.y} ${POLE_R.x} ${POLE_R.y} Z`;
   const wallPath = `M ${POLE_L.x} ${POLE_L.y} Q ${WALL_C.x} ${WALL_C.y} ${POLE_R.x} ${POLE_R.y}`;
-  const standsPath = `M ${POLE_L.x} ${POLE_L.y} Q ${WALL_C.x} ${WALL_C.y} ${POLE_R.x} ${POLE_R.y} L ${VB.w} 0 L 0 0 Z`;
 
   const N = 11;
   const wedges: string[] = [];
@@ -116,32 +142,9 @@ export function Diamond({
 
   const infield = `M ${HOME.x} ${HOME.y} L ${FIRST.x} ${FIRST.y} L ${SECOND.x} ${SECOND.y} L ${THIRD.x} ${THIRD.y} Z`;
 
+  // Solo il terreno di gioco: niente tribune/cielo generati (sfondo scuro o foto).
   const generated = (
     <>
-      <rect x="0" y="0" width={VB.w} height="210" fill="url(#sky)" />
-      {towerXs.map((tx, i) => (
-        <g key={i}>
-          <rect x={tx - 2} y={16} width={4} height={50} fill="#2a3550" />
-          <rect x={tx - 12} y={7} width={24} height={13} rx={2} fill="#26324c" />
-          {[0, 1, 2].map((c) => (
-            <circle key={c} cx={tx - 7 + c * 7} cy={13.5} r={2.2} fill="#ffe9a8" opacity={0.9} />
-          ))}
-        </g>
-      ))}
-      <path d={standsPath} fill={secondary} opacity={0.92} />
-      {[0.3, 0.46, 0.62, 0.78].map((f, i) => (
-        <path
-          key={i}
-          d={`M ${POLE_L.x - f * 34} ${POLE_L.y - f * 168} Q ${WALL_C.x} ${WALL_C.y - f * 100} ${POLE_R.x + f * 34} ${POLE_R.y - f * 168}`}
-          fill="none"
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth={2}
-        />
-      ))}
-      {roof === 2 && (
-        <path d={`M 0 8 Q ${WALL_C.x} -20 ${VB.w} 8`} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth={7} />
-      )}
-
       <clipPath id="fair-clip">
         <path d={fairPath} />
       </clipPath>
@@ -164,9 +167,10 @@ export function Diamond({
     </>
   );
 
+  const baseSpots = [FIRST, SECOND, THIRD];
   const markers = (
     <>
-      {[FIRST, SECOND, THIRD].map((b, i) => {
+      {baseSpots.map((b, i) => {
         const on = !!bases && bases[i];
         const s = on ? 8 : 5;
         return (
@@ -190,7 +194,7 @@ export function Diamond({
       <rect x={MOUND.x - 6} y={MOUND.y - 2} width={12} height={4} rx={1.5} fill="#f4f6fb" />
       <circle cx={HOME.x - 16} cy={HOME.y - 10} r={7.5} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.4} />
 
-      {DEFENSE.map((s) => (
+      {defense.map((s) => (
         <FielderLabel key={s.pos} x={s.x} y={s.y} pos={s.pos} name={playerAt(home, s.pos)} />
       ))}
     </>
@@ -198,11 +202,6 @@ export function Diamond({
 
   const defs = (
     <defs>
-      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#20304f" />
-        <stop offset="60%" stopColor="#38507a" />
-        <stop offset="100%" stopColor="#8a6f52" />
-      </linearGradient>
       <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stopColor="#2f6b32" />
         <stop offset="100%" stopColor="#429340" />
@@ -210,11 +209,25 @@ export function Diamond({
     </defs>
   );
 
+  // Foto di sfondo con zoom/pan (calibrazione).
+  const iw = VB.w * cal.bgZoom;
+  const ih = VB.h * cal.bgZoom;
+  const ix = (VB.w - iw) / 2 + cal.bgX;
+  const iy = (VB.h - ih) / 2 + cal.bgY;
+
   const content = (
     <>
       {defs}
-      {bg ? (
-        <image href={bg} x="0" y="0" width={VB.w} height={VB.h} preserveAspectRatio="xMidYMid slice" />
+      {useImage ? (
+        <image
+          href={bg}
+          x={ix}
+          y={iy}
+          width={iw}
+          height={ih}
+          preserveAspectRatio="xMidYMid slice"
+          onError={() => setFailedSrc(bg!)}
+        />
       ) : (
         generated
       )}
