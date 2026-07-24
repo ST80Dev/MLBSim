@@ -14,10 +14,19 @@ sotto-componenti in-file), più `src/ui/Diamond.tsx` (campo/stadio generato),
 `src/ui/format.ts` (helper: colore rating, stelle, colore accento, seed) e
 `src/styles.css` (tema, variabili CSS, griglie).
 
-## Componenti attuali (Fase 0)
+## Componenti attuali
 
-- **Scoreboard**: due squadre, badge, punteggio, stadio, indicatore vincitore.
-  Il sotto-titolo mostra la **forza totale** della squadra.
+- **Barra "Gestisci"** (Fase 1): scegli quale squadra pilotare (ospite/casa);
+  cambiarla riavvia la gara corrente.
+- **Pannello di controllo interattivo** (Fase 1): situazione (inning/mezzo, rombo
+  delle basi, out), mini-schede battitore/lanciatore con le doti chiave, e i
+  pulsanti-azione contestuali. In attacco: **Battuta / Bunt / Ruba la 2ª / Ruba
+  la 3ª** (solo quando ha senso). In difesa: **Lancia / Base intenzionale /
+  Cambio lanciatore** (menu dei rilievi). Fuori dal pannello, **quick-sim**
+  ("Salta a fine partita") e, a partita finita, il **banner del risultato**.
+- **Scoreboard**: due squadre, badge, punteggio, stadio, indicatore vincitore
+  (evidenziato solo a partita conclusa). Il sotto-titolo mostra la **forza
+  totale** della squadra.
 - **Diamante/campo** (`Diamond.tsx`): campo + stadio **originali** generati a
   runtime (SVG). La difesa di casa è posizionata sul diamante con etichetta
   (ruolo + cognome); piccole variazioni per stadio (tetto, torri-faro, tinte)
@@ -25,11 +34,15 @@ sotto-componenti in-file), più `src/ui/Diamond.tsx` (campo/stadio generato),
 - **Forza squadre**: pannello comparativo con **TOT / ATT / DIF / LAN** per
   entrambe le squadre (vedi `src/engine/strength.ts`).
 - **Line score** per inning (R/H/E), scrollabile in orizzontale.
-- **Box score**: tabellino battuta (AB R H RBI BB SO AVG) + lancio (IP H R ER BB
-  SO HR) per entrambe le squadre.
-- **Cronaca** play-by-play raggruppata per mezzo inning.
+- **Box score**: tabellino battuta (AB R H RBI BB SO **SB** AVG) + lancio (IP H R
+  ER BB SO HR **Dec** con V/P/SV) per entrambe le squadre.
+- **Cronaca** play-by-play raggruppata per mezzo inning, che cresce a ogni azione.
 - **Scheda "Rose & caratteristiche"**: doti 20-80 colorate per lineup e rotazione,
   con OVR a stelle.
+
+La partita interattiva (`LiveGame`) è **mutabile** e vive tra i render: `App`
+la tiene in un `useRef` con chiave `teamSeed|gara|squadra`, ricreandola solo al
+cambio di quei parametri, e forza il re-render dopo ogni azione.
 
 ## Loghi e stadi (importante)
 
@@ -43,10 +56,10 @@ sotto-componenti in-file), più `src/ui/Diamond.tsx` (campo/stadio generato),
   `public/stadiums/` (ignorata da git) e mappare la voce: il Diamond le usa come
   sfondo. Nessun asset ufficiale finisce nel repo.
 
-## Prossimi passi UI (Fasi 1/3)
+## Prossimi passi UI (Fasi 1+/3)
 
-- **Fase 1**: pulsanti-azione per turno (Swing / Bunt / Rubata / Hit-and-run /
-  Pinch-hit), cambi lanciatore, difesa avanzata; toggle **quick-sim**.
+- **Rifinitura Fase 1**: pulsanti per Hit-and-run, Pinch-hit (menu panchina) e
+  difesa avanzata (interni dentro).
 - **Fase 3**: campo con etichette giocatori posizionate, card giocatore ricche,
   pannelli in stile SBS/OOTP.
 

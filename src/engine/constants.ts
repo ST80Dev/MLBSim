@@ -54,4 +54,38 @@ export const TUNING = {
   platoonHitPenalty: 0.93,
   /** Incremento dei rate concessi per ogni battitore oltre la stamina. */
   fatiguePerBatter: 0.03,
+
+  /**
+   * Rubata di base (attiva doti Velocita' del corridore, Braccio del ricevitore,
+   * Difesa/hold del lanciatore). Probabilita' di riuscita:
+   *   base + speed*perSpeed - arm*perArm - hold*perHold - (rubata di 3a? penalita')
+   * dove speed/arm/hold sono in sigma (rating-50)/10.
+   */
+  steal: {
+    base: 0.7,
+    perSpeed: 0.06,
+    perArm: 0.05,
+    perHold: 0.02,
+    stealThirdPenalty: 0.08,
+    min: 0.15,
+    max: 0.95,
+  },
+
+  /**
+   * Bunt di sacrificio (attiva la Difesa del lanciatore e la Velocita' del
+   * battitore). Ripartizione dell'esito: valida (hit), sacrificio fallito
+   * (corridore di testa eliminato), pop-out, altrimenti sacrificio riuscito.
+   */
+  bunt: {
+    hitBase: 0.1,
+    hitPerSpeed: 0.03,
+    hitPerField: 0.02,
+    hitMin: 0.02,
+    hitMax: 0.3,
+    failBase: 0.12,
+    failPerField: 0.04,
+    failMin: 0.05,
+    failMax: 0.35,
+    popBase: 0.07,
+  },
 };

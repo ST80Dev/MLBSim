@@ -15,9 +15,9 @@ Criterio: **ognuna governa UNA sola leva** del motore (zero ridondanza).
 | **Contatto** | battute valide / media (↑ singoli, ↓ strikeout) | la parte "AVG" |
 | **Potenza** | extrabase e fuoricampo | la parte "SLG" |
 | **Occhio** | basi ball (↑ OBP, lieve ↓ strikeout) | la parte "OBP" |
-| **Velocità** | rubate, tripli, basi extra in corsa | |
-| **Difesa** | palle in gioco → out, errori | |
-| **Braccio** | eliminare ladri di base, assist esterni | attivo dalla tattica (Fase 1+) |
+| **Velocità** | rubate, tripli, basi extra in corsa | rubate e bunt attivi (Fase 1) |
+| **Difesa** | palle in gioco → out, errori | (difesa sul campo: Fase 4) |
+| **Braccio** | eliminare ladri di base (ricevitore), assist esterni | attivo sulle rubate (Fase 1) |
 
 ## Caratteristiche del lanciatore (6) — `PitcherRatings`
 
@@ -28,7 +28,7 @@ Criterio: **ognuna governa UNA sola leva** del motore (zero ridondanza).
 | **Movimento** (movement) | poche battute valide concesse |
 | **Palla a terra** (groundball) | pochi HR concessi + doppi giochi |
 | **Resistenza** (stamina) | quanti battitori regge prima di calare |
-| **Difesa** (fielding) | ritorni, bunt, cut-off, tenere i corridori (attivo Fase 1+) |
+| **Difesa** (fielding) | tenere i corridori (hold) e difesa sui bunt (attivo Fase 1); ritorni/cut-off in seguito |
 
 **Dominio vs Controllo** sono indipendenti: esiste il tutto-Dominio/poco-Controllo
 (tanti K ma tante basi ball) e il contrario ("pitch to contact").

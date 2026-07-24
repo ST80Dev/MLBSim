@@ -1,5 +1,8 @@
 import type { Batter, Pitcher } from './types';
 
+/** Esito di una decisione da lanciatore. */
+export type PitchDecision = 'W' | 'L' | 'SV';
+
 /** Riga di tabellino offensivo di un giocatore. */
 export interface BattingLine {
   id: string;
@@ -14,6 +17,8 @@ export interface BattingLine {
   double: number;
   triple: number;
   hr: number;
+  sb: number; // basi rubate (attivata in Fase 1)
+  cs: number; // eliminato in rubata (attivata in Fase 1)
   lob: number; // corridori lasciati in base
 }
 
@@ -29,6 +34,10 @@ export interface PitchingLine {
   bb: number;
   so: number;
   hr: number;
+  /** Decisione (W/L/SV) assegnata a fine partita; null se nessuna. */
+  dec: PitchDecision | null;
+  /** Vantaggio della propria squadra al momento dell'ingresso (per i save). */
+  enteredDiff: number;
 }
 
 export function newBattingLine(b: Batter): BattingLine {
@@ -45,6 +54,8 @@ export function newBattingLine(b: Batter): BattingLine {
     double: 0,
     triple: 0,
     hr: 0,
+    sb: 0,
+    cs: 0,
     lob: 0,
   };
 }
@@ -61,6 +72,8 @@ export function newPitchingLine(p: Pitcher): PitchingLine {
     bb: 0,
     so: 0,
     hr: 0,
+    dec: null,
+    enteredDiff: 0,
   };
 }
 
