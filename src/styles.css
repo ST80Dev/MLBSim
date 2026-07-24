@@ -1082,3 +1082,502 @@ table {
 .pbp-head {
   font-size: 14px;
 }
+
+/* =========================================================================
+   Fase 1 — schermata partita stile SBS: header controlli in alto, barra stat
+   a tutta larghezza, campo come sfondo con riquadri sovrapposti, lineup negli
+   angoli in basso, comandi sotto casa base. Tutto in 100% altezza.
+   ========================================================================= */
+
+.app.app-game {
+  max-width: none;
+  height: 100vh;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-game .topbar {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card2), var(--card));
+}
+.app-game .brand {
+  font-size: 19px;
+}
+.hdr-manage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tabs.inline {
+  margin: 0;
+  gap: 4px;
+}
+.tabs.inline .tab {
+  padding: 6px 14px;
+}
+
+.game-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Barra stat (sotto header, fuori dallo sfondo) --------------------- */
+.statbar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+}
+.team-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--tc);
+  border-radius: 10px;
+  background: var(--card);
+  min-width: 0;
+}
+.team-stat.home {
+  border-left: 1px solid var(--line);
+  border-right: 4px solid var(--tc);
+  align-items: flex-end;
+  text-align: right;
+}
+.team-stat.win {
+  box-shadow: 0 0 0 1px var(--win) inset;
+}
+.ts-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.team-stat.home .ts-head {
+  flex-direction: row-reverse;
+}
+.ts-id {
+  flex: 1;
+  min-width: 0;
+}
+.ts-name {
+  font-weight: 800;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ts-strength {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+.team-stat.home .ts-strength {
+  justify-content: flex-end;
+}
+.ts-str {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+}
+.ts-str-k {
+  color: var(--muted);
+  font-weight: 700;
+}
+.ts-str-v {
+  color: #fff;
+  font-weight: 800;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.ts-score {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 1;
+}
+.team-stat.win .ts-score {
+  color: var(--win);
+}
+.ts-player {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.team-stat.home .ts-player {
+  flex-direction: row-reverse;
+}
+.ts-role {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.ts-role.batter {
+  background: rgba(56, 211, 159, 0.16);
+  color: var(--win);
+}
+.ts-role.pitcher {
+  background: rgba(79, 157, 255, 0.16);
+  color: var(--accent);
+}
+.ts-pname {
+  font-weight: 800;
+  font-size: 15px;
+}
+.ts-line {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.team-stat.home .ts-line {
+  justify-content: flex-end;
+}
+.ts-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ts-stat-k {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.ts-stat-v {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 15px;
+}
+
+/* Centro barra stat: situazione + line score + toggle */
+.statbar-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 360px;
+}
+.sb-situation {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.sb-inning {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--accent);
+}
+.sb-half {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.sb-situation .diamond {
+  width: 32px;
+  height: 32px;
+}
+.sb-situation .outs {
+  flex-direction: row;
+  gap: 5px;
+}
+.statbar-center .linescore-card {
+  margin: 0;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+}
+.statbar-center .linescore td,
+.statbar-center .linescore th {
+  padding: 3px 7px;
+  font-size: 13px;
+}
+.stats-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.st-btn {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 4px 12px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+}
+.st-btn + .st-btn {
+  border-left: 1px solid var(--line);
+}
+.st-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+.st-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Campo di gioco (sfondo) + overlay -------------------------------- */
+.gamefield {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #0a1526;
+}
+.field-bg {
+  position: absolute;
+  inset: 0;
+}
+.field-bg-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Cronaca overlay (alto-centro, oltre il campo tra le tribune) */
+.cronaca-overlay {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 56%);
+  background: rgba(8, 14, 26, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 4;
+  backdrop-filter: blur(3px);
+}
+.cr-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 13px;
+}
+.cr-toggle {
+  color: var(--muted);
+}
+.cr-body {
+  max-height: 9.5em;
+  overflow-y: auto;
+  padding: 0 12px 8px;
+}
+.cr-inning {
+  margin-bottom: 6px;
+}
+.cr-inhead {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--accent);
+  border-bottom: 1px dashed var(--line);
+  padding: 3px 0;
+  position: sticky;
+  top: 0;
+  background: rgba(8, 14, 26, 0.96);
+}
+.cr-body ul {
+  list-style: none;
+  margin: 3px 0 0;
+  padding: 0;
+}
+.cr-body li {
+  font-size: 13px;
+  color: #c3cfe6;
+  padding: 2px 0 2px 12px;
+  position: relative;
+}
+.cr-body li::before {
+  content: '·';
+  position: absolute;
+  left: 2px;
+  color: var(--line);
+}
+.cr-body li.scored {
+  color: #fff;
+  font-weight: 700;
+}
+.cr-body li.scored::before {
+  content: '●';
+  color: var(--win);
+}
+.cr-collapsed-line {
+  padding: 2px 12px 8px;
+  font-size: 13px;
+  color: #c3cfe6;
+}
+.cr-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+/* Lineup negli angoli in basso */
+.lineup-corner {
+  position: absolute;
+  bottom: 8px;
+  width: min(330px, 27%);
+  z-index: 3;
+  max-height: 62%;
+  overflow: hidden;
+}
+.lineup-corner.left {
+  left: 8px;
+}
+.lineup-corner.right {
+  right: 8px;
+}
+.lineup-corner .lineup-side {
+  background: rgba(8, 14, 26, 0.86);
+  backdrop-filter: blur(3px);
+  border: 1px solid var(--line);
+  margin: 0;
+}
+.lineup-corner .ls-table {
+  font-size: 12px;
+}
+.lineup-corner .ls-table th,
+.lineup-corner .ls-table td {
+  padding: 3px 5px;
+}
+
+/* Comandi turno (basso-centro, sotto casa base) */
+.controls-overlay {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 42%);
+  z-index: 5;
+}
+.controls-overlay .actionbar {
+  background: rgba(8, 14, 26, 0.9);
+  border: 1px solid var(--accent);
+  backdrop-filter: blur(3px);
+  margin: 0;
+  align-items: center;
+}
+.controls-overlay .btn-row {
+  justify-content: center;
+}
+
+/* Overlay finale */
+.final-overlay {
+  position: absolute;
+  top: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  background: rgba(8, 14, 26, 0.92);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 26px;
+  z-index: 6;
+  backdrop-filter: blur(3px);
+}
+.final-overlay.won {
+  border-color: var(--win);
+}
+.final-overlay.lost {
+  border-color: #ff6b6b;
+}
+.final-overlay .final-title {
+  font-weight: 800;
+  font-size: 24px;
+}
+.final-overlay .final-line {
+  font-size: 16px;
+  color: var(--muted);
+  margin: 6px 0 12px;
+}
+.final-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* Modale recap (quasi a tutto schermo) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.modal.recap {
+  width: min(1200px, 96vw);
+  height: min(90vh, 900px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card2);
+}
+.modal-title {
+  font-weight: 800;
+  font-size: 16px;
+}
+.modal-head .stats-toggle {
+  margin-left: auto;
+}
+.modal-close {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.modal-body {
+  padding: 14px;
+  overflow-y: auto;
+}
+
+/* Vista Rose: scroll normale */
+.roster-view {
+  padding: 12px clamp(10px, 1.6vw, 20px) 40px;
+  overflow-y: auto;
+}

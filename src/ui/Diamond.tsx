@@ -73,7 +73,17 @@ function FielderLabel({ x, y, pos, name }: { x: number; y: number; pos: Position
   );
 }
 
-export function Diamond({ home, away }: { home: Team; away: Team }) {
+export function Diamond({
+  home,
+  away,
+  background,
+  bases,
+}: {
+  home: Team;
+  away: Team;
+  background?: boolean;
+  bases?: [boolean, boolean, boolean];
+}) {
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
   const bg = stadiumImage(home.id);
@@ -87,23 +97,9 @@ export function Diamond({ home, away }: { home: Team; away: Team }) {
   const towerXs =
     towers === 2 ? [95, 325] : [70, 150, 270, 350];
 
-  return (
-    <div className="card diamond-card">
-      <div className="diamond-marquee">
-        <span className="dm-park">🏟 {home.ballpark}</span>
-        <span className="dm-teams">
-          {away.abbrev} <span className="dm-at">@</span> {home.abbrev}
-        </span>
-      </div>
-      <div
-        className="field-wrap"
-        style={{
-          ['--fld' as string]: primary,
-          ['--fld2' as string]: secondary,
-        }}
-      >
-        <svg viewBox="0 0 420 400" role="img" aria-label={`Campo di ${home.ballpark}`} className="field-svg">
-          <defs>
+  const content = (
+    <>
+      <defs>
             <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#20304f" />
               <stop offset="55%" stopColor="#38507a" />
@@ -187,10 +183,23 @@ export function Diamond({ home, away }: { home: Team; away: Team }) {
           <circle cx={MOUND.x} cy={MOUND.y} r={16} fill="#b5764a" />
           <circle cx={HOME_PLATE.x} cy={HOME_PLATE.y} r={20} fill="#b5764a" opacity={0.55} />
 
-          {/* Basi */}
-          {[FIRST, SECOND, THIRD].map((b, i) => (
-            <rect key={i} x={b.x - 4} y={b.y - 4} width={8} height={8} fill="#f4f6fb" transform={`rotate(45 ${b.x} ${b.y})`} />
-          ))}
+          {/* Basi (occupata = evidenziata) */}
+          {[FIRST, SECOND, THIRD].map((b, i) => {
+            const on = !!bases && bases[i];
+            return (
+              <rect
+                key={i}
+                x={b.x - (on ? 6 : 4)}
+                y={b.y - (on ? 6 : 4)}
+                width={on ? 12 : 8}
+                height={on ? 12 : 8}
+                fill={on ? '#ffd15c' : '#f4f6fb'}
+                stroke={on ? '#b5764a' : 'none'}
+                strokeWidth={on ? 1.5 : 0}
+                transform={`rotate(45 ${b.x} ${b.y})`}
+              />
+            );
+          })}
           {/* Casa base */}
           <path d={`M ${HOME_PLATE.x - 5} ${HOME_PLATE.y - 3} L ${HOME_PLATE.x + 5} ${HOME_PLATE.y - 3} L ${HOME_PLATE.x + 5} ${HOME_PLATE.y + 1} L ${HOME_PLATE.x} ${HOME_PLATE.y + 6} L ${HOME_PLATE.x - 5} ${HOME_PLATE.y + 1} Z`} fill="#f4f6fb" />
           {/* Pedana di lancio */}
@@ -199,10 +208,46 @@ export function Diamond({ home, away }: { home: Team; away: Team }) {
           {/* Battitore (colore squadra ospite) nel box */}
           <circle cx={HOME_PLATE.x - 12} cy={HOME_PLATE.y - 6} r={6} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.2} />
 
-          {/* Difesa di casa con etichette */}
-          {DEFENSE.map((s) => (
-            <FielderLabel key={s.pos} x={s.x} y={s.y} pos={s.pos} name={playerAt(home, s.pos)} />
-          ))}
+      {/* Difesa di casa con etichette */}
+      {DEFENSE.map((s) => (
+        <FielderLabel key={s.pos} x={s.x} y={s.y} pos={s.pos} name={playerAt(home, s.pos)} />
+      ))}
+    </>
+  );
+
+  const style = {
+    ['--fld' as string]: primary,
+    ['--fld2' as string]: secondary,
+  };
+
+  // Modalita' sfondo: il campo riempie la sezione di gioco, senza cornice card.
+  if (background) {
+    return (
+      <div className="field-bg" style={style}>
+        <svg
+          viewBox="0 0 420 400"
+          role="img"
+          aria-label={`Campo di ${home.ballpark}`}
+          className="field-bg-svg"
+          preserveAspectRatio="xMidYMid meet"
+        >
+          {content}
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card diamond-card">
+      <div className="diamond-marquee">
+        <span className="dm-park">🏟 {home.ballpark}</span>
+        <span className="dm-teams">
+          {away.abbrev} <span className="dm-at">@</span> {home.abbrev}
+        </span>
+      </div>
+      <div className="field-wrap" style={style}>
+        <svg viewBox="0 0 420 400" role="img" aria-label={`Campo di ${home.ballpark}`} className="field-svg">
+          {content}
         </svg>
       </div>
     </div>

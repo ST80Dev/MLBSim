@@ -8,5 +8,7 @@ dist-ssr
 .env
 .env.*
 
-# Foto-stadio reali tenute solo in locale (mai committare asset ufficiali)
-public/stadiums/
+# Foto-stadio: cartella tracciata (scelta esplicita dell'utente per il deploy
+# su GitHub Pages). Le immagini le aggiunge/committa l'utente in `public/stadiums/`
+# — vedi public/stadiums/README.md. Nota: il sito Pages e' pubblico anche da
+# repo privato, quindi quelle immagini sono accessibili pubblicamente.
