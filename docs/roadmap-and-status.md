@@ -26,11 +26,19 @@
     restano guidate dal **supporto offensivo**, non dall'ERA.
   - **Rimandato** a una rifinitura successiva (non nel nucleo): Hit-and-run,
     Pinch-hit, difesa avanzata (interni dentro).
+  - **Nota di design** — il selettore "Gestisci ospite/casa" per singola partita
+    è **solo un'affordance di test** di questa fase iniziale (provare in fretta
+    entrambi i lati). **A regime la squadra gestita è una scelta persistente**,
+    fatta una volta all'avvio del gioco / in setup franchigia, non ripetuta ad
+    ogni partita: la sostituzione avverrà con Fase 2/5 (vedi sotto).
 
 ## Roadmap
 - **Fase 2 — Costruzione squadra & import storico**
   - Editor di lineup/rotazione; import di **giocatori e franchigie storiche
     reali** (database Lahman, pubblico).
+  - **Scelta della squadra gestita resa persistente**: la si sceglie una volta
+    (setup) e vale per tutte le partite; il selettore per-partita della Fase 1
+    diventa strumento di test/debug, non il flusso principale.
 - **Fase 3 — UI stile SBS/OOTP**
   - Campo con etichette, card giocatore ricche, pannelli colorati, pulsanti.
 - **Fase 4 — Stagione**
