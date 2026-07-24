@@ -1713,7 +1713,11 @@ table {
   font-size: 40px;
 }
 .ts-name {
-  font-size: 17px;
+  font-size: 23px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  line-height: 1.05;
 }
 .ts-player {
   gap: 12px;
