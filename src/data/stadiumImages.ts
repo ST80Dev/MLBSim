@@ -16,7 +16,11 @@
 // protetto: la responsabilita' della scelta e' di chi le aggiunge.
 
 export const STADIUM_IMAGES: Record<string, string> = {
-  // NYY: '/stadiums/NYY.jpg',
+  ARI: '/stadiums/ARI.jpg',
+  ATL: '/stadiums/ATL.jpg',
+  BAL: '/stadiums/BAL.jpg',
+  BOS: '/stadiums/BOS.jpg',
+  NYY: '/stadiums/NYY.jpg',
 };
 
 export function stadiumImage(teamId: string): string | undefined {
