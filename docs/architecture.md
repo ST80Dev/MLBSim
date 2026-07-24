@@ -32,8 +32,9 @@ Caratteristiche (20-80)  ──derive──►  Statistiche di conteggio  ──
   - `__tests__/` — test Vitest (determinismo, realismo, cime di eccellenza).
 - `src/data/` — generazione procedurale e dati.
   - `generator.ts` — genera giocatori/rose da caratteristiche + franchigie;
-    `makeNameFactory` pesca nomi per **origine** (peso ~ demografia MLB) evitando
-    doppioni di nome/cognome nella stessa squadra.
+    `makeNameFactory` pesca nomi per **origine** (peso ~ demografia MLB). I
+    doppioni di cognome **non** sono vietati: capitano in modo casuale e
+    occasionale (piu' coi cognomi comuni NA/latini), evitando solo gli eccessi.
   - `franchises.ts` — le 30 franchigie MLB reali (dati fattuali).
   - `names.ts` — pool di nomi per **origine** (`NAME_ORIGINS`: nordamericana,
     latina, giapponese, coreana, varie) con pesi.

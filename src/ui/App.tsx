@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Team, Batter, Position } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
 import { simulateGame } from '../engine/game';
 import { batterOverall, pitcherOverall } from '../engine/ratings';
-import { ratingsAtPosition } from '../engine/positions';
+import { ratingsAtPosition, activePos, computeSwap, applyAlignment } from '../engine/positions';
+import type { Alignment } from '../engine/positions';
 import { teamStrength } from '../engine/strength';
 import type { TeamStrength } from '../engine/strength';
 import { formatIp, formatAvg } from '../engine/boxscore';
@@ -17,11 +18,24 @@ export function App() {
   const [teamSeed, setTeamSeed] = useState<number>(() => newRandomSeed());
   const [gameNo, setGameNo] = useState(1);
   const [view, setView] = useState<View>('game');
+  // Schieramenti per squadra (away/home), persistenti tra le partite.
+  const [alignAway, setAlignAway] = useState<Alignment>({});
+  const [alignHome, setAlignHome] = useState<Alignment>({});
 
   const teams = useMemo(() => generateMatchup(teamSeed), [teamSeed]);
+
+  // Nuove squadre -> schieramenti azzerati.
+  useEffect(() => {
+    setAlignAway({});
+    setAlignHome({});
+  }, [teamSeed]);
+
+  const alignedAway = useMemo(() => applyAlignment(teams.away, alignAway), [teams, alignAway]);
+  const alignedHome = useMemo(() => applyAlignment(teams.home, alignHome), [teams, alignHome]);
+
   const result = useMemo(
-    () => simulateGame(teams.away, teams.home, gameSeed(teamSeed, gameNo)),
-    [teams, teamSeed, gameNo],
+    () => simulateGame(alignedAway, alignedHome, gameSeed(teamSeed, gameNo)),
+    [alignedAway, alignedHome, teamSeed, gameNo],
   );
 
   return (
@@ -72,8 +86,22 @@ export function App() {
         </>
       ) : (
         <div className="grid2">
-          <RosterRatings team={result.away} />
-          <RosterRatings team={result.home} />
+          <RosterRatings
+            team={teams.away}
+            alignment={alignAway}
+            onSwap={(id, pos) => {
+              const next = computeSwap(teams.away, alignAway, id, pos);
+              if (next) setAlignAway(next);
+            }}
+          />
+          <RosterRatings
+            team={teams.home}
+            alignment={alignHome}
+            onSwap={(id, pos) => {
+              const next = computeSwap(teams.home, alignHome, id, pos);
+              if (next) setAlignHome(next);
+            }}
+          />
         </div>
       )}
 
@@ -402,22 +430,34 @@ function Rating({ v }: { v: number }) {
   );
 }
 
-function LineupRow({ b }: { b: Batter }) {
-  const [pos, setPos] = useState<Position>(b.position);
+function LineupRow({
+  b,
+  pos,
+  target,
+  canSwitch,
+  onSwitch,
+}: {
+  b: Batter;
+  pos: Position;
+  target?: Position;
+  canSwitch: boolean;
+  onSwitch: () => void;
+}) {
   const moved = pos !== b.position;
   const r = ratingsAtPosition(b, pos);
-  // Etichetta del pulsante = il ruolo verso cui si passerebbe cliccando.
-  const target = moved ? b.position : b.secondaryPosition;
+  const title = !target
+    ? undefined
+    : !canSwitch
+      ? `Scambio con ${target} non disponibile (nessun compagno idoneo)`
+      : moved
+        ? 'Torna al ruolo naturale'
+        : `Schiera come ${target}`;
   return (
     <tr className={moved ? 'moved' : undefined}>
       <td className="l">
         <span className={moved ? 'pos moved' : 'pos'}>{pos}</span> {b.name}
-        {b.secondaryPosition && (
-          <button
-            className="posbtn"
-            title={moved ? 'Torna al ruolo naturale' : `Prova come ${b.secondaryPosition}`}
-            onClick={() => setPos(moved ? b.position : (b.secondaryPosition as Position))}
-          >
+        {target && (
+          <button className="posbtn" title={title} disabled={!canSwitch} onClick={onSwitch}>
             ⇄ {target}
           </button>
         )}
@@ -434,7 +474,15 @@ function LineupRow({ b }: { b: Batter }) {
   );
 }
 
-function RosterRatings({ team }: { team: Team }) {
+function RosterRatings({
+  team,
+  alignment,
+  onSwap,
+}: {
+  team: Team;
+  alignment: Alignment;
+  onSwap: (playerId: string, targetPos: Position) => void;
+}) {
   const rotation = team.rotation.slice(0, 3);
   return (
     <div className="card">
@@ -456,9 +504,22 @@ function RosterRatings({ team }: { team: Team }) {
           </tr>
         </thead>
         <tbody>
-          {team.lineup.map((b) => (
-            <LineupRow key={b.id} b={b} />
-          ))}
+          {team.lineup.map((b) => {
+            const pos = activePos(b, alignment);
+            const moved = pos !== b.position;
+            const target = moved ? b.position : b.secondaryPosition;
+            const canSwitch = !!target && computeSwap(team, alignment, b.id, target) !== null;
+            return (
+              <LineupRow
+                key={b.id}
+                b={b}
+                pos={pos}
+                target={target}
+                canSwitch={canSwitch}
+                onSwitch={() => target && onSwap(b.id, target)}
+              />
+            );
+          })}
         </tbody>
       </table>
 

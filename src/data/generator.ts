@@ -48,8 +48,10 @@ const POS_SHAPE: Record<string, { field: number; power: number; speed: number; a
 
 /**
  * Fabbrica di nomi per una rosa: pesca un'origine (peso ~ demografia MLB), poi
- * nome e cognome coerenti, evitando nomi completi ripetuti e limitando i
- * cognomi doppioni nella stessa squadra (basta con "3 Ortiz in un lineup").
+ * nome e cognome coerenti. NON impone l'unicita' assoluta: i doppioni di cognome
+ * (e, rarissimi, i veri omonimi) possono capitare in modo casuale — come nella
+ * realta', piu' facilmente coi cognomi comuni nord-americani e latini. Evita
+ * solo l'eccesso (i "3 Ortiz nello stesso lineup").
  */
 export interface NameFactory {
   next(): string;
@@ -73,16 +75,23 @@ export function makeNameFactory(rng: Rng): NameFactory {
   return {
     next(): string {
       let fallback = '';
-      for (let attempt = 0; attempt < 14; attempt++) {
+      for (let attempt = 0; attempt < 10; attempt++) {
         const o = pickOrigin();
         const full = `${rng.pick(o.first)} ${rng.pick(o.last)}`;
         const last = full.slice(full.indexOf(' ') + 1);
         fallback = full;
-        if (usedFull.has(full)) continue;
-        // Nei primi tentativi evita anche di ripetere un cognome; poi cede.
-        if ((lastCount.get(last) ?? 0) >= 1 && attempt < 10) continue;
+        const seen = lastCount.get(last) ?? 0;
+        // Probabilita' di RIFIUTARE la pesca: cresce col numero di doppioni, cosi'
+        // un secondo cognome uguale capita ogni tanto, un terzo e' raro, un
+        // quarto quasi impossibile; i veri omonimi (nome+cognome) rarissimi.
+        let reject = 0;
+        if (usedFull.has(full)) reject = 0.97;
+        else if (seen >= 3) reject = 0.98;
+        else if (seen === 2) reject = 0.9;
+        else if (seen === 1) reject = 0.6;
+        if (reject > 0 && rng.next() < reject) continue;
         usedFull.add(full);
-        lastCount.set(last, (lastCount.get(last) ?? 0) + 1);
+        lastCount.set(last, seen + 1);
         return full;
       }
       return fallback;

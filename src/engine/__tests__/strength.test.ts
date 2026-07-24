@@ -33,8 +33,9 @@ describe('forza squadra', () => {
 });
 
 describe('diversita dei nomi', () => {
-  it('niente cognomi troppo ripetuti in una stessa rosa', () => {
-    for (let s = 0; s < 20; s++) {
+  it('i doppioni di cognome capitano ma senza eccessi (niente 4+ uguali)', () => {
+    let teamsWithDup = 0;
+    for (let s = 0; s < 40; s++) {
       const { away, home } = generateMatchup(s);
       for (const t of [away, home]) {
         const all = [...t.lineup, ...t.bench, ...t.rotation, ...t.bullpen];
@@ -43,10 +44,13 @@ describe('diversita dei nomi', () => {
           const last = p.name.slice(p.name.indexOf(' ') + 1);
           counts.set(last, (counts.get(last) ?? 0) + 1);
         }
-        // Con i pool ampliati e il dedup, nessun cognome deve comparire 3+ volte.
         const max = Math.max(...counts.values());
-        expect(max).toBeLessThan(3);
+        if (max >= 2) teamsWithDup += 1;
+        // Occasionale (fino a 3) ok; l'eccesso "5 Ortiz" no.
+        expect(max).toBeLessThan(4);
       }
     }
+    // I doppioni NON sono vietati: su tante squadre devono comparire.
+    expect(teamsWithDup).toBeGreaterThan(0);
   });
 });

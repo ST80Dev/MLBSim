@@ -53,9 +53,16 @@ verso uno più duro scende, meno una penalità fissa di adattamento (fuori ruolo
 naturale). Quindi "variata, non per forza in calo".
 
 In UI (scheda *Rose & caratteristiche*) i giocatori idonei mostrano un toggle
-`⇄ <ruolo>`: al clic il ruolo attivo cambia e DIF/OVR si aggiornano subito, così
-si vede la variazione e si decide se tenerla. L'impatto sul motore di gioco
-arriverà quando la difesa conterà davvero (Fase 4).
+`⇄ <ruolo>`: al clic DIF/OVR si aggiornano subito, così si vede la variazione.
+
+Il cambio è uno **scambio difensivo** (`computeSwap`/`applyAlignment` in
+`positions.ts`): il giocatore prende il nuovo ruolo e chi lo occupava passa al
+ruolo lasciato libero — ma **solo se può coprirlo** (naturale, seconda posizione,
+o DH). Così il campo resta sempre valido (un giocatore per ruolo, niente buchi).
+Lo schieramento è **stato persistente** della squadra: vale per lineup, box score
+e **Diamond**, si mantiene tra le partite dello stesso matchup e si azzera con
+*Nuove squadre*. L'impatto sui risultati arriverà quando la difesa conterà
+davvero (Fase 4); per ora cambia posizioni mostrate e forza difensiva.
 
 ## Derivazione caratteristiche → statistiche
 
