@@ -91,11 +91,23 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
 - `spreadX`/`depthY`: larghezza e profondità dei marker.
 - `fan`: apertura prospettica (i marker lontani si allargano di più).
 - `bgZoom`/`bgX`/`bgY`: zoom e pan della foto di sfondo.
+- `image` (opzionale): **variante-foto** scelta. Il pannello rileva
+  automaticamente le foto alternative presenti nel repo (`<ID>.jpg`,
+  `<ID>2.jpg`, `<ID>3.jpg`, … — provate via `onload`) e mostra dei chip
+  **Principale / Alt 2 / Alt 3**: selezionandone uno cambia lo sfondo live e
+  salva il percorso in `image`. Se assente si usa la principale `<ID>.jpg`.
 
 Con i valori di default la proiezione è l'**identità** (campo generato non
 deformato). Il pannello mostra il valore live, ha slider con stepper −/+ e
 produce il **JSON** da incollare in `STADIUM_CALIBRATION` (una voce per stadio,
-chiave = ID franchigia). È **solo UI**: non tocca il motore.
+chiave = ID franchigia). «Azzera» reimposta la geometria ma **mantiene la foto
+scelta**. È **solo UI**: non tocca il motore.
+
+**Persistenza = repository.** La calibrazione non usa storage del browser: la
+fonte di verità è `src/data/stadiumCalibration.ts` **committato**. Si calibra
+live, si copia la riga JSON in `STADIUM_CALIBRATION` e si committa: da lì la
+calibrazione è permanente e uguale su ogni dispositivo (il sito Pages la
+ricarica al load). La calibrazione è **per foto** (include il campo `image`).
 
 ## Prossimi passi UI (Fasi 1+/3)
 

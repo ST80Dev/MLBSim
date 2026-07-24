@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Team, Position } from '../engine/types';
-import { stadiumImage } from '../data/stadiumImages';
+import { stadiumImage, assetUrl } from '../data/stadiumImages';
 import { DEFAULT_CALIBRATION } from '../data/stadiumCalibration';
 import type { FieldCalibration } from '../data/stadiumCalibration';
 
@@ -105,7 +105,8 @@ export function Diamond({
 }) {
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
-  const bg = stadiumImage(home.id);
+  // Foto scelta in calibrazione (variante) oppure la principale dello stadio.
+  const bg = cal.image ? assetUrl(cal.image) : stadiumImage(home.id);
   // Se la foto non e' (ancora) presente, si ripiega sul campo generato.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const useImage = !!bg && bg !== failedSrc;
