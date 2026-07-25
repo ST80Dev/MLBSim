@@ -7,22 +7,15 @@
 // payload cambiera' (Fase 4 stagione, Fase 5 franchigia), i vecchi salvataggi
 // possano essere migrati invece di rompersi.
 
-import type { Position } from '../../engine/types';
+import type { MatchArrangement } from '../../engine/arrangement';
+
+// Il "foglio partita" persistente e' definito nel motore (`MatchArrangement`):
+// la persistenza lo importa e basta, cosi' il motore resta la fonte di verita'
+// del formato e non dipende dal layer di salvataggio.
+export type { MatchArrangement } from '../../engine/arrangement';
 
 /** Versione corrente del formato di `GameSave`. Da alzare a ogni cambio incompatibile. */
 export const SCHEMA_VERSION = 1;
-
-/**
- * Assetto persistente di una squadra gestita (Fase 2): ordine di battuta e
- * schieramento difensivo scelti nell'editor. Applicato alla rosa (rigenerata da
- * seed) prima della partita, cosi' la squadra scende in campo come preparata.
- */
-export interface TeamArrangement {
-  /** Ordine di battuta: id dei 9 battitori del lineup, in ordine. */
-  order: string[];
-  /** Schieramento difensivo: id battitore -> ruolo attivo (solo chi e' fuori ruolo). */
-  alignment: Record<string, Position>;
-}
 
 /**
  * Stato di gioco persistente (fetta della Fase 2). Cresce nelle fasi
@@ -38,8 +31,8 @@ export interface GameSave {
    * "ospite/casa" della Fase 1 (che resta come strumento di test/debug).
    */
   managedTeamId?: string;
-  /** Assetti (ordine di battuta + difesa) per teamId, dall'editor di Fase 2. */
-  lineups?: Record<string, TeamArrangement>;
+  /** Foglio partita (lineup, difesa, rotazione, bullpen) per teamId — editor Fase 2. */
+  lineups?: Record<string, MatchArrangement>;
 }
 
 /** Metadati di uno slot, senza il payload (per elencare i salvataggi). */

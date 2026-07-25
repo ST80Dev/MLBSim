@@ -16,11 +16,24 @@ import {
   quickSim,
 } from '../engine/game';
 import { batterOverall, pitcherOverall } from '../engine/ratings';
-import { ratingsAtPosition, activePos, computeSwap, applyAlignment } from '../engine/positions';
+import {
+  ratingsAtPosition,
+  activePos,
+  computeSwap,
+  canOccupy,
+  fieldingAtPosition,
+} from '../engine/positions';
 import type { Alignment } from '../engine/positions';
-import { autoLineup, reorderLineup, validateFieldSet } from '../engine/lineup';
+import { autoLineup, FIELD_SLOTS } from '../engine/lineup';
+import {
+  defaultArrangement,
+  buildManagedTeam,
+  validateArrangement,
+  rosterBatters,
+  rosterPitchers,
+} from '../engine/arrangement';
 import { saveStore } from '../data/persistence';
-import type { TeamArrangement } from '../data/persistence';
+import type { MatchArrangement } from '../data/persistence';
 import { teamStrength } from '../engine/strength';
 import { formatIp } from '../engine/boxscore';
 import { generateMatchup } from '../data/generator';
@@ -50,14 +63,12 @@ type View = 'game' | 'roster' | 'manage';
 const SAVE_SLOT = 'principale';
 
 /**
- * Applica un assetto (ordine di battuta + schieramento difensivo) alla squadra
- * gestita: riordina il lineup e rivaluta la difesa. Senza assetto ritorna la
+ * Applica un foglio partita alla squadra gestita ricostruendo lineup, difesa,
+ * rotazione e bullpen (vedi `buildManagedTeam`). Senza assetto ritorna la
  * squadra invariata. E' il punto in cui l'editor "entra" nella simulazione.
  */
-function applyArrangement(team: Team, arr?: TeamArrangement): Team {
-  if (!arr) return team;
-  const lineup = reorderLineup(team.lineup, arr.order);
-  return applyAlignment({ ...team, lineup }, arr.alignment);
+function applyArrangement(team: Team, arr?: MatchArrangement): Team {
+  return arr ? buildManagedTeam(team, arr) : team;
 }
 type Side = 'away' | 'home';
 
@@ -77,7 +88,7 @@ export function App() {
   // Assetti applicati (per teamId) che entrano DAVVERO nella simulazione: la
   // squadra gestita scende in campo con l'ordine di battuta e la difesa scelti
   // nell'editor "Gestisci". Idratati dal salvataggio all'avvio.
-  const [arrangements, setArrangements] = useState<Record<string, TeamArrangement>>({});
+  const [arrangements, setArrangements] = useState<Record<string, MatchArrangement>>({});
 
   // Le rose grezze dipendono solo dal seed; l'assetto si applica sopra, alla
   // sola squadra gestita, prima di costruire la partita.
@@ -156,10 +167,10 @@ export function App() {
 
   // Editor "Gestisci": applica l'assetto alla sola squadra gestita (entra nella
   // sim, riavvia la gara) ed eventualmente lo rende persistente sul cloud.
-  const applyManaged = (arr: TeamArrangement) => {
+  const applyManaged = (arr: MatchArrangement) => {
     setArrangements((m) => ({ ...m, [managedId]: arr }));
   };
-  const saveManaged = async (arr: TeamArrangement) => {
+  const saveManaged = async (arr: MatchArrangement) => {
     const next = { ...arrangements, [managedId]: arr };
     setArrangements(next);
     await saveStore.save(SAVE_SLOT, { managedTeamId: managedId, lineups: next });
@@ -1343,12 +1354,13 @@ function LineupRow({
 }
 
 // ---------------------------------------------------------------------------
-// Vista "Gestisci": editor dell'ordine di battuta e della difesa della sola
-// squadra gestita. Riordino con frecce su/giu', scambio ruolo (naturale <->
-// secondario), "Auto" per un ordine plausibile, guardia di validazione sulla
-// copertura difensiva. Le modifiche restano in una bozza locale finche' non si
-// preme "Applica" (entra nella simulazione, riavvia la gara) o "Salva" (persiste
-// sul cloud e applica). Coerente con la scelta di salvataggio esplicito.
+// Vista "Gestisci": il "foglio partita" della squadra gestita. Quattro pannelli
+// scelgono i partecipanti dalla rosa completa (battitori / lanciatori) e ne
+// decidono ordine e ruoli: ordine di battuta, difesa (casella -> giocatore),
+// rotazione (il primo starter parte) e bullpen (ordine dei rilievi). Le
+// modifiche vivono in una bozza locale finche' non premi "Applica" (entra nella
+// simulazione, riavvia la gara) o "Salva" (persiste sul cloud e applica).
+// Salvataggio esplicito, come da scelta dell'utente.
 // ---------------------------------------------------------------------------
 
 function ManageView({
@@ -1358,250 +1370,301 @@ function ManageView({
   onSave,
 }: {
   team: Team;
-  initial?: TeamArrangement;
-  onApply: (arr: TeamArrangement) => void;
-  onSave: (arr: TeamArrangement) => Promise<void>;
+  initial?: MatchArrangement;
+  onApply: (arr: MatchArrangement) => void;
+  onSave: (arr: MatchArrangement) => Promise<void>;
 }) {
-  const [order, setOrder] = useState<string[]>(() => initial?.order ?? team.lineup.map((b) => b.id));
-  const [align, setAlign] = useState<Alignment>(() => initial?.alignment ?? {});
+  const [arr, setArr] = useState<MatchArrangement>(() => initial ?? defaultArrangement(team));
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Stato derivato: il lineup riordinato e' la fonte di verita' dell'ordine.
-  const lineup = reorderLineup(team.lineup, order);
-  const positions = lineup.map((b) => activePos(b, align));
-  const check = validateFieldSet(positions);
-  const current: TeamArrangement = { order: lineup.map((b) => b.id), alignment: align };
+  const batters = rosterBatters(team);
+  const pitchers = rosterPitchers(team);
+  const bById = new Map(batters.map((b) => [b.id, b]));
+  const pById = new Map(pitchers.map((p) => [p.id, p]));
+  const check = validateArrangement(team, arr);
 
-  const touch = () => setSaveState('idle');
-  const move = (i: number, dir: -1 | 1) => {
+  const update = (patch: Partial<MatchArrangement>) => {
+    setArr((a) => ({ ...a, ...patch }));
+    setSaveState('idle');
+  };
+
+  // order deve restare una permutazione dei partecipanti (le chiavi di defense).
+  const reconcileOrder = (order: string[], participants: string[]): string[] => {
+    const set = new Set(participants);
+    const kept = order.filter((id) => set.has(id));
+    const seen = new Set(kept);
+    for (const id of participants) if (!seen.has(id)) kept.push(id);
+    return kept;
+  };
+
+  // --- Ordine di battuta -------------------------------------------------
+  const lineup = arr.order.map((id) => bById.get(id)).filter(Boolean) as Batter[];
+  const moveBat = (i: number, dir: -1 | 1) => {
     const j = i + dir;
-    if (j < 0 || j >= lineup.length) return;
-    const ids = lineup.map((b) => b.id);
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    setOrder(ids);
-    touch();
+    if (j < 0 || j >= arr.order.length) return;
+    const order = [...arr.order];
+    [order[i], order[j]] = [order[j], order[i]];
+    update({ order });
   };
-  const swapPos = (id: string, target: Position) => {
-    const next = computeSwap(team, align, id, target);
-    if (next) {
-      setAlign(next);
-      touch();
+  const autoBat = () => update({ order: autoLineup(lineup).map((b) => b.id) });
+
+  // --- Difesa: casella -> battitore --------------------------------------
+  const occupantOf = (slot: Position): string | undefined =>
+    Object.keys(arr.defense).find((id) => arr.defense[id] === slot);
+  const setSlot = (slot: Position, x: string) => {
+    const defense: Record<string, Position> = { ...arr.defense };
+    const y = occupantOf(slot); // occupante attuale della casella (di norma definito)
+    const sx = defense[x]; // casella attuale di x (undefined se pescato dalla panca)
+    if (sx) {
+      // x gia' titolare altrove: scambio di caselle tra x e y.
+      defense[x] = slot;
+      if (y) defense[y] = sx;
+    } else {
+      // x dalla panca: prende la casella, y esce dai nove.
+      if (y) delete defense[y];
+      defense[x] = slot;
     }
+    update({ defense, order: reconcileOrder(arr.order, Object.keys(defense)) });
   };
-  const auto = () => {
-    setOrder(autoLineup(team.lineup).map((b) => b.id));
-    touch();
+
+  // --- Lanciatori: liste ordinate rotazione / bullpen --------------------
+  const usedP = new Set([...arr.rotation, ...arr.bullpen]);
+  const moveP = (field: 'rotation' | 'bullpen', i: number, dir: -1 | 1) => {
+    const list = [...arr[field]];
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    update({ [field]: list });
   };
+  const removeP = (field: 'rotation' | 'bullpen', id: string) =>
+    update({ [field]: arr[field].filter((x) => x !== id) });
+  const addP = (field: 'rotation' | 'bullpen', id: string) => {
+    if (!id) return;
+    update({ [field]: [...arr[field], id] });
+  };
+
   const save = async () => {
     setSaveState('saving');
     try {
-      await onSave(current);
+      await onSave(arr);
       setSaveState('saved');
     } catch {
       setSaveState('error');
     }
   };
 
-  const rotation = team.rotation.slice(0, 3);
-  const depth = [...team.bench, ...team.reserveBatters];
+  // Pool disponibile ad aggiungere un lanciatore (non gia' in rotazione/bullpen).
+  const freePitchers = pitchers.filter((p) => !usedP.has(p.id));
+
+  const pitcherList = (field: 'rotation' | 'bullpen', title: string, subtitle: string) => {
+    const ids = arr[field];
+    return (
+      <div className="card pitch-card">
+        <div className="card-title" style={{ borderColor: team.primaryColor }}>
+          {title} <span className="card-sub">{subtitle}</span>
+        </div>
+        <ol className="pitch-list">
+          {ids.length === 0 && <li className="empty">Nessun lanciatore selezionato.</li>}
+          {ids.map((id, i) => {
+            const p = pById.get(id);
+            if (!p) return null;
+            const starts = field === 'rotation' && i === 0;
+            return (
+              <li key={id} className={starts ? 'starts' : undefined}>
+                <span className="ord">
+                  <button className="ordbtn" title="Su" disabled={i === 0} onClick={() => moveP(field, i, -1)}>
+                    ▲
+                  </button>
+                  <button
+                    className="ordbtn"
+                    title="Giù"
+                    disabled={i === ids.length - 1}
+                    onClick={() => moveP(field, i, 1)}
+                  >
+                    ▼
+                  </button>
+                </span>
+                <span className="pnum">{i + 1}</span>
+                <span className="pname">
+                  {p.name}
+                  {starts && <span className="tag">parte</span>}
+                </span>
+                <span className="povr">{stars(pitcherOverall(p.ratings))}</span>
+                <button className="rmbtn" title="Rimuovi" onClick={() => removeP(field, id)}>
+                  ✕
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+        <div className="pitch-add">
+          <select
+            value=""
+            onChange={(e) => {
+              addP(field, e.target.value);
+              e.currentTarget.value = '';
+            }}
+            disabled={freePitchers.length === 0}
+          >
+            <option value="">
+              {freePitchers.length === 0 ? 'Nessun lanciatore libero' : '+ Aggiungi lanciatore…'}
+            </option>
+            {freePitchers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} — {p.role} · {stars(pitcherOverall(p.ratings))}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="roster-view manage-view">
-      <div className="manage-grid">
+      <div className="card-title manage-head" style={{ borderColor: team.primaryColor }}>
+        <TeamBadge team={team} size={26} /> {team.name} — foglio partita
+        <div className="manage-actions">
+          {check.ok ? (
+            <span className="save-state saved">Assetto valido</span>
+          ) : (
+            <span className="manage-warn inline">⚠ {check.errors[0]}</span>
+          )}
+          <button className="btn" onClick={autoBat} title="Ordine di battuta automatico">
+            ⚙ Auto ordine
+          </button>
+          <button
+            className="btn"
+            onClick={() => onApply(arr)}
+            disabled={!check.ok}
+            title="Applica alla partita (riavvia la gara in corso)"
+          >
+            ✓ Applica
+          </button>
+          <button
+            className="btn primary"
+            onClick={save}
+            disabled={!check.ok || saveState === 'saving'}
+            title="Salva sul cloud e applica"
+          >
+            {saveState === 'saving' ? '… Salvataggio' : '💾 Salva'}
+          </button>
+          <span className={`save-state ${saveState}`}>
+            {saveState === 'saved' && 'Salvato'}
+            {saveState === 'error' && 'Errore (offline?)'}
+          </span>
+        </div>
+      </div>
+
+      <div className="manage-grid4">
+        {/* Pannello 1: ordine di battuta dei 9 titolari. */}
         <div className="card">
           <div className="card-title" style={{ borderColor: team.primaryColor }}>
-            <TeamBadge team={team} size={26} /> {team.name} — ordine di battuta &amp; difesa
+            Ordine di battuta <span className="card-sub">chi batte, in che ordine</span>
           </div>
-
           <table className="ratings lineup-edit">
             <thead>
               <tr>
                 <th className="n">#</th>
                 <th className="ord"></th>
                 <th className="l">Battitore</th>
-                <th>Età</th>
+                <th title="Ruolo in difesa">DIF</th>
                 <th title="Contatto">CON</th>
                 <th title="Potenza">POT</th>
                 <th title="Occhio">OCC</th>
-                <th title="Velocità">VEL</th>
-                <th title="Difesa">DIF</th>
-                <th title="Braccio">BRA</th>
                 <th title="Overall">OVR</th>
               </tr>
             </thead>
             <tbody>
               {lineup.map((b, i) => {
-                const pos = activePos(b, align);
-                const moved = pos !== b.position;
-                const target = moved ? b.position : b.secondaryPosition;
-                const canSwitch = !!target && computeSwap(team, align, b.id, target) !== null;
+                const pos = arr.defense[b.id] ?? b.position;
                 const r = ratingsAtPosition(b, pos);
                 return (
-                  <tr key={b.id} className={moved ? 'moved' : undefined}>
+                  <tr key={b.id}>
                     <td className="n">{i + 1}</td>
                     <td className="ord">
-                      <button
-                        className="ordbtn"
-                        title="Sposta su"
-                        disabled={i === 0}
-                        onClick={() => move(i, -1)}
-                      >
+                      <button className="ordbtn" title="Su" disabled={i === 0} onClick={() => moveBat(i, -1)}>
                         ▲
                       </button>
                       <button
                         className="ordbtn"
-                        title="Sposta giù"
+                        title="Giù"
                         disabled={i === lineup.length - 1}
-                        onClick={() => move(i, 1)}
+                        onClick={() => moveBat(i, 1)}
                       >
                         ▼
                       </button>
                     </td>
-                    <td className="l">
-                      <span className={moved ? 'pos moved' : 'pos'}>{pos}</span> {b.name}
-                      {target && (
-                        <button
-                          className="posbtn"
-                          title={
-                            !canSwitch
-                              ? `Scambio con ${target} non disponibile`
-                              : moved
-                                ? 'Torna al ruolo naturale'
-                                : `Schiera come ${target}`
-                          }
-                          disabled={!canSwitch}
-                          onClick={() => swapPos(b.id, target)}
-                        >
-                          ⇄ {target}
-                        </button>
-                      )}
+                    <td className="l">{b.name}</td>
+                    <td>
+                      <span className={pos === b.position ? 'pos' : 'pos moved'}>{pos}</span>
                     </td>
-                    <td>{b.age}</td>
                     <Rating v={r.contact} />
                     <Rating v={r.power} />
                     <Rating v={r.eye} />
-                    <Rating v={r.speed} />
-                    <Rating v={r.fielding} />
-                    <Rating v={r.arm} />
                     <td className="ovr">{stars(batterOverall(r))}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-
-          {!check.ok && (
-            <div className="manage-warn">
-              ⚠ Difesa non valida:
-              {check.missing.length > 0 && <> scoperte {check.missing.join(', ')}.</>}
-              {check.duplicates.length > 0 && <> doppioni {check.duplicates.join(', ')}.</>}
-            </div>
-          )}
-
-          <div className="manage-actions">
-            <button className="btn" onClick={auto} title="Ordine di battuta automatico">
-              ⚙ Auto
-            </button>
-            <button
-              className="btn"
-              onClick={() => onApply(current)}
-              disabled={!check.ok}
-              title="Applica alla partita (riavvia la gara in corso)"
-            >
-              ✓ Applica
-            </button>
-            <button
-              className="btn primary"
-              onClick={save}
-              disabled={!check.ok || saveState === 'saving'}
-              title="Salva l'assetto sul cloud e applicalo"
-            >
-              {saveState === 'saving' ? '… Salvataggio' : '💾 Salva'}
-            </button>
-            <span className={`save-state ${saveState}`}>
-              {saveState === 'saved' && 'Salvato'}
-              {saveState === 'error' && 'Errore di salvataggio (offline?)'}
-            </span>
-          </div>
-          <p className="manage-hint">
-            L'ordine di battuta e la difesa qui scelti scendono in campo quando premi
-            <b> Applica</b> o <b>Salva</b>. Le frecce riordinano; <b>⇄</b> alterna ruolo naturale e
-            secondario.
-          </p>
         </div>
 
-        <div className="card depth-card">
+        {/* Pannello 2: difesa, una casella per riga -> scegli il giocatore. */}
+        <div className="card">
           <div className="card-title" style={{ borderColor: team.secondaryColor }}>
-            Profondità ({depth.length})
+            Difesa <span className="card-sub">chi copre ogni casella</span>
           </div>
-          {depth.length === 0 ? (
-            <p className="manage-hint">Nessuna riserva disponibile per questa squadra.</p>
-          ) : (
-            <table className="ratings">
-              <thead>
-                <tr>
-                  <th className="l">Riserva</th>
-                  <th>Ruolo</th>
-                  <th>Età</th>
-                  <th title="Overall">OVR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {depth.map((b) => (
-                  <tr key={b.id}>
-                    <td className="l">{b.name}</td>
-                    <td>
-                      <span className="pos">{b.position}</span>
+          <table className="ratings def-edit">
+            <thead>
+              <tr>
+                <th className="l">Casella</th>
+                <th className="l">Giocatore</th>
+                <th title="Fielding nella casella">FIE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {FIELD_SLOTS.map((slot) => {
+                const id = occupantOf(slot);
+                const b = id ? bById.get(id) : undefined;
+                const fie = b ? fieldingAtPosition(b, slot) : 0;
+                const outOfRole = b ? !canOccupy(b, slot) : false;
+                return (
+                  <tr key={slot} className={outOfRole ? 'moved' : undefined}>
+                    <td className="l">
+                      <span className="pos">{slot}</span>
                     </td>
-                    <td>{b.age}</td>
-                    <td className="ovr">{stars(batterOverall(b.ratings))}</td>
+                    <td className="l">
+                      <select value={id ?? ''} onChange={(e) => setSlot(slot, e.target.value)}>
+                        {batters.map((cand) => (
+                          <option key={cand.id} value={cand.id}>
+                            {cand.name} ({cand.position})
+                          </option>
+                        ))}
+                      </select>
+                      {outOfRole && (
+                        <span className="warn-badge" title="Fuori dal ruolo naturale/secondario">
+                          ⚠
+                        </span>
+                      )}
+                    </td>
+                    <Rating v={fie} />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                );
+              })}
+            </tbody>
+          </table>
           <p className="manage-hint">
-            Lo scambio riserva ⇄ titolare arriverà in un passo successivo.
+            Scegli tra tutti i battitori della rosa: la selezione qui definisce i 9 titolari.
+            ⚠ = fuori ruolo (fielding penalizzato).
           </p>
         </div>
-      </div>
 
-      <div className="card">
-        <div className="card-title" style={{ borderColor: team.primaryColor }}>
-          Rotazione
-        </div>
-        <table className="ratings">
-          <thead>
-            <tr>
-              <th className="l">Lanciatori</th>
-              <th>Età</th>
-              <th title="Dominio">DOM</th>
-              <th title="Controllo">CTR</th>
-              <th title="Movimento">MOV</th>
-              <th title="Palla a terra">PAT</th>
-              <th title="Resistenza">RES</th>
-              <th title="Difesa">DIF</th>
-              <th title="Overall">OVR</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rotation.map((p) => (
-              <tr key={p.id}>
-                <td className="l">
-                  <span className="pos">{p.role}</span> {p.name}
-                </td>
-                <td>{p.age}</td>
-                <Rating v={p.ratings.stuff} />
-                <Rating v={p.ratings.control} />
-                <Rating v={p.ratings.movement} />
-                <Rating v={p.ratings.groundball} />
-                <Rating v={p.ratings.stamina} />
-                <Rating v={p.ratings.fielding} />
-                <td className="ovr">{stars(pitcherOverall(p.ratings))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {/* Pannello 3: rotazione (il primo parte). */}
+        {pitcherList('rotation', 'Rotazione', 'il primo parte in questa gara')}
+
+        {/* Pannello 4: bullpen (ordine d'uso dei rilievi). */}
+        {pitcherList('bullpen', 'Rilievi', "ordine d'ingresso dal bullpen")}
       </div>
     </div>
   );

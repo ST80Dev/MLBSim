@@ -2101,18 +2101,130 @@ table {
   stroke-dasharray: 3 3;
 }
 
-/* --- Editor "Gestisci" (Fase 2): ordine di battuta + difesa ---------- */
-.manage-grid {
+/* --- Editor "Gestisci" (Fase 2): foglio partita --------------------- */
+.manage-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+}
+.manage-head .manage-actions {
+  margin-left: auto;
+  margin-top: 0;
+}
+.manage-grid4 {
   display: grid;
-  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   align-items: start;
-  margin-bottom: 12px;
 }
-@media (max-width: 860px) {
-  .manage-grid {
+@media (max-width: 900px) {
+  .manage-grid4 {
     grid-template-columns: 1fr;
   }
+}
+.card-sub {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+/* Difesa: select per casella */
+.def-edit select {
+  width: 100%;
+  max-width: 220px;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+.warn-badge {
+  margin-left: 4px;
+  color: #f0b053;
+  cursor: help;
+}
+/* Liste lanciatori */
+.pitch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pitch-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.pitch-list li.empty {
+  color: var(--muted);
+  font-style: italic;
+  border-bottom: 0;
+}
+.pitch-list li.starts {
+  background: rgba(120, 180, 255, 0.08);
+}
+.pitch-list .pnum {
+  width: 16px;
+  text-align: right;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.pitch-list .pname {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pitch-list .tag {
+  margin-left: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9cc2ff;
+  border: 1px solid rgba(120, 180, 255, 0.5);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.pitch-list .povr {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.rmbtn {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 5px;
+}
+.rmbtn:hover {
+  border-color: #d0604a;
+  color: #f0a08a;
+}
+.pitch-add {
+  margin-top: 8px;
+}
+.pitch-add select {
+  width: 100%;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+.manage-warn.inline {
+  margin: 0;
+  padding: 3px 8px;
 }
 .lineup-edit th.n,
 .lineup-edit td.n {
