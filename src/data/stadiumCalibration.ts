@@ -128,11 +128,50 @@ export const CALIBRATION_LABEL: Record<NumericCalKey, string> = {
   bgY: 'Foto — sposta vert.',
 };
 
-// Override per stadio (ID franchigia). Le chiavi non indicate restano ai valori
-// di PHOTO_DEFAULT_CALIBRATION. Incolla qui l'output del pannello di calibrazione.
+// Override inline per stadio (ID franchigia). Alternativa ai file (sotto):
+// le chiavi non indicate restano a PHOTO_DEFAULT_CALIBRATION.
 export const STADIUM_CALIBRATION: Record<string, Partial<FieldCalibration>> = {};
 
-/** Calibrazione effettiva di uno stadio: default-foto + eventuale override. */
+// --- Calibrazioni PER-FOTO da file JSON --------------------------------------
+// Metti un file `src/data/calibrations/<STEM>.json` per ogni foto calibrata,
+// dove <STEM> è il nome della foto senza estensione (es. `BAL.json` per
+// `stadiums/BAL.jpg`, `SFG3.json` per `stadiums/SFG3.jpg`). Il pannello di
+// calibrazione ha il pulsante «Esporta file» che scarica il JSON già nominato.
+// Vengono impacchettati al build: basta aggiungere il file e committare, si
+// applicano al deploy — nessuna modifica al codice.
+const CAL_FILE_MODULES = import.meta.glob('./calibrations/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, Partial<FieldCalibration>>;
+
+const CAL_FILES: Record<string, Partial<FieldCalibration>> = {};
+for (const path in CAL_FILE_MODULES) {
+  const stem = path.slice(path.lastIndexOf('/') + 1, -'.json'.length);
+  CAL_FILES[stem] = CAL_FILE_MODULES[path];
+}
+
+/** Stem del file di calibrazione per una foto (nome senza estensione). */
+export function calibrationStem(teamId: string, image?: string): string {
+  if (!image) return teamId;
+  const file = image.slice(image.lastIndexOf('/') + 1);
+  const dot = file.lastIndexOf('.');
+  return dot < 0 ? file : file.slice(0, dot);
+}
+
+/** Calibrazione da file per uno stadio: prima la principale, poi le varianti. */
+function fileCalibration(teamId: string): Partial<FieldCalibration> | null {
+  for (const suffix of ['', '2', '3', '4', '5']) {
+    const found = CAL_FILES[teamId + suffix];
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Calibrazione effettiva di uno stadio: default-foto sovrascritto da (in ordine
+ * di priorità) il file JSON per-foto, oppure l'override inline STADIUM_CALIBRATION.
+ */
 export function getCalibration(teamId: string): FieldCalibration {
-  return { ...PHOTO_DEFAULT_CALIBRATION, ...(STADIUM_CALIBRATION[teamId] ?? {}) };
+  const override = fileCalibration(teamId) ?? STADIUM_CALIBRATION[teamId] ?? {};
+  return { ...PHOTO_DEFAULT_CALIBRATION, ...override };
 }
