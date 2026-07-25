@@ -21,7 +21,7 @@ import type { Alignment } from '../engine/positions';
 import { teamStrength } from '../engine/strength';
 import { formatIp } from '../engine/boxscore';
 import { generateMatchup } from '../data/generator';
-import { stadiumImage, stadiumImageCandidates } from '../data/stadiumImages';
+import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
 import type { StadiumImageCandidate } from '../data/stadiumImages';
 import {
   getCalibration,
@@ -84,6 +84,9 @@ export function App() {
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
+  // Sfondo-stadio ambientale (attenuato) dietro tutta la plancia: riempie i bordi
+  // e sfuma sotto testata/pannelli, per ridurre il nero. La stessa foto scelta.
+  const backdropUrl = cal.image ? assetUrl(cal.image) : stadiumImage(homeId);
 
   const act = (fn: (g: LiveGame) => void) => {
     fn(live);
@@ -101,6 +104,13 @@ export function App() {
 
   return (
     <div className={view === 'game' ? 'app app-game' : 'app'}>
+      {view === 'game' && backdropUrl && (
+        <div
+          className="stadium-backdrop"
+          style={{ backgroundImage: `url("${backdropUrl}")` }}
+          aria-hidden="true"
+        />
+      )}
       <header className="topbar">
         <div className="brand">
           <span className="logo">⚾</span> MLBSim
@@ -430,7 +440,15 @@ function StatsToggle({ mode, setMode }: { mode: StatsMode; setMode: (m: StatsMod
 // incollare in src/data/stadiumCalibration.ts. Solo UI, non tocca il motore.
 // ---------------------------------------------------------------------------
 
-const CAL_FIELD_KEYS: NumericCalKey[] = ['homeX', 'homeY', 'spreadX', 'depthY', 'fan'];
+const CAL_FIELD_KEYS: NumericCalKey[] = [
+  'homeX',
+  'homeY',
+  'spreadX',
+  'depthY',
+  'ofDist',
+  'skewX',
+  'fan',
+];
 const CAL_PHOTO_KEYS: NumericCalKey[] = ['bgZoom', 'bgX', 'bgY'];
 
 function fmtCalNum(v: number, step: number): string {
@@ -443,9 +461,9 @@ function calEntry(id: string, cal: FieldCalibration): string {
   const img = cal.image ? `, image: '${cal.image}'` : '';
   return `  ${id}: { homeX: ${r0(cal.homeX)}, homeY: ${r0(cal.homeY)}, spreadX: ${r2(
     cal.spreadX,
-  )}, depthY: ${r2(cal.depthY)}, fan: ${r2(cal.fan)}, bgZoom: ${r2(cal.bgZoom)}, bgX: ${r0(
-    cal.bgX,
-  )}, bgY: ${r0(cal.bgY)}${img} },`;
+  )}, depthY: ${r2(cal.depthY)}, ofDist: ${r2(cal.ofDist)}, skewX: ${r0(cal.skewX)}, fan: ${r2(
+    cal.fan,
+  )}, bgZoom: ${r2(cal.bgZoom)}, bgX: ${r0(cal.bgX)}, bgY: ${r0(cal.bgY)}${img} },`;
 }
 
 function CalibrationPanel({

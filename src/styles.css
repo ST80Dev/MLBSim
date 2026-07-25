@@ -2027,3 +2027,39 @@ table {
   font-size: 17px;
   white-space: nowrap;
 }
+
+/* =========================================================================
+   Sfondo-stadio ambientale: la foto (attenuata) dietro tutta la plancia per
+   ridurre il nero ai bordi, sotto testata/statbar e sotto i pannelli laterali.
+   Il campo nitido con i marker resta sopra, dentro la sezione di gioco.
+   ========================================================================= */
+.app-game {
+  position: relative;
+}
+.stadium-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-size: cover;
+  background-position: center 28%;
+  filter: blur(3px) brightness(0.42) saturate(1.05);
+  transform: scale(1.06);
+}
+/* Testata, barra stat e campo sopra lo sfondo ambientale */
+.app-game > .topbar,
+.app-game > .game-screen {
+  position: relative;
+  z-index: 1;
+}
+/* Testata e barra stat semi-trasparenti: la foto traspare un po' dietro */
+.app-game .topbar {
+  background: linear-gradient(180deg, rgba(19, 26, 42, 0.9), rgba(13, 19, 33, 0.94));
+}
+.app-game .statbar {
+  background: rgba(10, 17, 30, 0.62);
+}
+/* Niente fondo nero nel campo: i bordi (letterbox) mostrano lo sfondo ambientale */
+.app-game .gamefield {
+  background: transparent;
+}

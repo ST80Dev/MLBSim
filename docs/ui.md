@@ -44,6 +44,15 @@ Regioni, dall'alto in basso:
 Il campo generato disegna **solo il terreno di gioco** (niente tribune/cielo
 finti): sotto una foto reale sarebbe ridondante e ruberebbe spazio.
 
+**Sfondo-stadio ambientale**: dietro tutta la plancia (`.stadium-backdrop`) la
+stessa foto, **attenuata e sfocata**, riempie i bordi (letterbox), gli angoli
+sotto lineup/cronaca e la fascia alta sotto testata/barra stat (queste sono
+semi-trasparenti): riduce al minimo il nero senza rubare nitidezza al campo. Se
+la foto manca, resta lo sfondo scuro.
+
+**Etichette dei marker**: sopra il marker per tutti tranne **lanciatore,
+ricevitore e battitore** (in basso nella foto), che le hanno sotto.
+
 **Toggle stat** (`StatsToggle`, tre stati): **Partita** (dato reale) ·
 **Stagione** (proiezione dalle doti, `player.stats`, ~650 PA / 1000 BF) ·
 **Scorsa** (disabilitato: nessuno storico finché non arriva la Fase 4). Governa
@@ -89,6 +98,10 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
 
 - `homeX`/`homeY`: posizione di casa base (perno).
 - `spreadX`/`depthY`: larghezza e profondità dei marker.
+- `ofDist`: **distanza interni↔esterni** — scala la profondità *oltre* l'interno
+  tenendo fermo l'interno (`<1` avvicina gli esterni = schiaccia la prospettiva).
+- `skewX`: **inclinazione sx/dx** — sposta i marker più lontani a destra/sinistra
+  per raddrizzare un campo storto.
 - `fan`: apertura prospettica (i marker lontani si allargano di più).
 - `bgZoom`/`bgX`/`bgY`: zoom e pan della foto di sfondo.
 - `image` (opzionale): **variante-foto** scelta. Il pannello rileva

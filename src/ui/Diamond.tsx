@@ -37,6 +37,9 @@ const BASE = {
   WALL_C: { x: 450, y: 50 },
 };
 const DEPTH_REF = BASE.HOME.y - BASE.WALL_C.y;
+// Profondita' normalizzata del bordo dell'interno: oltre questa soglia agisce
+// il fattore ofDist (avvicina/allontana gli esterni tenendo fermo l'interno).
+const INFIELD_DEPTH = 0.48;
 
 const DEFENSE: Spot[] = [
   { pos: 'P', x: 450, y: 302 },
@@ -55,8 +58,11 @@ function proj(p: Pt, cal: FieldCalibration): Pt {
   const dx = p.x - BASE.HOME.x;
   const depth = BASE.HOME.y - p.y;
   const depthN = depth / DEPTH_REF;
-  const x = cal.homeX + dx * cal.spreadX * (1 + depthN * cal.fan);
-  const y = cal.homeY - depth * cal.depthY;
+  // Distanza interni↔esterni: comprime/espande la profondita' oltre l'interno.
+  const depthAdj =
+    depthN <= INFIELD_DEPTH ? depthN : INFIELD_DEPTH + (depthN - INFIELD_DEPTH) * cal.ofDist;
+  const x = cal.homeX + dx * cal.spreadX * (1 + depthAdj * cal.fan) + depthAdj * cal.skewX;
+  const y = cal.homeY - depthAdj * DEPTH_REF * cal.depthY;
   return { x, y };
 }
 
@@ -71,11 +77,24 @@ function playerAt(team: Team, pos: Position): string {
   return b?.name ?? '';
 }
 
-function FielderLabel({ x, y, pos, name }: { x: number; y: number; pos: Position; name: string }) {
+function FielderLabel({
+  x,
+  y,
+  pos,
+  name,
+  below,
+}: {
+  x: number;
+  y: number;
+  pos: Position;
+  name: string;
+  below?: boolean;
+}) {
   const label = `${pos} ${lastNameOf(name)}`;
   const w = Math.max(40, label.length * 6.6 + 14);
   const lx = Math.min(VB.w - 8 - w / 2, Math.max(8 + w / 2, x));
-  const ly = y + 13;
+  // Etichetta sopra il marker (default) o sotto (P/C/battitore: sono in basso).
+  const ly = below ? y + 13 : y - 30;
   return (
     <g>
       <circle cx={x} cy={y} r={7.5} fill="var(--fld)" stroke="var(--fld2)" strokeWidth={1.8} />
@@ -196,7 +215,14 @@ export function Diamond({
       <circle cx={HOME.x - 16} cy={HOME.y - 10} r={7.5} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.4} />
 
       {defense.map((s) => (
-        <FielderLabel key={s.pos} x={s.x} y={s.y} pos={s.pos} name={playerAt(home, s.pos)} />
+        <FielderLabel
+          key={s.pos}
+          x={s.x}
+          y={s.y}
+          pos={s.pos}
+          name={playerAt(home, s.pos)}
+          below={s.pos === 'P' || s.pos === 'C'}
+        />
       ))}
     </>
   );
