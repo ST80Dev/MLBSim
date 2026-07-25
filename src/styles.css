@@ -2455,3 +2455,86 @@ table {
   line-height: 1.5;
   font-size: 14px;
 }
+
+/* --- Roster page (Fielders drag&drop) ------------------------------- */
+.roster-page .subhead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.subtabs {
+  display: flex;
+  gap: 4px;
+}
+.subtab {
+  background: var(--panel, var(--card));
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.subtab.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--card2);
+}
+.rp-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stat-seg .seg-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.fielders-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 980px) {
+  .fielders-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.roster-tbl th.n,
+.roster-tbl td.n {
+  width: 20px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.roster-tbl .roles {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.roster-tbl td.l.grip {
+  cursor: grab;
+}
+.roster-tbl td.l.grip:active {
+  cursor: grabbing;
+}
+.roster-tbl .drow.dragging {
+  opacity: 0.4;
+}
+.roster-tbl .drow:hover {
+  background: rgba(120, 180, 255, 0.06);
+}
+.defcell {
+  cursor: pointer;
+  border-radius: 4px;
+}
+.defcell.warn {
+  color: #f0b053;
+}
+.roster-tbl .drow[draggable='true'] {
+  transition: background 0.1s ease;
+}
