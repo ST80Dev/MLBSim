@@ -51,9 +51,11 @@ const DEFENSE: Spot[] = [
   { pos: '2B', x: 512, y: 250 },
   { pos: 'SS', x: 388, y: 250 },
   { pos: '3B', x: 296, y: 314 },
-  { pos: 'LF', x: 198, y: 190 },
+  // Esterni dx/sx nei vialetti (non lungo le linee di foul): partono già
+  // "dentro" il campo, tra 2a e 3a (LF) e tra 1a e 2a (RF).
+  { pos: 'LF', x: 314, y: 176 },
   { pos: 'CF', x: 450, y: 126 },
-  { pos: 'RF', x: 702, y: 190 },
+  { pos: 'RF', x: 586, y: 176 },
 ];
 
 /** Proietta un punto BASE nello spazio calibrato (perno = casa base). */
