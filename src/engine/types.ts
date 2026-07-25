@@ -120,6 +120,15 @@ export interface Team {
   rotation: Pitcher[];
   bullpen: Pitcher[];
   usesDH: boolean;
+  /**
+   * Profondita' (depth): riserve OLTRE i 25 attivi (lineup+bench+rotation+
+   * bullpen). Il motore NON le usa — sono un concetto del layer di gestione:
+   * conservano platoon/swingman/sostituti reali di una stagione importata e
+   * alimentano gli scambi (Fase 2) swap active<->depth tra le partite, draft
+   * (Fase 5). Possono essere vuote.
+   */
+  reserveBatters: Batter[];
+  reservePitchers: Pitcher[];
 }
 
 // ---------------------------------------------------------------------------

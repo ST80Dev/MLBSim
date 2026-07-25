@@ -31,6 +31,9 @@ const LINEUP_POSITIONS: Position[] = [
   'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH',
 ];
 const BENCH_POSITIONS: Position[] = ['C', 'SS', 'CF', '1B', '3B'];
+// Profondita' (depth) oltre i 25 attivi: riserve per gestione/scambi. Coprono
+// posizioni varie cosi' che ci sia sempre un sostituto plausibile da promuovere.
+const DEPTH_BATTER_POSITIONS: Position[] = ['C', 'SS', '2B', '3B', 'CF', '1B'];
 
 // Modellazione per ruolo: i difensori centrali difendono meglio, gli angoli
 // picchiano di piu', ecc. (bonus applicati alle doti in generazione).
@@ -211,6 +214,15 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
     makePitcher(rng, names, `${f.abbrev}-CL`, 'CL'),
   ];
 
+  // Profondita': ~6 battitori + 4 lanciatori (2 SP + 2 RP) di riserva.
+  const reserveBatters = DEPTH_BATTER_POSITIONS.map((pos, i) =>
+    makeBatter(rng, names, `${f.abbrev}-DB${i}`, pos),
+  );
+  const reservePitchers: Pitcher[] = [
+    ...Array.from({ length: 2 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-DSP${i}`, 'SP')),
+    ...Array.from({ length: 2 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-DRP${i}`, 'RP')),
+  ];
+
   return {
     id: f.id,
     name: f.name,
@@ -225,6 +237,8 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
     rotation,
     bullpen,
     usesDH: true,
+    reserveBatters,
+    reservePitchers,
   };
 }
 
