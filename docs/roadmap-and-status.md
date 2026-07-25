@@ -50,6 +50,12 @@
     l'interfaccia `SaveStore` (`src/data/persistence/`). Cloud sorgente primaria,
     niente auth, RLS aperta per scelta, save versionati (`schema_version`).
     Dettaglio in `docs/architecture.md` § Persistenza.
+  - **Editor lineup — FATTO (base motore/dati):** roster **25 attivi + ~10
+    depth** (`reserveBatters`/`reservePitchers` su `Team`, generati anche per le
+    squadre procedurali); split **14/11**; **sempre DH** in questa fase;
+    posizioni **libere con malus**. `engine/lineup.ts`: `autoLineup` (euristica
+    ordine di battuta) + `validateFieldSet`. Manca la **UI** dell'editor e il
+    wiring su `saveStore` (prossimo passo).
 - **Fase 3 — UI stile SBS/OOTP**
   - Campo con etichette, card giocatore ricche, pannelli colorati, pulsanti.
 - **Fase 4 — Stagione**

@@ -37,10 +37,21 @@ Caratteristiche (20-80)  ──derive──►  Statistiche di conteggio  ──
     `sb`/`cs` del battitore e la decisione (`dec`, `enteredDiff`) del lanciatore.
   - `strength.ts` — forza squadra (TOT/ATT/DIF/LAN) da lineup+bench+staff.
   - `positions.ts` — seconda posizione difensiva: rivalutazione difesa
-    (`ratingsAtPosition`) e schieramento a scambi validi (`computeSwap`).
+    (`ratingsAtPosition`) e schieramento a scambi validi (`computeSwap`). Nota:
+    `fieldingAtPosition` applica il malus per **qualsiasi** posizione — la
+    restrizione all'eleggibilità sta solo in `canOccupy`, quindi lo schieramento
+    "libero con malus" dell'editor (Fase 2) si ottiene non passando da quel gate.
+  - `lineup.ts` — **ordine di battuta e validazione** (Fase 2): `autoLineup`
+    (euristica epoca alta offesa: leadoff OBP/velocità, cleanup potenza) e
+    `validateFieldSet` (vincolo duro: le 9 caselle coperte esattamente una
+    volta). Puro e deterministico.
   - `index.ts` — barrel dell'API pubblica.
   - `__tests__/` — test Vitest (determinismo, realismo, cime di eccellenza).
 - `src/data/` — generazione procedurale e dati.
+  - **Roster (Fase 2)** — una rosa ha **25 attivi** (9 lineup + 5 bench / 5 SP +
+    6 bullpen, split 14/11) più `reserveBatters`/`reservePitchers` di
+    **profondità** (~10, rosa totale ~35). Il motore usa solo i 25 attivi; il
+    depth è per il layer di gestione (swap tra le partite, scambi, draft).
   - `generator.ts` — genera giocatori/rose da caratteristiche + franchigie;
     `makeNameFactory` pesca nomi per **origine** (peso ~ demografia MLB). I
     doppioni di cognome **non** sono vietati: capitano in modo casuale e
