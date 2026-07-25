@@ -44,6 +44,15 @@ Regioni, dall'alto in basso:
 Il campo generato disegna **solo il terreno di gioco** (niente tribune/cielo
 finti): sotto una foto reale sarebbe ridondante e ruberebbe spazio.
 
+**Sfondo-stadio ambientale**: dietro tutta la plancia (`.stadium-backdrop`) la
+stessa foto, **attenuata e sfocata**, riempie i bordi (letterbox), gli angoli
+sotto lineup/cronaca e la fascia alta sotto testata/barra stat (queste sono
+semi-trasparenti): riduce al minimo il nero senza rubare nitidezza al campo. Se
+la foto manca, resta lo sfondo scuro.
+
+**Etichette dei marker**: sopra il marker per tutti tranne **lanciatore,
+ricevitore e battitore** (in basso nella foto), che le hanno sotto.
+
 **Toggle stat** (`StatsToggle`, tre stati): **Partita** (dato reale) ·
 **Stagione** (proiezione dalle doti, `player.stats`, ~650 PA / 1000 BF) ·
 **Scorsa** (disabilitato: nessuno storico finché non arriva la Fase 4). Governa
@@ -89,6 +98,10 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
 
 - `homeX`/`homeY`: posizione di casa base (perno).
 - `spreadX`/`depthY`: larghezza e profondità dei marker.
+- `ofDist`: **distanza interni↔esterni** — scala la profondità *oltre* l'interno
+  tenendo fermo l'interno (`<1` avvicina gli esterni = schiaccia la prospettiva).
+- `skewX`: **inclinazione sx/dx** — sposta i marker più lontani a destra/sinistra
+  per raddrizzare un campo storto.
 - `fan`: apertura prospettica (i marker lontani si allargano di più).
 - `bgZoom`/`bgX`/`bgY`: zoom e pan della foto di sfondo.
 - `image` (opzionale): **variante-foto** scelta. Il pannello rileva
@@ -97,8 +110,15 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
   **Principale / Alt 2 / Alt 3**: selezionandone uno cambia lo sfondo live e
   salva il percorso in `image`. Se assente si usa la principale `<ID>.jpg`.
 
-Con i valori di default la proiezione è l'**identità** (campo generato non
-deformato). Il pannello mostra il valore live, ha slider con stepper −/+ e
+**Default dedicato alle foto**: gli stadi con foto partono da
+`PHOTO_DEFAULT_CALIBRATION` (casa base più in alto e esterni un po' compressi),
+perché quasi tutte le foto — viste da dietro casa base — hanno quel taglio; così
+non si rifanno gli stessi aggiustamenti a ogni stadio. Il **campo generato**
+(squadre senza foto) usa invece l'**identità** (`DEFAULT_CALIBRATION`): il
+Diamond applica la calibrazione solo sopra una foto reale, mai al campo
+generato. «Azzera» riporta al default-foto (mantiene la foto scelta).
+
+Il pannello mostra il valore live, ha slider con stepper −/+ e
 produce il **JSON** da incollare in `STADIUM_CALIBRATION` (una voce per stadio,
 chiave = ID franchigia). «Azzera» reimposta la geometria ma **mantiene la foto
 scelta**. È **solo UI**: non tocca il motore.

@@ -29,6 +29,13 @@ export interface FieldCalibration {
   spreadX: number;
   /** Scala di profondita' dei marker (1 = neutro). */
   depthY: number;
+  /** Distanza interni↔esterni: scala la profondita' OLTRE l'interno, tenendo
+   *  fermo l'interno. <1 avvicina gli esterni (schiaccia la prospettiva),
+   *  >1 li allontana. 1 = neutro. */
+  ofDist: number;
+  /** Inclinazione sx/dx: sposta i marker piu' lontani verso destra (>0) o
+   *  sinistra (<0), per raddrizzare un campo storto (0 = niente). */
+  skewX: number;
   /** Apertura a ventaglio: quanto si allargano i marker piu' lontani (0 = niente). */
   fan: number;
   /** Zoom della foto di sfondo (1 = riempimento base). */
@@ -42,12 +49,35 @@ export interface FieldCalibration {
   image?: string;
 }
 
-/** Valori neutri: identita' della proiezione (campo generato non deformato). */
+/** Valori neutri: identita' della proiezione. Usati per il CAMPO GENERATO
+ *  (squadre senza foto), che non va deformato. */
 export const DEFAULT_CALIBRATION: FieldCalibration = {
   homeX: 450,
   homeY: 394,
   spreadX: 1,
   depthY: 1,
+  ofDist: 1,
+  skewX: 0,
+  fan: 0,
+  bgZoom: 1,
+  bgX: 0,
+  bgY: 0,
+};
+
+/**
+ * Calibrazione iniziale per gli stadi con FOTO. Quasi tutte le foto (viste da
+ * dietro casa base) hanno: casa base un po' più in alto del bordo inferiore, e
+ * gli esterni schiacciati in prospettiva (poco più in alto degli interni).
+ * Questi valori partono già così, per non dover rifare gli stessi aggiustamenti
+ * a ogni stadio. Ogni stadio può poi sovrascriverli in STADIUM_CALIBRATION.
+ */
+export const PHOTO_DEFAULT_CALIBRATION: FieldCalibration = {
+  homeX: 450,
+  homeY: 360,
+  spreadX: 1,
+  depthY: 0.78,
+  ofDist: 0.85,
+  skewX: 0,
   fan: 0,
   bgZoom: 1,
   bgX: 0,
@@ -60,6 +90,8 @@ export type NumericCalKey =
   | 'homeY'
   | 'spreadX'
   | 'depthY'
+  | 'ofDist'
+  | 'skewX'
   | 'fan'
   | 'bgZoom'
   | 'bgX'
@@ -74,6 +106,8 @@ export const CALIBRATION_RANGE: Record<
   homeY: { min: 250, max: 419, step: 1 },
   spreadX: { min: 0.3, max: 2.2, step: 0.01 },
   depthY: { min: 0.3, max: 2.2, step: 0.01 },
+  ofDist: { min: 0.3, max: 1.8, step: 0.02 },
+  skewX: { min: -300, max: 300, step: 2 },
   fan: { min: -0.6, max: 1.2, step: 0.01 },
   bgZoom: { min: 0.5, max: 3, step: 0.01 },
   bgX: { min: -400, max: 400, step: 1 },
@@ -86,17 +120,19 @@ export const CALIBRATION_LABEL: Record<NumericCalKey, string> = {
   homeY: 'Casa base — verticale',
   spreadX: 'Larghezza campo',
   depthY: 'Profondita campo',
+  ofDist: 'Distanza interni↔esterni',
+  skewX: 'Inclinazione sx/dx',
   fan: 'Apertura prospettica',
   bgZoom: 'Foto — zoom',
   bgX: 'Foto — sposta orizz.',
   bgY: 'Foto — sposta vert.',
 };
 
-// Override per stadio (ID franchigia). Le chiavi non indicate restano ai
-// valori di DEFAULT_CALIBRATION. Incolla qui l'output del pannello di calibrazione.
+// Override per stadio (ID franchigia). Le chiavi non indicate restano ai valori
+// di PHOTO_DEFAULT_CALIBRATION. Incolla qui l'output del pannello di calibrazione.
 export const STADIUM_CALIBRATION: Record<string, Partial<FieldCalibration>> = {};
 
-/** Calibrazione effettiva di uno stadio (default + eventuale override). */
+/** Calibrazione effettiva di uno stadio: default-foto + eventuale override. */
 export function getCalibration(teamId: string): FieldCalibration {
-  return { ...DEFAULT_CALIBRATION, ...(STADIUM_CALIBRATION[teamId] ?? {}) };
+  return { ...PHOTO_DEFAULT_CALIBRATION, ...(STADIUM_CALIBRATION[teamId] ?? {}) };
 }
