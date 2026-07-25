@@ -29,13 +29,14 @@ export interface FieldCalibration {
   spreadX: number;
   /** Scala di profondita' dei marker (1 = neutro). */
   depthY: number;
-  /** Distanza interni↔esterni: scala la profondita' OLTRE l'interno, tenendo
-   *  fermo l'interno. <1 avvicina gli esterni (schiaccia la prospettiva),
-   *  >1 li allontana. 1 = neutro. */
+  /** Distanza interni↔esterni: scala la profondita' oltre gli angoli
+   *  dell'interno (tiene ferme 1a/3a e monte, avvicina 2a/SS ed esterni).
+   *  <1 avvicina (schiaccia la prospettiva), >1 allontana. 1 = neutro. */
   ofDist: number;
-  /** Inclinazione sx/dx: sposta i marker piu' lontani verso destra (>0) o
-   *  sinistra (<0), per raddrizzare un campo storto (0 = niente). */
-  skewX: number;
+  /** Rotazione dell'asse del campo attorno a casa base, in gradi. Ruotando a
+   *  destra (>0) l'esterno di sinistra si allunga e quello di destra si
+   *  avvicina a casa base (e viceversa). 0 = niente. */
+  rotation: number;
   /** Apertura a ventaglio: quanto si allargano i marker piu' lontani (0 = niente). */
   fan: number;
   /** Zoom della foto di sfondo (1 = riempimento base). */
@@ -57,7 +58,7 @@ export const DEFAULT_CALIBRATION: FieldCalibration = {
   spreadX: 1,
   depthY: 1,
   ofDist: 1,
-  skewX: 0,
+  rotation: 0,
   fan: 0,
   bgZoom: 1,
   bgX: 0,
@@ -77,7 +78,7 @@ export const PHOTO_DEFAULT_CALIBRATION: FieldCalibration = {
   spreadX: 1,
   depthY: 0.78,
   ofDist: 0.85,
-  skewX: 0,
+  rotation: 0,
   fan: 0,
   bgZoom: 1,
   bgX: 0,
@@ -91,7 +92,7 @@ export type NumericCalKey =
   | 'spreadX'
   | 'depthY'
   | 'ofDist'
-  | 'skewX'
+  | 'rotation'
   | 'fan'
   | 'bgZoom'
   | 'bgX'
@@ -107,11 +108,11 @@ export const CALIBRATION_RANGE: Record<
   spreadX: { min: 0.3, max: 2.2, step: 0.01 },
   depthY: { min: 0.3, max: 2.2, step: 0.01 },
   ofDist: { min: 0.3, max: 1.8, step: 0.02 },
-  skewX: { min: -300, max: 300, step: 1 },
+  rotation: { min: -60, max: 60, step: 0.5 },
   fan: { min: -0.6, max: 1.2, step: 0.01 },
-  bgZoom: { min: 0.5, max: 3, step: 0.01 },
-  bgX: { min: -400, max: 400, step: 1 },
-  bgY: { min: -300, max: 300, step: 1 },
+  bgZoom: { min: 0.3, max: 5, step: 0.01 },
+  bgX: { min: -1500, max: 1500, step: 1 },
+  bgY: { min: -1200, max: 1200, step: 1 },
 };
 
 /** Etichette leggibili degli slider. */
@@ -121,7 +122,7 @@ export const CALIBRATION_LABEL: Record<NumericCalKey, string> = {
   spreadX: 'Larghezza campo',
   depthY: 'Profondita campo',
   ofDist: 'Distanza interni↔esterni',
-  skewX: 'Inclinazione sx/dx',
+  rotation: 'Rotazione asse sx/dx',
   fan: 'Apertura prospettica',
   bgZoom: 'Foto — zoom',
   bgX: 'Foto — sposta orizz.',

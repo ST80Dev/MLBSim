@@ -447,7 +447,7 @@ const CAL_FIELD_KEYS: NumericCalKey[] = [
   'spreadX',
   'depthY',
   'ofDist',
-  'skewX',
+  'rotation',
   'fan',
 ];
 const CAL_PHOTO_KEYS: NumericCalKey[] = ['bgZoom', 'bgX', 'bgY'];
@@ -462,7 +462,7 @@ function calEntry(id: string, cal: FieldCalibration): string {
   const img = cal.image ? `, image: '${cal.image}'` : '';
   return `  ${id}: { homeX: ${r0(cal.homeX)}, homeY: ${r0(cal.homeY)}, spreadX: ${r2(
     cal.spreadX,
-  )}, depthY: ${r2(cal.depthY)}, ofDist: ${r2(cal.ofDist)}, skewX: ${r0(cal.skewX)}, fan: ${r2(
+  )}, depthY: ${r2(cal.depthY)}, ofDist: ${r2(cal.ofDist)}, rotation: ${r2(cal.rotation)}, fan: ${r2(
     cal.fan,
   )}, bgZoom: ${r2(cal.bgZoom)}, bgX: ${r0(cal.bgX)}, bgY: ${r0(cal.bgY)}${img} },`;
 }

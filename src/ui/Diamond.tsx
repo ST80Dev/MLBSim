@@ -37,9 +37,9 @@ const BASE = {
   WALL_C: { x: 450, y: 50 },
 };
 const DEPTH_REF = BASE.HOME.y - BASE.WALL_C.y;
-// Profondita' normalizzata del bordo dell'interno: oltre questa soglia agisce
-// il fattore ofDist (avvicina/allontana gli esterni tenendo fermo l'interno).
-const INFIELD_DEPTH = 0.48;
+// Profondita' normalizzata oltre la quale agisce ofDist: tiene fermi gli angoli
+// dell'interno (1a/3a) e il monte, comprime/allontana 2a-SS e gli esterni.
+const INFIELD_DEPTH = 0.3;
 
 const DEFENSE: Spot[] = [
   { pos: 'P', x: 450, y: 302 },
@@ -58,11 +58,22 @@ function proj(p: Pt, cal: FieldCalibration): Pt {
   const dx = p.x - BASE.HOME.x;
   const depth = BASE.HOME.y - p.y;
   const depthN = depth / DEPTH_REF;
-  // Distanza interni↔esterni: comprime/espande la profondita' oltre l'interno.
+  // Distanza interni↔esterni: comprime/espande la profondita' oltre gli angoli.
   const depthAdj =
     depthN <= INFIELD_DEPTH ? depthN : INFIELD_DEPTH + (depthN - INFIELD_DEPTH) * cal.ofDist;
-  const x = cal.homeX + dx * cal.spreadX * (1 + depthAdj * cal.fan) + depthAdj * cal.skewX;
-  const y = cal.homeY - depthAdj * DEPTH_REF * cal.depthY;
+  let x = cal.homeX + dx * cal.spreadX * (1 + depthAdj * cal.fan);
+  let y = cal.homeY - depthAdj * DEPTH_REF * cal.depthY;
+  // Rotazione dell'asse attorno a casa base: l'esterno opposto si allunga,
+  // quello dal lato della rotazione si avvicina al piatto.
+  if (cal.rotation) {
+    const a = (cal.rotation * Math.PI) / 180;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const rx = x - cal.homeX;
+    const ry = y - cal.homeY;
+    x = cal.homeX + rx * c - ry * s;
+    y = cal.homeY + rx * s + ry * c;
+  }
   return { x, y };
 }
 
@@ -255,7 +266,7 @@ export function Diamond({
           y={iy}
           width={iw}
           height={ih}
-          preserveAspectRatio="xMidYMid slice"
+          preserveAspectRatio="xMidYMid meet"
           onError={() => setFailedSrc(bg!)}
         />
       ) : (
