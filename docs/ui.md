@@ -110,8 +110,15 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
   **Principale / Alt 2 / Alt 3**: selezionandone uno cambia lo sfondo live e
   salva il percorso in `image`. Se assente si usa la principale `<ID>.jpg`.
 
-Con i valori di default la proiezione è l'**identità** (campo generato non
-deformato). Il pannello mostra il valore live, ha slider con stepper −/+ e
+**Default dedicato alle foto**: gli stadi con foto partono da
+`PHOTO_DEFAULT_CALIBRATION` (casa base più in alto e esterni un po' compressi),
+perché quasi tutte le foto — viste da dietro casa base — hanno quel taglio; così
+non si rifanno gli stessi aggiustamenti a ogni stadio. Il **campo generato**
+(squadre senza foto) usa invece l'**identità** (`DEFAULT_CALIBRATION`): il
+Diamond applica la calibrazione solo sopra una foto reale, mai al campo
+generato. «Azzera» riporta al default-foto (mantiene la foto scelta).
+
+Il pannello mostra il valore live, ha slider con stepper −/+ e
 produce il **JSON** da incollare in `STADIUM_CALIBRATION` (una voce per stadio,
 chiave = ID franchigia). «Azzera» reimposta la geometria ma **mantiene la foto
 scelta**. È **solo UI**: non tocca il motore.

@@ -49,13 +49,34 @@ export interface FieldCalibration {
   image?: string;
 }
 
-/** Valori neutri: identita' della proiezione (campo generato non deformato). */
+/** Valori neutri: identita' della proiezione. Usati per il CAMPO GENERATO
+ *  (squadre senza foto), che non va deformato. */
 export const DEFAULT_CALIBRATION: FieldCalibration = {
   homeX: 450,
   homeY: 394,
   spreadX: 1,
   depthY: 1,
   ofDist: 1,
+  skewX: 0,
+  fan: 0,
+  bgZoom: 1,
+  bgX: 0,
+  bgY: 0,
+};
+
+/**
+ * Calibrazione iniziale per gli stadi con FOTO. Quasi tutte le foto (viste da
+ * dietro casa base) hanno: casa base un po' più in alto del bordo inferiore, e
+ * gli esterni schiacciati in prospettiva (poco più in alto degli interni).
+ * Questi valori partono già così, per non dover rifare gli stessi aggiustamenti
+ * a ogni stadio. Ogni stadio può poi sovrascriverli in STADIUM_CALIBRATION.
+ */
+export const PHOTO_DEFAULT_CALIBRATION: FieldCalibration = {
+  homeX: 450,
+  homeY: 360,
+  spreadX: 1,
+  depthY: 0.78,
+  ofDist: 0.85,
   skewX: 0,
   fan: 0,
   bgZoom: 1,
@@ -107,11 +128,11 @@ export const CALIBRATION_LABEL: Record<NumericCalKey, string> = {
   bgY: 'Foto — sposta vert.',
 };
 
-// Override per stadio (ID franchigia). Le chiavi non indicate restano ai
-// valori di DEFAULT_CALIBRATION. Incolla qui l'output del pannello di calibrazione.
+// Override per stadio (ID franchigia). Le chiavi non indicate restano ai valori
+// di PHOTO_DEFAULT_CALIBRATION. Incolla qui l'output del pannello di calibrazione.
 export const STADIUM_CALIBRATION: Record<string, Partial<FieldCalibration>> = {};
 
-/** Calibrazione effettiva di uno stadio (default + eventuale override). */
+/** Calibrazione effettiva di uno stadio: default-foto + eventuale override. */
 export function getCalibration(teamId: string): FieldCalibration {
-  return { ...DEFAULT_CALIBRATION, ...(STADIUM_CALIBRATION[teamId] ?? {}) };
+  return { ...PHOTO_DEFAULT_CALIBRATION, ...(STADIUM_CALIBRATION[teamId] ?? {}) };
 }

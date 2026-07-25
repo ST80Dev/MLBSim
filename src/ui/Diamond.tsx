@@ -129,17 +129,20 @@ export function Diamond({
   // Se la foto non e' (ancora) presente, si ripiega sul campo generato.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const useImage = !!bg && bg !== failedSrc;
+  // La calibrazione vale solo sopra una foto: il campo GENERATO usa sempre
+  // l'identita' (non va deformato dai default-foto).
+  const effCal = useImage ? cal : DEFAULT_CALIBRATION;
 
   // Punti calibrati.
-  const HOME = proj(BASE.HOME, cal);
-  const FIRST = proj(BASE.FIRST, cal);
-  const SECOND = proj(BASE.SECOND, cal);
-  const THIRD = proj(BASE.THIRD, cal);
-  const MOUND = proj(BASE.MOUND, cal);
-  const POLE_L = proj(BASE.POLE_L, cal);
-  const POLE_R = proj(BASE.POLE_R, cal);
-  const WALL_C = proj(BASE.WALL_C, cal);
-  const defense = DEFENSE.map((s) => ({ pos: s.pos, ...proj(s, cal) }));
+  const HOME = proj(BASE.HOME, effCal);
+  const FIRST = proj(BASE.FIRST, effCal);
+  const SECOND = proj(BASE.SECOND, effCal);
+  const THIRD = proj(BASE.THIRD, effCal);
+  const MOUND = proj(BASE.MOUND, effCal);
+  const POLE_L = proj(BASE.POLE_L, effCal);
+  const POLE_R = proj(BASE.POLE_R, effCal);
+  const WALL_C = proj(BASE.WALL_C, effCal);
+  const defense = DEFENSE.map((s) => ({ pos: s.pos, ...proj(s, effCal) }));
 
   /** Punto sulla curva del muro (Bézier POLE_L → WALL_C → POLE_R). */
   const wallPoint = (t: number): [number, number] => {
@@ -237,10 +240,10 @@ export function Diamond({
   );
 
   // Foto di sfondo con zoom/pan (calibrazione).
-  const iw = VB.w * cal.bgZoom;
-  const ih = VB.h * cal.bgZoom;
-  const ix = (VB.w - iw) / 2 + cal.bgX;
-  const iy = (VB.h - ih) / 2 + cal.bgY;
+  const iw = VB.w * effCal.bgZoom;
+  const ih = VB.h * effCal.bgZoom;
+  const ix = (VB.w - iw) / 2 + effCal.bgX;
+  const iy = (VB.h - ih) / 2 + effCal.bgY;
 
   const content = (
     <>

@@ -25,7 +25,7 @@ import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumI
 import type { StadiumImageCandidate } from '../data/stadiumImages';
 import {
   getCalibration,
-  DEFAULT_CALIBRATION,
+  PHOTO_DEFAULT_CALIBRATION,
   CALIBRATION_RANGE,
   CALIBRATION_LABEL,
 } from '../data/stadiumCalibration';
@@ -602,8 +602,8 @@ function CalibrationPanel({
       <div className="cal-actions">
         <button
           className="btn"
-          onClick={() => setCal({ ...DEFAULT_CALIBRATION, image: cal.image })}
-          title="Azzera la geometria (mantiene la foto scelta)"
+          onClick={() => setCal({ ...PHOTO_DEFAULT_CALIBRATION, image: cal.image })}
+          title="Riporta ai valori iniziali per le foto (mantiene la foto scelta)"
         >
           Azzera
         </button>
