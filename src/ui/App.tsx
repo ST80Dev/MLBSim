@@ -592,7 +592,7 @@ function CalibrationPanel({
           <code> public/stadiums/{team.id}.jpg</code> per lo sfondo reale.
         </div>
       )}
-      {variants.length > 1 && (
+      {variants.length >= 1 && (
         <>
           <div className="cal-group">Foto dello stadio ({variants.length})</div>
           <div className="cal-variants">
@@ -610,6 +610,12 @@ function CalibrationPanel({
               );
             })}
           </div>
+          {variants.length === 1 && (
+            <div className="cal-hint">
+              Una sola foto. Aggiungi <code>{team.id}2.jpg</code> in{' '}
+              <code>public/stadiums/</code> per averne alternative.
+            </div>
+          )}
         </>
       )}
       <div className="cal-group">Campo (perno = casa base)</div>

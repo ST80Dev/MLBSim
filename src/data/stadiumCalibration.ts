@@ -33,9 +33,10 @@ export interface FieldCalibration {
    *  dell'interno (tiene ferme 1a/3a e monte, avvicina 2a/SS ed esterni).
    *  <1 avvicina (schiaccia la prospettiva), >1 allontana. 1 = neutro. */
   ofDist: number;
-  /** Rotazione dell'asse del campo attorno a casa base, in gradi. Ruotando a
-   *  destra (>0) l'esterno di sinistra si allunga e quello di destra si
-   *  avvicina a casa base (e viceversa). 0 = niente. */
+  /** Prospettiva laterale (campo storto): allunga le distanze dei marker di un
+   *  lato e avvicina quelli opposti. >0 allunga a destra e avvicina a sinistra
+   *  (e viceversa). 0 = niente. Non è una rotazione rigida: è uno stiramento
+   *  della profondità in funzione del lato (regole di prospettiva). */
   rotation: number;
   /** Apertura a ventaglio: quanto si allargano i marker piu' lontani (0 = niente). */
   fan: number;
@@ -107,9 +108,9 @@ export const CALIBRATION_RANGE: Record<
   homeY: { min: 250, max: 419, step: 1 },
   spreadX: { min: 0.3, max: 2.2, step: 0.01 },
   depthY: { min: 0.3, max: 2.2, step: 0.01 },
-  ofDist: { min: 0.3, max: 1.8, step: 0.02 },
-  rotation: { min: -60, max: 60, step: 0.5 },
-  fan: { min: -0.6, max: 1.2, step: 0.01 },
+  ofDist: { min: 0.2, max: 1.8, step: 0.02 },
+  rotation: { min: -0.8, max: 0.8, step: 0.02 },
+  fan: { min: -1.5, max: 1.8, step: 0.01 },
   bgZoom: { min: 0.3, max: 5, step: 0.01 },
   bgX: { min: -1500, max: 1500, step: 1 },
   bgY: { min: -1200, max: 1200, step: 1 },

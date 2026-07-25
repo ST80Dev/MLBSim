@@ -37,6 +37,9 @@ const BASE = {
   WALL_C: { x: 450, y: 50 },
 };
 const DEPTH_REF = BASE.HOME.y - BASE.WALL_C.y;
+// Semi-larghezza (dal piatto ai pali di foul): normalizza lo scostamento
+// orizzontale per la prospettiva laterale.
+const HALF_SPAN = BASE.POLE_R.x - BASE.HOME.x;
 // Profondita' normalizzata oltre la quale agisce ofDist: tiene fermi gli angoli
 // dell'interno (1a/3a) e il monte, comprime/allontana 2a-SS e gli esterni.
 const INFIELD_DEPTH = 0.3;
@@ -61,19 +64,12 @@ function proj(p: Pt, cal: FieldCalibration): Pt {
   // Distanza interni↔esterni: comprime/espande la profondita' oltre gli angoli.
   const depthAdj =
     depthN <= INFIELD_DEPTH ? depthN : INFIELD_DEPTH + (depthN - INFIELD_DEPTH) * cal.ofDist;
-  let x = cal.homeX + dx * cal.spreadX * (1 + depthAdj * cal.fan);
-  let y = cal.homeY - depthAdj * DEPTH_REF * cal.depthY;
-  // Rotazione dell'asse attorno a casa base: l'esterno opposto si allunga,
-  // quello dal lato della rotazione si avvicina al piatto.
-  if (cal.rotation) {
-    const a = (cal.rotation * Math.PI) / 180;
-    const c = Math.cos(a);
-    const s = Math.sin(a);
-    const rx = x - cal.homeX;
-    const ry = y - cal.homeY;
-    x = cal.homeX + rx * c - ry * s;
-    y = cal.homeY + rx * s + ry * c;
-  }
+  // Prospettiva laterale (campo storto): stira la profondita' in base al lato,
+  // così un lato allunga le distanze e l'opposto le accorcia (nessuna rotazione
+  // rigida). Il fattore dipende dallo scostamento orizzontale dal piatto.
+  const depthShear = 1 + cal.rotation * (dx / HALF_SPAN);
+  const x = cal.homeX + dx * cal.spreadX * (1 + depthAdj * cal.fan);
+  const y = cal.homeY - depthAdj * DEPTH_REF * cal.depthY * depthShear;
   return { x, y };
 }
 
