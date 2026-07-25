@@ -32,7 +32,7 @@ import {
 } from '../data/stadiumCalibration';
 import type { FieldCalibration, NumericCalKey } from '../data/stadiumCalibration';
 import { gameSeed, newRandomSeed, ratingColor, stars } from './format';
-import { Diamond } from './Diamond';
+import { Diamond, computeMarkers } from './Diamond';
 import {
   batterStatLine,
   pitcherStatLine,
@@ -88,6 +88,12 @@ export function App() {
   // Sfondo-stadio ambientale (attenuato) dietro tutta la plancia: riempie i bordi
   // e sfuma sotto testata/pannelli, per ridurre il nero. La stessa foto scelta.
   const backdropUrl = cal.image ? assetUrl(cal.image) : stadiumImage(homeId);
+  // Modalità piazzamento manuale dei marker (attiva col pannello aperto).
+  const manual = !!cal.markers;
+  const editing = calOpen && manual && !!stadiumImage(homeId);
+  const moveMarker = (id: string, pos: { x: number; y: number }) => {
+    setCal({ ...cal, markers: { ...(cal.markers ?? {}), [id]: pos } });
+  };
 
   const act = (fn: (g: LiveGame) => void) => {
     fn(live);
@@ -184,8 +190,16 @@ export function App() {
             setStatsMode={setStatsMode}
           />
 
-          <div className="gamefield">
-            <Diamond home={result.home} away={result.away} background bases={sit.bases} cal={cal} />
+          <div className={editing ? 'gamefield editing' : 'gamefield'}>
+            <Diamond
+              home={result.home}
+              away={result.away}
+              background
+              bases={sit.bases}
+              cal={cal}
+              editable={editing}
+              onMarkerMove={moveMarker}
+            />
 
             <div className="cronaca-corner left">
               <CronacaTeam result={result} side="away" />
@@ -532,6 +546,15 @@ function CalibrationPanel({
     );
   };
 
+  // Piazzamento manuale: seed dei marker dalla proiezione corrente, poi trascino.
+  const manual = !!cal.markers;
+  const enterManual = () => setCal({ ...cal, markers: computeMarkers(cal) });
+  const exitManual = () => {
+    const next = { ...cal };
+    delete next.markers;
+    setCal(next);
+  };
+
   // Esporta un file JSON nominato come la foto (<STEM>.json), da mettere in
   // src/data/calibrations/ e committare: si applica al deploy.
   const stem = calibrationStem(team.id, cal.image);
@@ -618,8 +641,26 @@ function CalibrationPanel({
           )}
         </>
       )}
-      <div className="cal-group">Campo (perno = casa base)</div>
-      {CAL_FIELD_KEYS.map(row)}
+      {manual ? (
+        <>
+          <div className="cal-group">Piazzamento manuale</div>
+          <div className="cal-note">
+            Trascina i <b>14 marker</b> sulla foto (9 difensori, 3 basi, casa base,
+            battitore). La foto è fissata: regola prima <b>zoom/pan</b> qui sotto.
+          </div>
+          <button className="btn" onClick={exitManual}>
+            ↩︎ Torna ai parametri
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="cal-group">Campo (perno = casa base)</div>
+          {CAL_FIELD_KEYS.map(row)}
+          <button className="btn" onClick={enterManual} title="Sposta i marker a mano sulla foto">
+            ✋ Piazza marker a mano
+          </button>
+        </>
+      )}
       <div className="cal-group">Foto di sfondo</div>
       {CAL_PHOTO_KEYS.map(row)}
       <div className="cal-actions">

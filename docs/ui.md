@@ -100,10 +100,11 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
 - `spreadX`/`depthY`: larghezza e profondità dei marker.
 - `ofDist`: **distanza interni↔esterni** — scala la profondità oltre gli angoli
   (tiene ferme 1ª/3ª e monte, avvicina 2ª/SS ed esterni). `<1` schiaccia.
-- `rotation`: **prospettiva laterale** (campo storto). Stira la profondità in
-  base al lato: `>0` allunga le distanze dei marker di **destra** e avvicina
-  quelli di **sinistra** (e viceversa), su esterni **e** angoli 1ª/3ª. Non è una
-  rotazione rigida (niente moto circolare): è uno stiramento prospettico.
+- `rotation`: **rotazione dell'asse** casa base–2ª–CF attorno a casa base (in
+  gradi). `>0` inclina l'asse a destra: **1ª e RF si allungano verso destra** e
+  **3ª e LF salgono** (e viceversa) — l'intero diamante ruota coerentemente per
+  seguire un campo storto in foto. A piccoli angoli è un tilt dell'asse, non un
+  giro. Range ±30°.
 - `fan`: apertura prospettica (i marker lontani si allargano di più).
 - `bgZoom`/`bgX`/`bgY`: zoom e pan della foto di sfondo. La foto è mostrata
   **intera** (`meet`, mai ritagliata): con zoom e pan si porta in campo qualsiasi
@@ -113,6 +114,18 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
   `<ID>2.jpg`, `<ID>3.jpg`, … — provate via `onload`) e mostra dei chip
   **Principale / Alt 2 / Alt 3**: selezionandone uno cambia lo sfondo live e
   salva il percorso in `image`. Se assente si usa la principale `<ID>.jpg`.
+
+### Piazzamento manuale dei marker (✋)
+
+Alternativa ai parametri: nel pannello, **«✋ Piazza marker a mano»** entra in
+modalità manuale. Si fissa prima la foto (zoom/pan), poi si **trascinano i 14
+marker** direttamente sulla foto — 9 difensori (P, C, 1B, 2B, SS, 3B, LF, CF,
+RF), 3 basi (1ª/2ª/3ª), casa base e battitore (il monte segue P). Le posizioni
+si salvano in `cal.markers` (coord. assolute nel viewBox 900×420) e finiscono
+nel file `<STEM>.json` via **Esporta file**; se presenti, hanno la **precedenza**
+sulla proiezione parametrica. «↩︎ Torna ai parametri» le rimuove. Convenzione
+anti-sovrapposizione: etichette difensori **sopra**, basi/runner **sotto**.
+Durante il drag i pannelli laterali sono non-interattivi (`.gamefield.editing`).
 
 **Default dedicato alle foto**: gli stadi con foto partono da
 `PHOTO_DEFAULT_CALIBRATION` (casa base più in alto e esterni un po' compressi),
