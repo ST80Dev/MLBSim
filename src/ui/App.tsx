@@ -534,7 +534,8 @@ function CalibrationPanel({
   const row = (k: NumericCalKey) => {
     const rng = CALIBRATION_RANGE[k];
     const v = cal[k];
-    const nudge = rng.step * 10;
+    // Passo dei pulsanti −/+: 5 px per i parametri in pixel (step 1).
+    const nudge = rng.step * 5;
     return (
       <div className="cal-row" key={k}>
         <div className="cal-row-top">

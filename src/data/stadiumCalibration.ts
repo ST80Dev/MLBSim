@@ -107,7 +107,7 @@ export const CALIBRATION_RANGE: Record<
   spreadX: { min: 0.3, max: 2.2, step: 0.01 },
   depthY: { min: 0.3, max: 2.2, step: 0.01 },
   ofDist: { min: 0.3, max: 1.8, step: 0.02 },
-  skewX: { min: -300, max: 300, step: 2 },
+  skewX: { min: -300, max: 300, step: 1 },
   fan: { min: -0.6, max: 1.2, step: 0.01 },
   bgZoom: { min: 0.5, max: 3, step: 0.01 },
   bgX: { min: -400, max: 400, step: 1 },
