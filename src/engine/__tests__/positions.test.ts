@@ -49,6 +49,8 @@ function fakeTeam(lineup: Batter[]): Team {
     rotation: [],
     bullpen: [],
     usesDH: true,
+    reserveBatters: [],
+    reservePitchers: [],
   };
 }
 

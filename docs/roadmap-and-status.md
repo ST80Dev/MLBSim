@@ -34,12 +34,29 @@
     ogni partita: la sostituzione avverrà con Fase 2/5 (vedi sotto).
 
 ## Roadmap
-- **Fase 2 — Costruzione squadra & import storico**
+- **Fase 2 — Costruzione squadra & import storico** *(in corso)*
   - Editor di lineup/rotazione; import di **giocatori e franchigie storiche
     reali** (database Lahman, pubblico).
   - **Scelta della squadra gestita resa persistente**: la si sceglie una volta
     (setup) e vale per tutte le partite; il selettore per-partita della Fase 1
     diventa strumento di test/debug, non il flusso principale.
+  - **Import storico — decisione di design**: le stagioni reali sono *snapshot
+    congelati*, quindi le **statistiche** dell'annata sono la verità di quel
+    giocatore storico e i rating 20-80 si **stimano** dalle stat solo per
+    pilotare le leve del motore. Il principio "caratteristiche = fonte di verità"
+    resta pieno per i giocatori **generati** (che evolvono); lo snapshot storico
+    non evolve. Import di **stagioni intere** dal Lahman via pipeline di build
+    (JSON compatti per annata, non CSV a runtime).
+  - **Persistenza — FATTO (fondamenta):** salvataggi su **Supabase** dietro
+    l'interfaccia `SaveStore` (`src/data/persistence/`). Cloud sorgente primaria,
+    niente auth, RLS aperta per scelta, save versionati (`schema_version`).
+    Dettaglio in `docs/architecture.md` § Persistenza.
+  - **Editor lineup — FATTO (base motore/dati):** roster **25 attivi + ~10
+    depth** (`reserveBatters`/`reservePitchers` su `Team`, generati anche per le
+    squadre procedurali); split **14/11**; **sempre DH** in questa fase;
+    posizioni **libere con malus**. `engine/lineup.ts`: `autoLineup` (euristica
+    ordine di battuta) + `validateFieldSet`. Manca la **UI** dell'editor e il
+    wiring su `saveStore` (prossimo passo).
 - **Fase 3 — UI stile SBS/OOTP**
   - Campo con etichette, card giocatore ricche, pannelli colorati, pulsanti.
 - **Fase 4 — Stagione**

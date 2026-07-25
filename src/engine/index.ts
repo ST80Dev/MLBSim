@@ -8,3 +8,4 @@ export * from './probabilities';
 export * from './atbat';
 export * from './boxscore';
 export * from './game';
+export * from './lineup';
