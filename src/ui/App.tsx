@@ -15,8 +15,7 @@ import {
   autoManageDefense,
   quickSim,
 } from '../engine/game';
-import { batterOverall, pitcherOverall, deriveBatterStats } from '../engine/ratings';
-import type { BatterStats } from '../engine/types';
+import { batterOverall, pitcherOverall, deriveBatterStats, derivePitcherStats } from '../engine/ratings';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import { autoLineup } from '../engine/lineup';
 import {
@@ -24,6 +23,7 @@ import {
   buildManagedTeam,
   validateArrangement,
   rosterBatters,
+  rosterPitchers,
 } from '../engine/arrangement';
 import { saveStore } from '../data/persistence';
 import type { MatchArrangement } from '../data/persistence';
@@ -1338,19 +1338,19 @@ function Rating({ v }: { v: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Pagina "Roster": gestione della rosa della squadra gestita, anche schermata
-// di preparazione della partita. Due macro-sezioni da linguette (Fielders /
-// Pitchers). Fielders: ordine di battuta + distribuzione difensiva, e l'elenco
-// dei disponibili (panca + riserve). Le mosse si fanno per TRASCINAMENTO del
-// nome su un altro, vedendo sempre valori e stat (niente scelte "al buio"):
-//   - riga titolare -> riga titolare = riordina l'ordine di battuta
-//   - qualunque -> cella RUOLO di un titolare = assegna quella casella difensiva
-//   - panchinaro -> titolare (o titolare -> panchinaro) = sostituzione
-// Tabelle con toggle stat: Stagione / Scorsa / Storico / Caratteristiche. Le
-// tre modalita' statistiche oggi mostrano una linea ATTESA derivata dai rating
-// (segnaposto: la stagione in corso e' a zero finche' non si gioca); i valori
-// reali arriveranno col motore di stagione. Fissi accanto a ogni giocatore:
-// valore totale (overall), eta', ruolo/i. Salvataggio esplicito.
+// Pagina "Roster": gestione rosa della squadra gestita, anche schermata di
+// preparazione partita. Linguette Fielders / Pitchers. Le mosse si fanno per
+// TRASCINAMENTO del nome su un altro (niente scelte "al buio"), vedendo sempre
+// valori e statistiche:
+//   Fielders  - riga titolare -> riga titolare = riordina ordine di battuta
+//             - trascina su una cella DEF       = assegna/scambia la casella
+//             - panchinaro <-> titolare         = sostituzione
+//   Pitchers  - trascina tra Rotazione / Bullpen / Disponibili per comporre
+//               lo staff; nella lista, rilascia su una riga per riordinare.
+// Toggle stat: Stagione / Scorsa / Storico / Caratteristiche. Le tre modalita'
+// statistiche mostrano una linea ATTESA derivata dai rating (segnaposto: la
+// stagione in corso e' a zero); i risultati (RBI, W-L, SV...) sono stime finche'
+// non si gioca. Fissi accanto a ogni giocatore: overall, eta', ruolo/i.
 // ---------------------------------------------------------------------------
 
 type RosterStat = 'season' | 'last' | 'hist' | 'ratings';
@@ -1362,25 +1362,10 @@ const ROSTER_STAT_LABEL: Record<RosterStat, string> = {
   ratings: 'Caratteristiche',
 };
 
-const ZERO_BATTING: BatterStats = {
-  pa: 0, h: 0, double: 0, triple: 0, hr: 0, bb: 0, so: 0, hbp: 0, sb: 0, cs: 0,
-};
+const clamp01 = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+const round = (x: number) => Math.round(x);
 
-/** Media, OBP, SLG e conteggi da una linea di battuta. Peripherals, non risultati. */
-function battingLine(s: BatterStats) {
-  const ab = Math.max(0, s.pa - s.bb - s.hbp);
-  const singles = s.h - s.double - s.triple - s.hr;
-  const tb = singles + 2 * s.double + 3 * s.triple + 4 * s.hr;
-  return {
-    avg: ab ? s.h / ab : 0,
-    obp: s.pa ? (s.h + s.bb + s.hbp) / s.pa : 0,
-    slg: ab ? tb / ab : 0,
-    hr: s.hr,
-    sb: s.sb,
-  };
-}
-
-/** Formatta una media/percentuale come .312 (senza zero iniziale). */
+/** Media/percentuale come .312 (senza zero iniziale). */
 function pct3(x: number): string {
   return x.toFixed(3).replace(/^0/, '');
 }
@@ -1390,12 +1375,81 @@ function rolesOf(b: Batter): string {
   return b.secondaryPosition ? `${b.position}/${b.secondaryPosition}` : b.position;
 }
 
-/** Le stat da mostrare per un battitore secondo la modalita' scelta. */
-function statsFor(b: Batter, mode: RosterStat): BatterStats {
-  if (mode === 'season') return ZERO_BATTING; // stagione in corso: non ancora giocata
-  // scorsa / storico: linea attesa dai rating (segnaposto finche' non c'e' storico)
-  return deriveBatterStats(b.ratings);
+interface BatLine {
+  g: number; avg: number; obp: number; slg: number;
+  h: number; d2: number; t3: number; hr: number; rbi: number; bb: number; so: number; sb: number;
 }
+
+/** Linea di battuta ATTESA dai rating (o zeri per la stagione in corso). */
+function batLine(b: Batter, mode: RosterStat): BatLine {
+  if (mode === 'season') {
+    return { g: 0, avg: 0, obp: 0, slg: 0, h: 0, d2: 0, t3: 0, hr: 0, rbi: 0, bb: 0, so: 0, sb: 0 };
+  }
+  const s = deriveBatterStats(b.ratings);
+  const ab = Math.max(1, s.pa - s.bb - s.hbp);
+  const singles = s.h - s.double - s.triple - s.hr;
+  const tb = singles + 2 * s.double + 3 * s.triple + 4 * s.hr;
+  return {
+    g: round(s.pa / 4.3),
+    avg: s.h / ab,
+    obp: (s.h + s.bb + s.hbp) / s.pa,
+    slg: tb / ab,
+    h: s.h, d2: s.double, t3: s.triple, hr: s.hr,
+    rbi: round(s.hr * 1.9 + (s.h - s.hr) * 0.35), // stima: risultato, non peripheral
+    bb: s.bb, so: s.so, sb: s.sb,
+  };
+}
+
+interface PitLine {
+  w: number; l: number; g: number; gs: number; ip: number; ipOuts: number;
+  h: number; bb: number; k: number; svo: number; sv: number; whip: number; k9: number;
+}
+
+/** Carico stagionale atteso per ruolo (partite, aperture, battitori affrontati). */
+const PITCH_LOAD: Record<string, { g: number; gs: number; bf: number }> = {
+  SP: { g: 32, gs: 32, bf: 800 },
+  RP: { g: 65, gs: 0, bf: 280 },
+  CL: { g: 62, gs: 0, bf: 248 },
+};
+
+/** Linea di lancio ATTESA dai rating (peripherals derivati; risultati stimati). */
+function pitLine(p: Pitcher, mode: RosterStat): PitLine {
+  if (mode === 'season') {
+    return { w: 0, l: 0, g: 0, gs: 0, ip: 0, ipOuts: 0, h: 0, bb: 0, k: 0, svo: 0, sv: 0, whip: 0, k9: 0 };
+  }
+  const load = PITCH_LOAD[p.role] ?? PITCH_LOAD.RP;
+  const s = derivePitcherStats(p.ratings, load.bf);
+  const outs = Math.max(1, load.bf - s.h - s.bb - s.hbp);
+  const ip = outs / 3;
+  const ovr = pitcherOverall(p.ratings);
+  const wp = clamp01(0.5 + (ovr - 50) / 60, 0.35, 0.68);
+  const dec = p.role === 'SP' ? 20 : p.role === 'CL' ? 6 : 8;
+  const w = round(dec * wp);
+  let svo = 0;
+  let sv = 0;
+  if (p.role === 'CL') {
+    svo = round(38 + (ovr - 55) * 0.4);
+    sv = round(svo * clamp01(0.8 + (ovr - 55) / 120, 0.7, 0.93));
+  } else if (p.role === 'RP') {
+    svo = 6;
+    sv = round(svo * 0.5);
+  }
+  return {
+    w, l: dec - w, g: load.g, gs: load.gs, ip, ipOuts: outs,
+    h: s.h, bb: s.bb, k: s.so, svo, sv,
+    whip: (s.h + s.bb) / ip, k9: (s.so / ip) * 9,
+  };
+}
+
+/** IP in notazione baseball: interi + terzi (es. 200.1). */
+function ipFmt(outs: number): string {
+  return `${Math.floor(outs / 3)}.${outs % 3}`;
+}
+
+const BAT_COLS = ['G', 'AVG', 'OBP', 'SLG', 'H', '2B', '3B', 'HR', 'RBI', 'BB', 'SO', 'SB'];
+const BAT_RATING_COLS = ['CON', 'POT', 'OCC', 'VEL', 'DIF', 'BRA'];
+const PIT_COLS = ['W', 'L', 'G', 'GS', 'IP', 'H', 'BB', 'K', 'SVO', 'SV', 'WHIP', 'K/9'];
+const PIT_RATING_COLS = ['DOM', 'CTR', 'MOV', 'PAT', 'RES', 'DIF'];
 
 function RosterPage({
   team,
@@ -1415,15 +1469,18 @@ function RosterPage({
   const [tab, setTab] = useState<'fielders' | 'pitchers'>('fielders');
   const [arr, setArr] = useState<MatchArrangement>(() => initial ?? defaultArrangement(team));
   const [statMode, setStatMode] = useState<RosterStat>('ratings');
-  const [drag, setDrag] = useState<{ id: string; from: 'lineup' | 'bench' } | null>(null);
+  const [drag, setDrag] = useState<{ id: string; from: string } | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const batters = rosterBatters(team);
+  const pitchers = rosterPitchers(team);
   const bById = new Map(batters.map((b) => [b.id, b]));
+  const pById = new Map(pitchers.map((p) => [p.id, p]));
   const lineup = arr.order.map((id) => bById.get(id)).filter(Boolean) as Batter[];
   const starterIds = new Set(arr.order);
   const bench = batters.filter((b) => !starterIds.has(b.id));
   const check = validateArrangement(team, arr);
+  const ratingsMode = statMode === 'ratings';
 
   const update = (patch: Partial<MatchArrangement>) => {
     setArr((a) => ({ ...a, ...patch }));
@@ -1437,10 +1494,9 @@ function RosterPage({
     return kept;
   };
 
-  // --- Operazioni (drag&drop) --------------------------------------------
+  // --- Fielders: operazioni --------------------------------------------
   const occupantOf = (slot: Position) =>
     Object.keys(arr.defense).find((id) => arr.defense[id] === slot);
-
   const setSlot = (slot: Position, x: string) => {
     const defense: Record<string, Position> = { ...arr.defense };
     const y = occupantOf(slot);
@@ -1454,7 +1510,6 @@ function RosterPage({
     }
     update({ defense, order: reconcileOrder(arr.order, Object.keys(defense)) });
   };
-
   const reorderBatting = (targetId: string, draggedId: string) => {
     if (draggedId === targetId) return;
     const order = [...arr.order];
@@ -1464,8 +1519,6 @@ function RosterPage({
     order.splice(order.indexOf(targetId), 0, draggedId);
     update({ order });
   };
-
-  // benchId subentra al posto (ordine + casella) di starterId.
   const substitute = (starterId: string, benchId: string) => {
     const order = arr.order.map((id) => (id === starterId ? benchId : id));
     const defense = { ...arr.defense };
@@ -1473,24 +1526,41 @@ function RosterPage({
     delete defense[starterId];
     update({ order, defense });
   };
-
   const autoBat = () => update({ order: autoLineup(lineup).map((b) => b.id) });
 
-  // --- Dispatch dei drop --------------------------------------------------
-  const dropOnLineupRow = (starterId: string) => {
+  const dropLineupRow = (starterId: string) => {
     if (!drag) return;
     if (drag.from === 'lineup') reorderBatting(starterId, drag.id);
     else substitute(starterId, drag.id);
     setDrag(null);
   };
-  const dropOnDefCell = (slot: Position) => {
-    if (!drag) return;
-    setSlot(slot, drag.id);
+  const dropDefCell = (slot: Position) => {
+    if (drag) setSlot(slot, drag.id);
     setDrag(null);
   };
-  const dropOnBenchRow = (benchId: string) => {
+  const dropBenchRow = (benchId: string) => {
+    if (drag && drag.from === 'lineup') substitute(drag.id, benchId);
+    setDrag(null);
+  };
+
+  // --- Pitchers: composizione staff via drag&drop ----------------------
+  const usedP = new Set([...arr.rotation, ...arr.bullpen]);
+  const availP = pitchers.filter((p) => !usedP.has(p.id));
+  const placePitcher = (toList: 'rotation' | 'bullpen' | 'avail', targetId?: string) => {
     if (!drag) return;
-    if (drag.from === 'lineup') substitute(drag.id, benchId);
+    const id = drag.id;
+    let rotation = arr.rotation.filter((x) => x !== id);
+    let bullpen = arr.bullpen.filter((x) => x !== id);
+    const insert = (list: string[]) => {
+      if (targetId && list.includes(targetId)) {
+        const i = list.indexOf(targetId);
+        return [...list.slice(0, i), id, ...list.slice(i)];
+      }
+      return [...list, id];
+    };
+    if (toList === 'rotation') rotation = insert(rotation);
+    else if (toList === 'bullpen') bullpen = insert(bullpen);
+    update({ rotation, bullpen });
     setDrag(null);
   };
 
@@ -1508,37 +1578,118 @@ function RosterPage({
     onStart();
   };
 
-  // Intestazioni colonne stat secondo la modalita'.
-  const statCols =
-    statMode === 'ratings'
-      ? ['CON', 'POT', 'OCC', 'VEL', 'DIF', 'BRA']
-      : ['AVG', 'HR', 'OBP', 'SLG', 'SB'];
-
-  const statCells = (b: Batter, pos: Position) => {
-    if (statMode === 'ratings') {
+  // --- Celle statistiche ------------------------------------------------
+  const batStatCells = (b: Batter, pos: Position) => {
+    if (ratingsMode) {
       const r = ratingsAtPosition(b, pos);
       return (
         <>
-          <Rating v={r.contact} />
-          <Rating v={r.power} />
-          <Rating v={r.eye} />
-          <Rating v={r.speed} />
-          <Rating v={r.fielding} />
-          <Rating v={r.arm} />
+          <Rating v={r.contact} /><Rating v={r.power} /><Rating v={r.eye} />
+          <Rating v={r.speed} /><Rating v={r.fielding} /><Rating v={r.arm} />
         </>
       );
     }
-    const l = battingLine(statsFor(b, statMode));
+    const s = batLine(b, statMode);
     return (
       <>
-        <td>{pct3(l.avg)}</td>
-        <td>{l.hr}</td>
-        <td>{pct3(l.obp)}</td>
-        <td>{pct3(l.slg)}</td>
-        <td>{l.sb}</td>
+        <td>{s.g}</td><td>{pct3(s.avg)}</td><td>{pct3(s.obp)}</td><td>{pct3(s.slg)}</td>
+        <td>{s.h}</td><td>{s.d2}</td><td>{s.t3}</td><td>{s.hr}</td><td>{s.rbi}</td>
+        <td>{s.bb}</td><td>{s.so}</td><td>{s.sb}</td>
       </>
     );
   };
+  const pitStatCells = (p: Pitcher) => {
+    if (ratingsMode) {
+      const r = p.ratings;
+      return (
+        <>
+          <Rating v={r.stuff} /><Rating v={r.control} /><Rating v={r.movement} />
+          <Rating v={r.groundball} /><Rating v={r.stamina} /><Rating v={r.fielding} />
+        </>
+      );
+    }
+    const s = pitLine(p, statMode);
+    return (
+      <>
+        <td>{s.w}</td><td>{s.l}</td><td>{s.g}</td><td>{s.gs}</td><td>{ipFmt(s.ipOuts)}</td>
+        <td>{s.h}</td><td>{s.bb}</td><td>{s.k}</td><td>{s.svo}</td><td>{s.sv}</td>
+        <td>{s.whip.toFixed(2)}</td><td>{s.k9.toFixed(1)}</td>
+      </>
+    );
+  };
+  const batCols = ratingsMode ? BAT_RATING_COLS : BAT_COLS;
+  const pitCols = ratingsMode ? PIT_RATING_COLS : PIT_COLS;
+
+  // Riga pitcher riusabile per Rotazione / Bullpen / Disponibili.
+  const pitcherRow = (p: Pitcher, from: string, i: number, tag?: string) => (
+    <tr
+      key={p.id}
+      className={`drow${drag?.id === p.id ? ' dragging' : ''}`}
+      draggable
+      onDragStart={() => setDrag({ id: p.id, from })}
+      onDragEnd={() => setDrag(null)}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.stopPropagation();
+        placePitcher(from === 'avail' ? 'avail' : (from as 'rotation' | 'bullpen'), p.id);
+      }}
+    >
+      <td className="n">{from === 'avail' ? '' : i + 1}</td>
+      <td className="l grip">
+        ⠿ {p.name}
+        {tag && <span className="tag">{tag}</span>}
+      </td>
+      <td className="roles">{p.role}</td>
+      <td className="ovr">{stars(pitcherOverall(p.ratings))}</td>
+      <td>{p.age}</td>
+      {pitStatCells(p)}
+    </tr>
+  );
+
+  const pitTable = (
+    title: string,
+    hint: string,
+    list: 'rotation' | 'bullpen' | 'avail',
+    rows: Pitcher[],
+  ) => (
+    <div
+      className="card"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={() => placePitcher(list)}
+    >
+      <div className="card-title">
+        {title} <span className="card-sub">{hint}</span>
+      </div>
+      <div className="roster-scroll">
+        <table className="ratings roster-tbl">
+          <thead>
+            <tr>
+              <th className="n">#</th>
+              <th className="l">Lanciatore</th>
+              <th>RUOLO</th>
+              <th title="Valore totale">OVR</th>
+              <th title="Età">ETÀ</th>
+              {pitCols.map((c) => (
+                <th key={c}>{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p, i) =>
+              pitcherRow(p, list, i, list === 'rotation' && i === 0 ? 'parte' : undefined),
+            )}
+            {rows.length === 0 && (
+              <tr>
+                <td className="l" colSpan={5 + pitCols.length}>
+                  {list === 'avail' ? 'Nessun disponibile.' : 'Trascina qui un lanciatore.'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   return (
     <div className="page roster-page">
@@ -1577,11 +1728,7 @@ function RosterPage({
           <button className="btn" onClick={() => onApply(arr)} disabled={!check.ok}>
             ✓ Applica
           </button>
-          <button
-            className="btn"
-            onClick={save}
-            disabled={!check.ok || saveState === 'saving'}
-          >
+          <button className="btn" onClick={save} disabled={!check.ok || saveState === 'saving'}>
             {saveState === 'saving' ? '… Salvataggio' : '💾 Salva'}
           </button>
           {activeGame && (
@@ -1596,136 +1743,139 @@ function RosterPage({
         </div>
       </div>
 
-      {statMode !== 'ratings' && (
+      {!ratingsMode && (
         <div className="page-note">
           Valori <b>attesi</b> derivati dai rating (segnaposto): la stagione in corso e' a zero
-          finche' non si gioca; i numeri reali arriveranno col motore di stagione.
+          finche' non si gioca; i risultati (RBI, W-L, SV) sono stime. I numeri reali arriveranno
+          col motore di stagione.
         </div>
       )}
 
       {tab === 'fielders' ? (
-        <div className="fielders-grid">
-          {/* Titolari: ordine di battuta + difesa */}
+        <>
           <div className="card">
             <div className="card-title">
               Titolari <span className="card-sub">trascina per riordinare / cambiare ruolo</span>
             </div>
-            <table className="ratings roster-tbl">
-              <thead>
-                <tr>
-                  <th className="n">#</th>
-                  <th className="l">Giocatore</th>
-                  <th title="Casella difensiva">DEF</th>
-                  <th title="Ruoli naturali">RUOLI</th>
-                  <th title="Valore totale">OVR</th>
-                  <th title="Età">ETÀ</th>
-                  {statCols.map((c) => (
-                    <th key={c}>{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {lineup.map((b, i) => {
-                  const pos = arr.defense[b.id] ?? b.position;
-                  const outOfRole = !canOccupy(b, pos);
-                  const dragging = drag?.id === b.id;
-                  return (
-                    <tr
-                      key={b.id}
-                      className={`drow${dragging ? ' dragging' : ''}`}
-                      draggable
-                      onDragStart={() => setDrag({ id: b.id, from: 'lineup' })}
-                      onDragEnd={() => setDrag(null)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => dropOnLineupRow(b.id)}
-                    >
-                      <td className="n">{i + 1}</td>
-                      <td className="l grip">⠿ {b.name}</td>
-                      <td
-                        className={`defcell${outOfRole ? ' warn' : ''}`}
+            <div className="roster-scroll">
+              <table className="ratings roster-tbl">
+                <thead>
+                  <tr>
+                    <th className="n">#</th>
+                    <th className="l">Giocatore</th>
+                    <th title="Casella difensiva">DEF</th>
+                    <th title="Ruoli naturali">RUOLI</th>
+                    <th title="Valore totale">OVR</th>
+                    <th title="Età">ETÀ</th>
+                    {batCols.map((c) => (
+                      <th key={c}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineup.map((b, i) => {
+                    const pos = arr.defense[b.id] ?? b.position;
+                    const outOfRole = !canOccupy(b, pos);
+                    return (
+                      <tr
+                        key={b.id}
+                        className={`drow${drag?.id === b.id ? ' dragging' : ''}`}
+                        draggable
+                        onDragStart={() => setDrag({ id: b.id, from: 'lineup' })}
+                        onDragEnd={() => setDrag(null)}
                         onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.stopPropagation();
-                          dropOnDefCell(pos);
-                        }}
-                        title={outOfRole ? 'Fuori ruolo (fielding penalizzato)' : undefined}
+                        onDrop={() => dropLineupRow(b.id)}
                       >
-                        <span className={pos === b.position ? 'pos' : 'pos moved'}>{pos}</span>
-                        {outOfRole && ' ⚠'}
-                      </td>
-                      <td className="roles">{rolesOf(b)}</td>
-                      <td className="ovr">{stars(batterOverall(ratingsAtPosition(b, pos)))}</td>
-                      <td>{b.age}</td>
-                      {statCells(b, pos)}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <td className="n">{i + 1}</td>
+                        <td className="l grip">⠿ {b.name}</td>
+                        <td
+                          className={`defcell${outOfRole ? ' warn' : ''}`}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.stopPropagation();
+                            dropDefCell(pos);
+                          }}
+                          title={outOfRole ? 'Fuori ruolo (fielding penalizzato)' : undefined}
+                        >
+                          <span className={pos === b.position ? 'pos' : 'pos moved'}>{pos}</span>
+                          {outOfRole && ' ⚠'}
+                        </td>
+                        <td className="roles">{rolesOf(b)}</td>
+                        <td className="ovr">{stars(batterOverall(ratingsAtPosition(b, pos)))}</td>
+                        <td>{b.age}</td>
+                        {batStatCells(b, pos)}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* Disponibili: panca + riserve */}
-          <div
-            className="card"
-            onDragOver={(e) => e.preventDefault()}
-          >
+          <div className="card" onDragOver={(e) => e.preventDefault()}>
             <div className="card-title">
               Disponibili ({bench.length}){' '}
               <span className="card-sub">trascina su un titolare per sostituire</span>
             </div>
-            <table className="ratings roster-tbl">
-              <thead>
-                <tr>
-                  <th className="l">Giocatore</th>
-                  <th title="Ruoli naturali">RUOLI</th>
-                  <th title="Valore totale">OVR</th>
-                  <th title="Età">ETÀ</th>
-                  {statCols.map((c) => (
-                    <th key={c}>{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {bench.map((b) => {
-                  const dragging = drag?.id === b.id;
-                  return (
+            <div className="roster-scroll">
+              <table className="ratings roster-tbl">
+                <thead>
+                  <tr>
+                    <th className="l">Giocatore</th>
+                    <th title="Ruoli naturali">RUOLI</th>
+                    <th title="Valore totale">OVR</th>
+                    <th title="Età">ETÀ</th>
+                    {batCols.map((c) => (
+                      <th key={c}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {bench.map((b) => (
                     <tr
                       key={b.id}
-                      className={`drow${dragging ? ' dragging' : ''}`}
+                      className={`drow${drag?.id === b.id ? ' dragging' : ''}`}
                       draggable
                       onDragStart={() => setDrag({ id: b.id, from: 'bench' })}
                       onDragEnd={() => setDrag(null)}
                       onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => dropOnBenchRow(b.id)}
+                      onDrop={() => dropBenchRow(b.id)}
                     >
                       <td className="l grip">⠿ {b.name}</td>
                       <td className="roles">{rolesOf(b)}</td>
                       <td className="ovr">{stars(batterOverall(b.ratings))}</td>
                       <td>{b.age}</td>
-                      {statCells(b, b.position)}
+                      {batStatCells(b, b.position)}
                     </tr>
-                  );
-                })}
-                {bench.length === 0 && (
-                  <tr>
-                    <td className="l" colSpan={4 + statCols.length}>
-                      Nessun disponibile.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  ))}
+                  {bench.length === 0 && (
+                    <tr>
+                      <td className="l" colSpan={4 + batCols.length}>
+                        Nessun disponibile.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       ) : (
-        <div className="card page-stub">
-          <div className="card-title">Pitchers</div>
-          <p>
-            Rotazione (ordine degli starter, il primo parte) e bullpen (ordine dei rilievi),
-            con gli stessi disponibili e lo stesso trascinamento dei Fielders.
-          </p>
-          <p className="muted">In arrivo nel passo dedicato ai lanciatori.</p>
-        </div>
+        <>
+          {pitTable(
+            'Rotazione',
+            'ordine degli starter · il primo parte',
+            'rotation',
+            arr.rotation.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
+          )}
+          {pitTable(
+            'Bullpen',
+            "ordine d'ingresso dei rilievi",
+            'bullpen',
+            arr.bullpen.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
+          )}
+          {pitTable('Disponibili', 'trascina in rotazione o bullpen', 'avail', availP)}
+        </>
       )}
     </div>
   );

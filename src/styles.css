@@ -2538,3 +2538,26 @@ table {
 .roster-tbl .drow[draggable='true'] {
   transition: background 0.1s ease;
 }
+
+/* --- Roster: tabelle larghe (molte stat) ---------------------------- */
+.roster-scroll {
+  overflow-x: auto;
+}
+.roster-tbl {
+  min-width: 100%;
+}
+.roster-tbl .tag {
+  margin-left: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9cc2ff;
+  border: 1px solid rgba(120, 180, 255, 0.5);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.roster-tbl td,
+.roster-tbl th {
+  padding-left: 5px;
+  padding-right: 5px;
+}
