@@ -2645,3 +2645,136 @@ table {
   color: #f0a08a;
   border: 1px solid rgba(220, 100, 90, 0.5);
 }
+
+/* --- Home: calendario a caselle grandi (finestra scorrevole) -------- */
+.cal-nav {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+.navbtn {
+  border: 1px solid var(--line);
+  background: var(--panel, var(--card2));
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.navbtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.navbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.match-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+.match-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--card2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.match-card.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+  background: rgba(79, 157, 255, 0.1);
+}
+.match-card.locked {
+  opacity: 0.62;
+}
+.mc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+}
+.mc-day {
+  font-weight: 800;
+}
+.mc-loc {
+  color: var(--muted);
+}
+.mc-teams {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 14px;
+}
+.mc-team {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.mc-rec {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.mc-vs {
+  color: var(--muted);
+  font-size: 12px;
+}
+.mc-sp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+}
+.mc-spn {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mc-spn:last-child {
+  text-align: right;
+}
+.mc-vs2 {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.mc-foot {
+  display: flex;
+  justify-content: center;
+}
+.btn.sm {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.mc-res {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 13px;
+}
+.mc-res.w {
+  color: var(--win);
+}
+.mc-res.l {
+  color: #f0a08a;
+}
+.mc-status.lock {
+  color: var(--muted);
+  font-size: 12px;
+}

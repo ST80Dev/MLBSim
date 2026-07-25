@@ -1460,8 +1460,13 @@ function batLine(b: Batter, mode: RosterStat): BatLine {
 }
 
 interface PitLine {
-  w: number; l: number; g: number; gs: number; ip: number; ipOuts: number;
+  w: number; l: number; g: number; gs: number; ip: number; ipOuts: number; era: number;
   h: number; bb: number; k: number; svo: number; sv: number; whip: number; k9: number;
+}
+
+/** Stima dei punti guadagnati (ER) da una linea attesa: ERA e' un risultato. */
+function estimateER(h: number, hr: number, bb: number): number {
+  return 0.32 * (h - hr) + 1.44 * hr + 0.11 * bb;
 }
 
 /** Carico stagionale atteso per ruolo (partite, aperture, battitori affrontati). */
@@ -1474,7 +1479,7 @@ const PITCH_LOAD: Record<string, { g: number; gs: number; bf: number }> = {
 /** Linea di lancio ATTESA dai rating (peripherals derivati; risultati stimati). */
 function pitLine(p: Pitcher, mode: RosterStat): PitLine {
   if (mode === 'season') {
-    return { w: 0, l: 0, g: 0, gs: 0, ip: 0, ipOuts: 0, h: 0, bb: 0, k: 0, svo: 0, sv: 0, whip: 0, k9: 0 };
+    return { w: 0, l: 0, g: 0, gs: 0, ip: 0, ipOuts: 0, era: 0, h: 0, bb: 0, k: 0, svo: 0, sv: 0, whip: 0, k9: 0 };
   }
   const load = PITCH_LOAD[p.role] ?? PITCH_LOAD.RP;
   const s = derivePitcherStats(p.ratings, load.bf);
@@ -1495,6 +1500,7 @@ function pitLine(p: Pitcher, mode: RosterStat): PitLine {
   }
   return {
     w, l: dec - w, g: load.g, gs: load.gs, ip, ipOuts: outs,
+    era: (estimateER(s.h, s.hr, s.bb) / ip) * 9,
     h: s.h, bb: s.bb, k: s.so, svo, sv,
     whip: (s.h + s.bb) / ip, k9: (s.so / ip) * 9,
   };
@@ -1524,17 +1530,53 @@ function seasonBatLine(a?: SeasonBat): BatLine {
 function seasonPitLine(a?: SeasonPit): PitLine {
   const outs = a?.outs ?? 0;
   const ip = outs / 3;
-  const h = a?.h ?? 0, bb = a?.bb ?? 0, k = a?.so ?? 0;
+  const h = a?.h ?? 0, bb = a?.bb ?? 0, k = a?.so ?? 0, er = a?.er ?? 0;
   return {
     w: a?.w ?? 0, l: a?.l ?? 0, g: a?.g ?? 0, gs: a?.gs ?? 0, ip, ipOuts: outs,
+    era: ip ? (er / ip) * 9 : 0,
     h, bb, k, svo: a?.svo ?? 0, sv: a?.sv ?? 0,
     whip: ip ? (h + bb) / ip : 0, k9: ip ? (k / ip) * 9 : 0,
   };
 }
 
-const BAT_COLS = ['G', 'AVG', 'OBP', 'SLG', 'H', '2B', '3B', 'HR', 'RBI', 'BB', 'SO', 'SB'];
+// Modello difensivo (stima): chances per gara per ruolo, quota di assist,
+// tasso base di errore. Gli eventi difensivi non sono ancora simulati dal
+// motore, quindi queste colonne sono STIME da ruolo + rating di difesa.
+const DEF_MODEL: Record<string, { ch: number; aShare: number; err: number }> = {
+  C: { ch: 7.5, aShare: 0.12, err: 0.006 },
+  '1B': { ch: 9.2, aShare: 0.08, err: 0.006 },
+  '2B': { ch: 4.6, aShare: 0.55, err: 0.02 },
+  SS: { ch: 4.4, aShare: 0.62, err: 0.025 },
+  '3B': { ch: 2.8, aShare: 0.65, err: 0.03 },
+  LF: { ch: 2.0, aShare: 0.05, err: 0.01 },
+  CF: { ch: 2.7, aShare: 0.05, err: 0.008 },
+  RF: { ch: 2.1, aShare: 0.06, err: 0.01 },
+  DH: { ch: 0, aShare: 0, err: 0 },
+};
+
+interface DefLine {
+  e: number;
+  a: number;
+  po: number;
+  fp: number;
+}
+
+/** Stima difensiva (E/A/PO/FLD%) da ruolo, partite e rating di difesa. */
+function defLine(pos: Position, g: number, fielding: number): DefLine {
+  const m = DEF_MODEL[pos] ?? DEF_MODEL.LF;
+  const chances = m.ch * g;
+  const a = round(chances * m.aShare);
+  const po = round(chances - a);
+  const e = round(chances * m.err * clamp01(1 - (fielding - 50) / 60, 0.4, 1.7));
+  const tc = po + a + e;
+  return { e, a, po, fp: tc ? (po + a) / tc : 0 };
+}
+
+const BAT_COLS = [
+  'G', 'AVG', 'OBP', 'SLG', 'H', '2B', '3B', 'HR', 'RBI', 'BB', 'SO', 'SB', 'E', 'A', 'PO', 'FLD%',
+];
 const BAT_RATING_COLS = ['CON', 'POT', 'OCC', 'VEL', 'DIF', 'BRA'];
-const PIT_COLS = ['W', 'L', 'G', 'GS', 'IP', 'H', 'BB', 'K', 'SVO', 'SV', 'WHIP', 'K/9'];
+const PIT_COLS = ['W', 'L', 'G', 'GS', 'IP', 'ERA', 'H', 'BB', 'K', 'SVO', 'SV', 'WHIP', 'K/9'];
 const PIT_RATING_COLS = ['DOM', 'CTR', 'MOV', 'PAT', 'RES', 'DIF'];
 
 function RosterPage({
@@ -1678,11 +1720,13 @@ function RosterPage({
       );
     }
     const s = statMode === 'season' ? seasonBatLine(season.bat[b.id]) : batLine(b, statMode);
+    const d = defLine(pos, s.g, ratingsAtPosition(b, pos).fielding);
     return (
       <>
         <td>{s.g}</td><td>{pct3(s.avg)}</td><td>{pct3(s.obp)}</td><td>{pct3(s.slg)}</td>
         <td>{s.h}</td><td>{s.d2}</td><td>{s.t3}</td><td>{s.hr}</td><td>{s.rbi}</td>
         <td>{s.bb}</td><td>{s.so}</td><td>{s.sb}</td>
+        <td>{d.e}</td><td>{d.a}</td><td>{d.po}</td><td>{d.fp ? pct3(d.fp) : '—'}</td>
       </>
     );
   };
@@ -1700,6 +1744,7 @@ function RosterPage({
     return (
       <>
         <td>{s.w}</td><td>{s.l}</td><td>{s.g}</td><td>{s.gs}</td><td>{ipFmt(s.ipOuts)}</td>
+        <td>{s.ip ? s.era.toFixed(2) : '—'}</td>
         <td>{s.h}</td><td>{s.bb}</td><td>{s.k}</td><td>{s.svo}</td><td>{s.sv}</td>
         <td>{s.whip.toFixed(2)}</td><td>{s.k9.toFixed(1)}</td>
       </>
@@ -1833,8 +1878,9 @@ function RosterPage({
 
       {statMode === 'season' && (
         <div className="page-note">
-          Statistiche <b>reali</b> della stagione in corso, accumulate dalle partite giocate
-          (giornata {season.day}). A 0 finche' non giochi.
+          Statistiche <b>reali</b> della stagione in corso (battuta e lancio), accumulate dalle
+          partite giocate (giornata {season.day}). Le stat di <b>difesa</b> (E/A/PO/FLD%) sono
+          ancora una stima: gli eventi difensivi non sono simulati dal motore.
         </div>
       )}
       {(statMode === 'last' || statMode === 'hist') && (
@@ -2106,11 +2152,14 @@ function HomePage({
   const myDiv = sortByRecord(season, divisionRivals(league, managedTeam.id));
   const divLeader = recordOf(season, myDiv[0]?.id ?? managedTeam.id);
 
-  // Calendario a finestra: gare attorno al turno corrente + resto a scorrimento.
+  // Calendario a finestra: ~10 gare attorno al turno, scorrimento manuale.
   const regState = (i: number): ChipState =>
     i < day ? 'played' : i === day ? 'current' : 'locked';
-  const from = Math.max(0, day - 4);
-  const window = schedule.regular.slice(from, day + 6);
+  const WIN = 10;
+  const maxStart = Math.max(0, schedule.regular.length - WIN);
+  const [winStart, setWinStart] = useState(() => Math.min(maxStart, Math.max(0, day - 3)));
+  const shift = (d: number) => setWinStart((s) => Math.max(0, Math.min(maxStart, s + d)));
+  const slice = schedule.regular.slice(winStart, winStart + WIN);
 
   return (
     <div className="page home-page">
@@ -2203,41 +2252,61 @@ function HomePage({
 
       <div className="card cal-section">
         <div className="card-title">
-          In evidenza <span className="card-sub">attorno alla giornata {day + 1}</span>
+          Calendario{' '}
+          <span className="card-sub">
+            giornate {winStart + 1}–{Math.min(winStart + WIN, schedule.regular.length)} di{' '}
+            {schedule.regular.length}
+          </span>
+          <div className="cal-nav">
+            <button className="navbtn" onClick={() => setWinStart(0)} disabled={winStart === 0}>
+              ⏮
+            </button>
+            <button className="navbtn" onClick={() => shift(-WIN)} disabled={winStart === 0}>
+              ◀
+            </button>
+            <button
+              className="navbtn"
+              onClick={() => setWinStart(Math.min(maxStart, Math.max(0, day - 3)))}
+              title="Vai al turno corrente"
+            >
+              ⦿ Turno
+            </button>
+            <button
+              className="navbtn"
+              onClick={() => shift(WIN)}
+              disabled={winStart >= maxStart}
+            >
+              ▶
+            </button>
+            <button
+              className="navbtn"
+              onClick={() => setWinStart(maxStart)}
+              disabled={winStart >= maxStart}
+            >
+              ⏭
+            </button>
+          </div>
         </div>
-        <div className="cal-chips window">
-          {window.map((g, k) => {
-            const i = from + k;
+        <div className="match-grid">
+          {slice.map((g, k) => {
+            const i = winStart + k;
+            const opp = g.opponentId ? teamById(league, g.opponentId) : undefined;
+            if (!opp) return null;
             return (
-              <GameChip
+              <MatchCard
                 key={g.id}
                 g={g}
-                league={league}
+                i={i}
+                managedTeam={managedTeam}
+                opp={opp}
                 state={regState(i)}
                 result={season.results[i]}
+                myRec={recordOf(season, managedTeam.id)}
+                oppRec={recordOf(season, opp.id)}
                 onPlay={onPlay}
               />
             );
           })}
-        </div>
-      </div>
-
-      <div className="card cal-section">
-        <div className="card-title">
-          Stagione regolare{' '}
-          <span className="card-sub">{schedule.regular.length} giornate · giocate {day}</span>
-        </div>
-        <div className="cal-chips">
-          {schedule.regular.map((g, i) => (
-            <GameChip
-              key={g.id}
-              g={g}
-              league={league}
-              state={regState(i)}
-              result={season.results[i]}
-              onPlay={onPlay}
-            />
-          ))}
         </div>
       </div>
 
@@ -2251,16 +2320,68 @@ function HomePage({
           ))}
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="card cal-section">
-        <div className="card-title">
-          Playoff <span className="card-sub">date potenziali · avversari da determinare</span>
-        </div>
-        <div className="cal-chips">
-          {schedule.playoff.map((g) => (
-            <GameChip key={g.id} g={g} league={league} state="tbd" onPlay={onPlay} />
-          ))}
-        </div>
+function MatchCard({
+  g,
+  i,
+  managedTeam,
+  opp,
+  state,
+  result,
+  myRec,
+  oppRec,
+  onPlay,
+}: {
+  g: ScheduleGame;
+  i: number;
+  managedTeam: Team;
+  opp: Team;
+  state: ChipState;
+  result?: { us: number; them: number };
+  myRec: { w: number; l: number };
+  oppRec: { w: number; l: number };
+  onPlay: (g: ScheduleGame) => void;
+}) {
+  const mySP = managedTeam.rotation[i % managedTeam.rotation.length];
+  const oppSP = opp.rotation[i % opp.rotation.length];
+  const won = result ? result.us > result.them : false;
+  return (
+    <div className={`match-card ${state}`}>
+      <div className="mc-head">
+        <span className="mc-day">Giornata {g.day}</span>
+        <span className="mc-loc">{g.home ? 'in casa' : 'in trasferta'}</span>
+      </div>
+      <div className="mc-teams">
+        <span className="mc-team">
+          <TeamBadge team={managedTeam} size={18} /> {managedTeam.abbrev}
+          <span className="mc-rec">{myRec.w}-{myRec.l}</span>
+        </span>
+        <span className="mc-vs">{g.home ? 'vs' : '@'}</span>
+        <span className="mc-team">
+          <TeamBadge team={opp} size={18} /> {opp.abbrev}
+          <span className="mc-rec">{oppRec.w}-{oppRec.l}</span>
+        </span>
+      </div>
+      <div className="mc-sp" title="Lanciatori partenti probabili">
+        <span className="mc-spn">{mySP?.name ?? '—'}</span>
+        <span className="mc-vs2">SP</span>
+        <span className="mc-spn">{oppSP?.name ?? '—'}</span>
+      </div>
+      <div className="mc-foot">
+        {state === 'current' ? (
+          <button className="btn primary sm" onClick={() => onPlay(g)}>
+            ▶ Gioca
+          </button>
+        ) : state === 'played' && result ? (
+          <span className={`mc-res ${won ? 'w' : 'l'}`}>
+            {won ? 'Vittoria' : 'Sconfitta'} {result.us}-{result.them}
+          </span>
+        ) : (
+          <span className="mc-status lock">Da giocare</span>
+        )}
       </div>
     </div>
   );
