@@ -16,14 +16,7 @@ import {
   quickSim,
 } from '../engine/game';
 import { batterOverall, pitcherOverall } from '../engine/ratings';
-import {
-  ratingsAtPosition,
-  activePos,
-  computeSwap,
-  canOccupy,
-  fieldingAtPosition,
-} from '../engine/positions';
-import type { Alignment } from '../engine/positions';
+import { ratingsAtPosition, canOccupy, fieldingAtPosition } from '../engine/positions';
 import { autoLineup, FIELD_SLOTS } from '../engine/lineup';
 import {
   defaultArrangement,
@@ -36,7 +29,9 @@ import { saveStore } from '../data/persistence';
 import type { MatchArrangement } from '../data/persistence';
 import { teamStrength } from '../engine/strength';
 import { formatIp } from '../engine/boxscore';
-import { generateMatchup } from '../data/generator';
+import { generateLeague, teamById, byDivision, LEAGUE_LABEL, DIVISION_LABEL } from '../data/league';
+import { generateSchedule } from '../data/schedule';
+import type { ScheduleGame, Schedule } from '../data/schedule';
 import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
 import type { StadiumImageCandidate } from '../data/stadiumImages';
 import {
@@ -57,7 +52,7 @@ import {
 } from './statlines';
 import type { StatItem, StatsMode } from './statlines';
 
-type View = 'game' | 'roster' | 'manage';
+type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'game';
 
 /** Slot di salvataggio unico della Fase 2 (single-player, una carriera). */
 const SAVE_SLOT = 'principale';
@@ -73,60 +68,74 @@ function applyArrangement(team: Team, arr?: MatchArrangement): Team {
 type Side = 'away' | 'home';
 
 export function App() {
-  const [teamSeed, setTeamSeed] = useState<number>(() => newRandomSeed());
-  const [gameNo, setGameNo] = useState(1);
-  const [controlled, setControlled] = useState<Side>('home');
-  const [view, setView] = useState<View>('game');
+  const [leagueSeed, setLeagueSeed] = useState<number>(() => newRandomSeed());
+  const [managedId, setManagedId] = useState<string>('');
+  const [activeGame, setActiveGame] = useState<ScheduleGame | null>(null);
+  const [view, setView] = useState<View>('home');
   const [statsMode, setStatsMode] = useState<StatsMode>('game');
   const [recapOpen, setRecapOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
   const [, forceTick] = useReducer((x) => x + 1, 0);
-  // Schieramenti difensivi modificabili nella scheda "Rose" (id -> ruolo attivo).
-  // Strumento di editing del roster; azzerati quando cambiano le squadre.
-  const [alignAway, setAlignAway] = useState<Alignment>({});
-  const [alignHome, setAlignHome] = useState<Alignment>({});
   // Assetti applicati (per teamId) che entrano DAVVERO nella simulazione: la
   // squadra gestita scende in campo con l'ordine di battuta e la difesa scelti
-  // nell'editor "Gestisci". Idratati dal salvataggio all'avvio.
+  // nell'editor. Idratati dal salvataggio all'avvio.
   const [arrangements, setArrangements] = useState<Record<string, MatchArrangement>>({});
 
-  // Le rose grezze dipendono solo dal seed; l'assetto si applica sopra, alla
-  // sola squadra gestita, prima di costruire la partita.
-  const baseTeams = useMemo(() => generateMatchup(teamSeed), [teamSeed]);
-  const managedId = baseTeams[controlled].id;
-  const arrangement = arrangements[managedId];
-  const teams = useMemo(() => {
-    const applied = applyArrangement(baseTeams[controlled], arrangement);
-    return controlled === 'home'
-      ? { away: baseTeams.away, home: applied }
-      : { away: applied, home: baseTeams.home };
-  }, [baseTeams, controlled, arrangement]);
+  // La lega (30 squadre) e' generata da un seed unico: calendario, classifiche e
+  // leaderboard leggono tutti QUESTA stessa lega. La squadra gestita e' una
+  // franchigia; l'avversario esce dal calendario della gara scelta.
+  const league = useMemo(() => generateLeague(leagueSeed), [leagueSeed]);
+  const myId = managedId || league[0].id;
+  const managedTeam = teamById(league, myId) ?? league[0];
+  const schedule = useMemo(
+    () => generateSchedule(leagueSeed, myId, league),
+    [leagueSeed, myId, league],
+  );
 
-  // Idrata gli assetti salvati (una volta). Se un assetto e' per una squadra che
-  // ricompare, verra' applicato; altrimenti resta latente senza effetti.
+  const opponentId = activeGame?.opponentId ?? league.find((t) => t.id !== myId)!.id;
+  const opponent = teamById(league, opponentId) ?? league[0];
+  // La squadra gestita gioca in casa/trasferta secondo il calendario.
+  const controlled: Side = activeGame && activeGame.home === false ? 'away' : 'home';
+  const arrangement = arrangements[myId];
+  const teams = useMemo(() => {
+    const applied = applyArrangement(managedTeam, arrangement);
+    return controlled === 'home'
+      ? { away: opponent, home: applied }
+      : { away: applied, home: opponent };
+  }, [managedTeam, opponent, controlled, arrangement]);
+
+  // Idrata squadra gestita e assetti salvati (una volta).
   useEffect(() => {
     let alive = true;
     saveStore
       .load(SAVE_SLOT)
       .then((rec) => {
-        if (alive && rec?.payload.lineups) setArrangements(rec.payload.lineups);
+        if (!alive || !rec) return;
+        if (rec.payload.managedTeamId) setManagedId(rec.payload.managedTeamId);
+        if (rec.payload.lineups) setArrangements(rec.payload.lineups);
       })
       .catch(() => {
-        /* offline o slot assente: si parte dagli assetti di default. */
+        /* offline o slot assente: si parte dai default. */
       });
     return () => {
       alive = false;
     };
   }, []);
 
-  // La partita interattiva e' mutabile e vive tra i render: la ricreo solo
-  // quando cambiano squadre, numero di gara, squadra gestita o assetto applicato.
-  const key = `${teamSeed}|${gameNo}|${controlled}|${arrangement ? JSON.stringify(arrangement) : ''}`;
+  // Seme di gara deterministico dalla partita di calendario scelta.
+  const gnum = activeGame
+    ? (activeGame.phase === 'playoff' ? 20000 : activeGame.phase === 'preseason' ? 0 : 10000) +
+      activeGame.day
+    : 1;
+
+  // La partita interattiva e' mutabile e vive tra i render: la ricreo solo quando
+  // cambiano lega, squadra gestita, avversario, casa/trasferta, gara o assetto.
+  const key = `${leagueSeed}|${myId}|${opponentId}|${controlled}|${gnum}|${arrangement ? JSON.stringify(arrangement) : ''}`;
   const ref = useRef<{ key: string; game: LiveGame } | null>(null);
   if (!ref.current || ref.current.key !== key) {
     ref.current = {
       key,
-      game: createLiveGame(teams.away, teams.home, gameSeed(teamSeed, gameNo), controlled),
+      game: createLiveGame(teams.away, teams.home, gameSeed(leagueSeed, gnum), controlled),
     };
   }
   const live = ref.current.game;
@@ -158,22 +167,29 @@ export function App() {
     forceTick();
   };
 
-  const newTeams = () => {
-    setTeamSeed(newRandomSeed());
-    setGameNo(1);
-    setAlignAway({});
-    setAlignHome({});
+  const newLeague = () => {
+    setLeagueSeed(newRandomSeed());
+    setManagedId('');
+    setActiveGame(null);
   };
 
-  // Editor "Gestisci": applica l'assetto alla sola squadra gestita (entra nella
-  // sim, riavvia la gara) ed eventualmente lo rende persistente sul cloud.
+  // Dal calendario: scegli la gara da giocare. La preparazione (Roster) e la
+  // partita useranno questa gara. Per ora "gioca" porta direttamente in campo;
+  // la pagina di preparazione dedicata arrivera' col rifacimento del Roster.
+  const playGame = (g: ScheduleGame) => {
+    setActiveGame(g);
+    setView('game');
+  };
+
+  // Editor: applica l'assetto alla sola squadra gestita (entra nella sim,
+  // riavvia la gara) ed eventualmente lo rende persistente sul cloud.
   const applyManaged = (arr: MatchArrangement) => {
-    setArrangements((m) => ({ ...m, [managedId]: arr }));
+    setArrangements((m) => ({ ...m, [myId]: arr }));
   };
   const saveManaged = async (arr: MatchArrangement) => {
-    const next = { ...arrangements, [managedId]: arr };
+    const next = { ...arrangements, [myId]: arr };
     setArrangements(next);
-    await saveStore.save(SAVE_SLOT, { managedTeamId: managedId, lineups: next });
+    await saveStore.save(SAVE_SLOT, { managedTeamId: myId, lineups: next });
   };
 
   return (
@@ -188,74 +204,77 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="logo">⚾</span> MLBSim
-          <span className="phase">Fase 1</span>
+          <span className="phase">Fase 2</span>
         </div>
 
-        <div className="hdr-manage">
-          <span className="manage-label">Gestisci</span>
-          <div className="seg">
-            {(['away', 'home'] as Side[]).map((s) => (
-              <button
-                key={s}
-                className={`seg-btn${controlled === s ? ' active' : ''}`}
-                onClick={() => setControlled(s)}
-                title="Cambiare squadra riavvia questa gara"
-              >
-                {(s === 'away' ? teams.away : teams.home).abbrev}
-                <span className="seg-sub">{s === 'away' ? 'ospite' : 'casa'}</span>
-              </button>
-            ))}
-          </div>
+        <div className="hdr-team" title="Squadra gestita">
+          <TeamBadge team={managedTeam} size={22} />
+          <span className="hdr-team-name">{managedTeam.abbrev}</span>
         </div>
 
         <nav className="tabs inline">
-          <button className={view === 'game' ? 'tab active' : 'tab'} onClick={() => setView('game')}>
-            Partita
-          </button>
-          <button
-            className={view === 'roster' ? 'tab active' : 'tab'}
-            onClick={() => setView('roster')}
-          >
-            Rose
-          </button>
-          <button
-            className={view === 'manage' ? 'tab active' : 'tab'}
-            onClick={() => setView('manage')}
-            title="Ordine di battuta e difesa della squadra che gestisci"
-          >
-            Gestisci
-          </button>
+          {(
+            [
+              ['home', 'Home'],
+              ['roster', 'Roster'],
+              ['leaderboard', 'Leaderboard'],
+              ['standings', 'Classifiche'],
+              ['franchise', 'Franchigia'],
+            ] as Array<[View, string]>
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              className={view === v ? 'tab active' : 'tab'}
+              onClick={() => setView(v)}
+            >
+              {label}
+            </button>
+          ))}
+          {activeGame && (
+            <button
+              className={view === 'game' ? 'tab active' : 'tab'}
+              onClick={() => setView('game')}
+              title="Partita in corso"
+            >
+              ⚾ Partita
+            </button>
+          )}
         </nav>
 
         <div className="actions">
           {view === 'game' && (
-            <button
-              className={calOpen ? 'btn active' : 'btn'}
-              onClick={() => setCalOpen((o) => !o)}
-              title="Calibra i marker del campo sulla foto-stadio"
-            >
-              🎯 Calibra campo
-            </button>
-          )}
-          <button className="btn" onClick={() => setRecapOpen(true)}>
-            Recap partita
-          </button>
-          <button className="btn" onClick={newTeams}>
-            Nuove squadre
-          </button>
-          {final ? (
-            <button className="btn primary" onClick={() => setGameNo((g) => g + 1)}>
-              Nuova partita ▸
-            </button>
-          ) : (
-            <button className="btn" onClick={() => act((g) => quickSim(g))}>
-              Salta a fine ⏩
-            </button>
+            <>
+              <button
+                className={calOpen ? 'btn active' : 'btn'}
+                onClick={() => setCalOpen((o) => !o)}
+                title="Calibra i marker del campo sulla foto-stadio"
+              >
+                🎯 Calibra campo
+              </button>
+              <button className="btn" onClick={() => setRecapOpen(true)}>
+                Recap
+              </button>
+              {final ? (
+                <button
+                  className="btn primary"
+                  onClick={() => {
+                    setActiveGame(null);
+                    setView('home');
+                  }}
+                >
+                  Al calendario ▸
+                </button>
+              ) : (
+                <button className="btn" onClick={() => act((g) => quickSim(g))}>
+                  Salta a fine ⏩
+                </button>
+              )}
+            </>
           )}
         </div>
       </header>
 
-      {view === 'game' ? (
+      {view === 'game' && activeGame && (
         <div className="game-screen">
           <StatBar
             result={result}
@@ -308,7 +327,10 @@ export function App() {
                 <FinalOverlay
                   result={result}
                   controlled={controlled}
-                  onNew={() => setGameNo((g) => g + 1)}
+                  onNew={() => {
+                    setActiveGame(null);
+                    setView('home');
+                  }}
                   onRecap={() => setRecapOpen(true)}
                 />
               ) : (
@@ -317,36 +339,36 @@ export function App() {
             </div>
           </div>
         </div>
-      ) : view === 'roster' ? (
-        <div className="roster-view">
-          <div className="grid2">
-            <RosterRatings
-              team={teams.away}
-              alignment={alignAway}
-              onSwap={(id, pos) => {
-                const next = computeSwap(teams.away, alignAway, id, pos);
-                if (next) setAlignAway(next);
-              }}
-            />
-            <RosterRatings
-              team={teams.home}
-              alignment={alignHome}
-              onSwap={(id, pos) => {
-                const next = computeSwap(teams.home, alignHome, id, pos);
-                if (next) setAlignHome(next);
-              }}
-            />
-          </div>
-        </div>
-      ) : (
+      )}
+
+      {view === 'home' && (
+        <HomePage
+          league={league}
+          managedTeam={managedTeam}
+          schedule={schedule}
+          activeGameId={activeGame?.id ?? null}
+          onPlay={playGame}
+          onManagedChange={(id) => {
+            setManagedId(id);
+            setActiveGame(null);
+          }}
+          onNewLeague={newLeague}
+        />
+      )}
+
+      {view === 'roster' && (
         <ManageView
-          key={managedId}
-          team={baseTeams[controlled]}
+          key={myId}
+          team={managedTeam}
           initial={arrangement}
           onApply={applyManaged}
           onSave={saveManaged}
         />
       )}
+
+      {view === 'leaderboard' && <LeaderboardPage league={league} />}
+      {view === 'standings' && <StandingsPage league={league} managedId={myId} />}
+      {view === 'franchise' && <FranchisePage team={managedTeam} />}
 
       {recapOpen && (
         <RecapModal
@@ -1309,50 +1331,6 @@ function Rating({ v }: { v: number }) {
   );
 }
 
-function LineupRow({
-  b,
-  pos,
-  target,
-  canSwitch,
-  onSwitch,
-}: {
-  b: Batter;
-  pos: Position;
-  target?: Position;
-  canSwitch: boolean;
-  onSwitch: () => void;
-}) {
-  const moved = pos !== b.position;
-  const r = ratingsAtPosition(b, pos);
-  const title = !target
-    ? undefined
-    : !canSwitch
-      ? `Scambio con ${target} non disponibile (nessun compagno idoneo)`
-      : moved
-        ? 'Torna al ruolo naturale'
-        : `Schiera come ${target}`;
-  return (
-    <tr className={moved ? 'moved' : undefined}>
-      <td className="l">
-        <span className={moved ? 'pos moved' : 'pos'}>{pos}</span> {b.name}
-        {target && (
-          <button className="posbtn" title={title} disabled={!canSwitch} onClick={onSwitch}>
-            ⇄ {target}
-          </button>
-        )}
-      </td>
-      <td>{b.age}</td>
-      <Rating v={r.contact} />
-      <Rating v={r.power} />
-      <Rating v={r.eye} />
-      <Rating v={r.speed} />
-      <Rating v={r.fielding} />
-      <Rating v={r.arm} />
-      <td className="ovr">{stars(batterOverall(r))}</td>
-    </tr>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Vista "Gestisci": il "foglio partita" della squadra gestita. Quattro pannelli
 // scelgono i partecipanti dalla rosa completa (battitori / lanciatori) e ne
@@ -1670,87 +1648,245 @@ function ManageView({
   );
 }
 
-function RosterRatings({
-  team,
-  alignment,
-  onSwap,
-}: {
-  team: Team;
-  alignment: Alignment;
-  onSwap: (playerId: string, targetPos: Position) => void;
-}) {
-  const rotation = team.rotation.slice(0, 3);
-  return (
-    <div className="card">
-      <div className="card-title" style={{ borderColor: team.primaryColor }}>
-        <TeamBadge team={team} size={26} /> {team.name}
-      </div>
-      <table className="ratings">
-        <thead>
-          <tr>
-            <th className="l">Lineup</th>
-            <th>Età</th>
-            <th title="Contatto">CON</th>
-            <th title="Potenza">POT</th>
-            <th title="Occhio">OCC</th>
-            <th title="Velocità">VEL</th>
-            <th title="Difesa">DIF</th>
-            <th title="Braccio">BRA</th>
-            <th title="Overall">OVR</th>
-          </tr>
-        </thead>
-        <tbody>
-          {team.lineup.map((b) => {
-            const pos = activePos(b, alignment);
-            const moved = pos !== b.position;
-            const target = moved ? b.position : b.secondaryPosition;
-            const canSwitch = !!target && computeSwap(team, alignment, b.id, target) !== null;
-            return (
-              <LineupRow
-                key={b.id}
-                b={b}
-                pos={pos}
-                target={target}
-                canSwitch={canSwitch}
-                onSwitch={() => target && onSwap(b.id, target)}
-              />
-            );
-          })}
-        </tbody>
-      </table>
+// ---------------------------------------------------------------------------
+// Pagine argomentali raggiungibili dall'header. In questa fase Home (dashboard +
+// calendario) e' completa; Leaderboard e Franchigia sono impalcature che si
+// riempiranno nei rispettivi passi; Classifiche mostra gia' la struttura reale
+// delle division. Tutte leggono la stessa lega generata da seed.
+// ---------------------------------------------------------------------------
 
-      <table className="ratings">
-        <thead>
-          <tr>
-            <th className="l">Lanciatori</th>
-            <th>Età</th>
-            <th title="Dominio">DOM</th>
-            <th title="Controllo">CTR</th>
-            <th title="Movimento">MOV</th>
-            <th title="Palla a terra">PAT</th>
-            <th title="Resistenza">RES</th>
-            <th title="Difesa">DIF</th>
-            <th title="Overall">OVR</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rotation.map((p) => (
-            <tr key={p.id}>
-              <td className="l">
-                <span className="pos">{p.role}</span> {p.name}
-              </td>
-              <td>{p.age}</td>
-              <Rating v={p.ratings.stuff} />
-              <Rating v={p.ratings.control} />
-              <Rating v={p.ratings.movement} />
-              <Rating v={p.ratings.groundball} />
-              <Rating v={p.ratings.stamina} />
-              <Rating v={p.ratings.fielding} />
-              <td className="ovr">{stars(pitcherOverall(p.ratings))}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+function GameChip({
+  g,
+  league,
+  active,
+  onPlay,
+}: {
+  g: ScheduleGame;
+  league: Team[];
+  active: boolean;
+  onPlay: (g: ScheduleGame) => void;
+}) {
+  const opp = g.opponentId ? teamById(league, g.opponentId) : undefined;
+  return (
+    <button
+      className={`gchip${active ? ' active' : ''}${opp ? '' : ' tbd'}`}
+      disabled={!opp}
+      onClick={() => opp && onPlay(g)}
+      title={
+        opp
+          ? `Giornata ${g.day}: ${g.home ? 'vs' : '@'} ${opp.name} — gioca`
+          : `${g.round}: avversario da determinare`
+      }
+    >
+      <span className="gday">{g.day}</span>
+      <span className="gvs">{g.home ? 'vs' : '@'}</span>
+      {opp ? (
+        <>
+          <span className="gdot" style={{ background: opp.primaryColor }} />
+          <span className="gopp">{opp.abbrev}</span>
+        </>
+      ) : (
+        <span className="gopp tbdlabel">{g.round}</span>
+      )}
+    </button>
+  );
+}
+
+function CalSection({
+  title,
+  hint,
+  games,
+  league,
+  activeGameId,
+  onPlay,
+}: {
+  title: string;
+  hint: string;
+  games: ScheduleGame[];
+  league: Team[];
+  activeGameId: string | null;
+  onPlay: (g: ScheduleGame) => void;
+}) {
+  return (
+    <div className="card cal-section">
+      <div className="card-title">
+        {title} <span className="card-sub">{hint}</span>
+      </div>
+      <div className="cal-chips">
+        {games.map((g) => (
+          <GameChip
+            key={g.id}
+            g={g}
+            league={league}
+            active={g.id === activeGameId}
+            onPlay={onPlay}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HomePage({
+  league,
+  managedTeam,
+  schedule,
+  activeGameId,
+  onPlay,
+  onManagedChange,
+  onNewLeague,
+}: {
+  league: Team[];
+  managedTeam: Team;
+  schedule: Schedule;
+  activeGameId: string | null;
+  onPlay: (g: ScheduleGame) => void;
+  onManagedChange: (id: string) => void;
+  onNewLeague: () => void;
+}) {
+  const next = schedule.regular[0];
+  const nextOpp = next?.opponentId ? teamById(league, next.opponentId) : undefined;
+  return (
+    <div className="page home-page">
+      <div className="card dash">
+        <div className="dash-team">
+          <TeamBadge team={managedTeam} size={40} />
+          <div>
+            <div className="dash-name">{managedTeam.name}</div>
+            <div className="dash-sub">
+              {LEAGUE_LABEL[managedTeam.league]} · {DIVISION_LABEL[managedTeam.division]} ·{' '}
+              {managedTeam.ballpark}
+            </div>
+          </div>
+        </div>
+        {next && nextOpp && (
+          <button className="btn primary next-game" onClick={() => onPlay(next)}>
+            ▶ Gioca giornata 1 {next.home ? 'vs' : '@'} {nextOpp.abbrev}
+          </button>
+        )}
+        <div className="dash-actions">
+          <label className="dash-pick">
+            <span>Squadra gestita</span>
+            <select value={managedTeam.id} onChange={(e) => onManagedChange(e.target.value)}>
+              {league.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.abbrev} — {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="btn" onClick={onNewLeague} title="Rigenera l'intera lega da un nuovo seed">
+            🔄 Nuova lega
+          </button>
+        </div>
+      </div>
+
+      <CalSection
+        title="Prestagione"
+        hint={`${schedule.preseason.length} amichevoli · usi futuri: draft / trasferimenti`}
+        games={schedule.preseason}
+        league={league}
+        activeGameId={activeGameId}
+        onPlay={onPlay}
+      />
+      <CalSection
+        title="Stagione regolare"
+        hint={`${schedule.regular.length} giornate · clicca una gara per giocarla`}
+        games={schedule.regular}
+        league={league}
+        activeGameId={activeGameId}
+        onPlay={onPlay}
+      />
+      <CalSection
+        title="Playoff"
+        hint="date potenziali · avversari da determinare"
+        games={schedule.playoff}
+        league={league}
+        activeGameId={activeGameId}
+        onPlay={onPlay}
+      />
+    </div>
+  );
+}
+
+function StandingsPage({ league, managedId }: { league: Team[]; managedId: string }) {
+  const groups = byDivision(league);
+  return (
+    <div className="page standings-page">
+      <div className="page-note">
+        Record a 0–0: si popoleranno quando la stagione verra' giocata (motore di
+        stagione, Fase 4). La struttura di lega e division e' quella reale.
+      </div>
+      <div className="standings-grid">
+        {groups.map((grp) => (
+          <div className="card" key={`${grp.league}-${grp.division}`}>
+            <div className="card-title">
+              {LEAGUE_LABEL[grp.league]} {DIVISION_LABEL[grp.division]}
+            </div>
+            <table className="ratings standings">
+              <thead>
+                <tr>
+                  <th className="l">Squadra</th>
+                  <th>V</th>
+                  <th>P</th>
+                  <th>PCT</th>
+                  <th>GB</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grp.teams.map((t) => (
+                  <tr key={t.id} className={t.id === managedId ? 'me' : undefined}>
+                    <td className="l">
+                      <TeamBadge team={t} size={18} /> {t.abbrev}{' '}
+                      <span className="tname">{t.name}</span>
+                    </td>
+                    <td>0</td>
+                    <td>0</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LeaderboardPage({ league }: { league: Team[] }) {
+  return (
+    <div className="page">
+      <div className="card page-stub">
+        <div className="card-title">Leaderboard — {league.length} squadre</div>
+        <p>
+          Classifiche giocatori della stagione MLB, con linguette <b>Batting</b> (AVG, HR,
+          RBI, OBP, SLG…) e <b>Pitching</b> (ERA, W, K, WHIP, SV…), ordinabili per colonna.
+        </p>
+        <p className="muted">
+          In arrivo nel passo dedicato: ora la lega e i giocatori esistono gia'; le colonne
+          si popoleranno con una linea-stat attesa derivata dai rating (e coi numeri reali
+          quando la stagione verra' giocata).
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FranchisePage({ team }: { team: Team }) {
+  return (
+    <div className="page">
+      <div className="card page-stub">
+        <div className="card-title">
+          <TeamBadge team={team} size={22} /> Franchigia — {team.name}
+        </div>
+        <p>
+          Il layer manageriale: stipendio unico annuale, salary cap rigido, scambi a valore,
+          draft basilare. Da ampliare nei passi successivi.
+        </p>
+        <p className="muted">Impalcatura: i controlli di gestione arriveranno qui.</p>
+      </div>
     </div>
   );
 }
