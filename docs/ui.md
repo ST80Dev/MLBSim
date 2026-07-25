@@ -115,6 +115,18 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
   **Principale / Alt 2 / Alt 3**: selezionandone uno cambia lo sfondo live e
   salva il percorso in `image`. Se assente si usa la principale `<ID>.jpg`.
 
+### Piazzamento manuale dei marker (✋)
+
+Alternativa ai parametri: nel pannello, **«✋ Piazza marker a mano»** entra in
+modalità manuale. Si fissa prima la foto (zoom/pan), poi si **trascinano i 14
+marker** direttamente sulla foto — 9 difensori (P, C, 1B, 2B, SS, 3B, LF, CF,
+RF), 3 basi (1ª/2ª/3ª), casa base e battitore (il monte segue P). Le posizioni
+si salvano in `cal.markers` (coord. assolute nel viewBox 900×420) e finiscono
+nel file `<STEM>.json` via **Esporta file**; se presenti, hanno la **precedenza**
+sulla proiezione parametrica. «↩︎ Torna ai parametri» le rimuove. Convenzione
+anti-sovrapposizione: etichette difensori **sopra**, basi/runner **sotto**.
+Durante il drag i pannelli laterali sono non-interattivi (`.gamefield.editing`).
+
 **Default dedicato alle foto**: gli stadi con foto partono da
 `PHOTO_DEFAULT_CALIBRATION` (casa base più in alto e esterni un po' compressi),
 perché quasi tutte le foto — viste da dietro casa base — hanno quel taglio; così

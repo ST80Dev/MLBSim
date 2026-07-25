@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import type { Team, Position } from '../engine/types';
 import { stadiumImage, assetUrl } from '../data/stadiumImages';
 import { DEFAULT_CALIBRATION } from '../data/stadiumCalibration';
@@ -123,18 +124,44 @@ function FielderLabel({
   );
 }
 
+/** ID dei 14 marker piazzabili a mano (il monte segue P). */
+export const MARKER_IDS = [
+  'P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF',
+  'base1', 'base2', 'base3', 'home', 'batter',
+] as const;
+
+/** Posizioni di partenza dei marker (proiezione parametrica) per il piazzamento. */
+export function computeMarkers(cal: FieldCalibration): Record<string, { x: number; y: number }> {
+  const r = (p: Pt) => ({ x: Math.round(p.x), y: Math.round(p.y) });
+  const m: Record<string, { x: number; y: number }> = {};
+  DEFENSE.forEach((s) => {
+    m[s.pos] = r(proj(s, cal));
+  });
+  m.base1 = r(proj(BASE.FIRST, cal));
+  m.base2 = r(proj(BASE.SECOND, cal));
+  m.base3 = r(proj(BASE.THIRD, cal));
+  const h = proj(BASE.HOME, cal);
+  m.home = r(h);
+  m.batter = { x: Math.round(h.x - 16), y: Math.round(h.y - 10) };
+  return m;
+}
+
 export function Diamond({
   home,
   away,
   background,
   bases,
   cal = DEFAULT_CALIBRATION,
+  editable,
+  onMarkerMove,
 }: {
   home: Team;
   away: Team;
   background?: boolean;
   bases?: [boolean, boolean, boolean];
   cal?: FieldCalibration;
+  editable?: boolean;
+  onMarkerMove?: (id: string, pos: { x: number; y: number }) => void;
 }) {
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
@@ -143,6 +170,38 @@ export function Diamond({
   // Se la foto non e' (ancora) presente, si ripiega sul campo generato.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const useImage = !!bg && bg !== failedSrc;
+
+  // Drag dei marker in modalità manuale.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const toVB = (e: { clientX: number; clientY: number }): { x: number; y: number } | null => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const m = svg.getScreenCTM();
+    if (!m) return null;
+    const q = pt.matrixTransform(m.inverse());
+    return { x: Math.round(q.x), y: Math.round(q.y) };
+  };
+  const onDown = (id: string, e: ReactPointerEvent) => {
+    if (!editable) return;
+    e.stopPropagation();
+    setDragId(id);
+    svgRef.current?.setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: ReactPointerEvent) => {
+    if (!dragId) return;
+    const p = toVB(e);
+    if (p) onMarkerMove?.(dragId, p);
+  };
+  const onUp = (e: ReactPointerEvent) => {
+    if (dragId) {
+      setDragId(null);
+      svgRef.current?.releasePointerCapture?.(e.pointerId);
+    }
+  };
   // La calibrazione vale solo sopra una foto: il campo GENERATO usa sempre
   // l'identita' (non va deformato dai default-foto).
   const effCal = useImage ? cal : DEFAULT_CALIBRATION;
@@ -204,43 +263,95 @@ export function Diamond({
     </>
   );
 
-  const baseSpots = [FIRST, SECOND, THIRD];
+  // Posizioni effettive dei marker: manuali (se piazzate a mano su foto) o proiettate.
+  const defenseByPos: Record<string, Pt> = {};
+  defense.forEach((d) => {
+    defenseByPos[d.pos] = { x: d.x, y: d.y };
+  });
+  const man = useImage ? cal.markers : undefined;
+  const mp = (id: string, fb: Pt): Pt => man?.[id] ?? fb;
+  const pHome = mp('home', HOME);
+  const pMound = mp('P', MOUND);
+  const pBatter = mp('batter', { x: HOME.x - 16, y: HOME.y - 10 });
+  const baseData: [string, Pt, number, string][] = [
+    ['base1', mp('base1', FIRST), 0, '1ª'],
+    ['base2', mp('base2', SECOND), 1, '2ª'],
+    ['base3', mp('base3', THIRD), 2, '3ª'],
+  ];
+
+  // Rende un marker trascinabile in modalità manuale (con area di presa ampia).
+  const grab = (id: string, cx: number, cy: number, node: ReactNode): ReactNode =>
+    editable ? (
+      <g key={id} className="mk-drag" onPointerDown={(e) => onDown(id, e)}>
+        {node}
+        <circle className="mk-hit" cx={cx} cy={cy} r={15} fill="transparent" />
+      </g>
+    ) : (
+      <g key={id}>{node}</g>
+    );
+
+  const FIELDERS: Position[] = ['P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'];
+
   const markers = (
     <>
-      {baseSpots.map((b, i) => {
+      {baseData.map(([id, b, i, lab]) => {
         const on = !!bases && bases[i];
         const s = on ? 8 : 5;
-        return (
-          <rect
-            key={i}
-            x={b.x - s}
-            y={b.y - s}
-            width={s * 2}
-            height={s * 2}
-            fill={on ? '#ffd15c' : '#f4f6fb'}
-            stroke={on ? '#b5764a' : 'none'}
-            strokeWidth={on ? 2 : 0}
-            transform={`rotate(45 ${b.x} ${b.y})`}
-          />
+        return grab(
+          id,
+          b.x,
+          b.y,
+          <>
+            <rect
+              x={b.x - s}
+              y={b.y - s}
+              width={s * 2}
+              height={s * 2}
+              fill={on ? '#ffd15c' : '#f4f6fb'}
+              stroke={on ? '#b5764a' : 'none'}
+              strokeWidth={on ? 2 : 0}
+              transform={`rotate(45 ${b.x} ${b.y})`}
+            />
+            {editable && (
+              <text x={b.x} y={b.y + 18} textAnchor="middle" fontSize={10} fontWeight={800} fill="#ffd15c">
+                {lab}
+              </text>
+            )}
+          </>,
         );
       })}
-      <path
-        d={`M ${HOME.x - 6} ${HOME.y - 4} L ${HOME.x + 6} ${HOME.y - 4} L ${HOME.x + 6} ${HOME.y + 1} L ${HOME.x} ${HOME.y + 7} L ${HOME.x - 6} ${HOME.y + 1} Z`}
-        fill="#f4f6fb"
-      />
-      <rect x={MOUND.x - 6} y={MOUND.y - 2} width={12} height={4} rx={1.5} fill="#f4f6fb" />
-      <circle cx={HOME.x - 16} cy={HOME.y - 10} r={7.5} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.4} />
+      {grab(
+        'home',
+        pHome.x,
+        pHome.y,
+        <path
+          d={`M ${pHome.x - 6} ${pHome.y - 4} L ${pHome.x + 6} ${pHome.y - 4} L ${pHome.x + 6} ${pHome.y + 1} L ${pHome.x} ${pHome.y + 7} L ${pHome.x - 6} ${pHome.y + 1} Z`}
+          fill="#f4f6fb"
+        />,
+      )}
+      <rect x={pMound.x - 6} y={pMound.y - 2} width={12} height={4} rx={1.5} fill="#f4f6fb" />
+      {grab(
+        'batter',
+        pBatter.x,
+        pBatter.y,
+        <circle cx={pBatter.x} cy={pBatter.y} r={7.5} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.4} />,
+      )}
 
-      {defense.map((s) => (
-        <FielderLabel
-          key={s.pos}
-          x={s.x}
-          y={s.y}
-          pos={s.pos}
-          name={playerAt(home, s.pos)}
-          below={s.pos === 'P' || s.pos === 'C'}
-        />
-      ))}
+      {FIELDERS.map((pos) => {
+        const p = mp(pos, defenseByPos[pos]);
+        return grab(
+          pos,
+          p.x,
+          p.y,
+          <FielderLabel
+            x={p.x}
+            y={p.y}
+            pos={pos}
+            name={playerAt(home, pos)}
+            below={pos === 'P' || pos === 'C'}
+          />,
+        );
+      })}
     </>
   );
 
@@ -286,13 +397,17 @@ export function Diamond({
 
   if (background) {
     return (
-      <div className="field-bg" style={style}>
+      <div className={`field-bg${editable ? ' editing' : ''}`} style={style}>
         <svg
+          ref={svgRef}
           viewBox={`0 0 ${VB.w} ${VB.h}`}
           role="img"
           aria-label={`Campo di ${home.ballpark}`}
           className="field-bg-svg"
           preserveAspectRatio="xMidYMid meet"
+          onPointerMove={editable ? onMove : undefined}
+          onPointerUp={editable ? onUp : undefined}
+          style={editable ? { touchAction: 'none' } : undefined}
         >
           {content}
         </svg>

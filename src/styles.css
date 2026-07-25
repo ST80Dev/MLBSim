@@ -2079,3 +2079,24 @@ table {
 .cal-alt .btn.sm {
   margin-top: 6px;
 }
+
+/* --- Piazzamento manuale dei marker (drag sulla foto) ------------------- */
+.gamefield.editing .cronaca-corner,
+.gamefield.editing .lineup-corner,
+.gamefield.editing .controls-overlay {
+  pointer-events: none;
+}
+.field-bg.editing .field-bg-svg {
+  cursor: crosshair;
+}
+.field-bg.editing .mk-drag {
+  cursor: grab;
+}
+.field-bg.editing .mk-drag:active {
+  cursor: grabbing;
+}
+.field-bg.editing .mk-hit {
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}

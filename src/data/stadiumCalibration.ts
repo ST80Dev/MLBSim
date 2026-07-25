@@ -49,6 +49,11 @@ export interface FieldCalibration {
   /** Foto scelta (percorso relativo in public/): se assente usa la principale
    *  `<ID>.jpg`. Serve a preferire un'alternativa `<ID>2.jpg`/`<ID>3.jpg`/…. */
   image?: string;
+  /** Posizioni MANUALI dei marker (coord. assolute nel viewBox 900x420),
+   *  piazzate a mano sulla foto. Se presenti, hanno la precedenza sulla
+   *  proiezione parametrica. Chiavi: P,C,1B,2B,SS,3B,LF,CF,RF,base1,base2,base3,
+   *  home,batter. */
+  markers?: Record<string, { x: number; y: number }>;
 }
 
 /** Valori neutri: identita' della proiezione. Usati per il CAMPO GENERATO
