@@ -13,9 +13,25 @@ import {
   attemptSteal,
   stealSuccessProb,
   buntOutcomeProbs,
+  canHitAndRun,
+  hitAndRun,
+  pinchHit,
+  benchFor,
+  setInfieldIn,
+  playOffense,
+  offenseSide,
 } from '../game';
+import type { LiveGame } from '../game';
 import { generateMatchup } from '../../data/generator';
 import type { Batter, Pitcher } from '../types';
+
+/** Mette un corridore su una base (0=1a,1=2a,2=3a) per allestire situazioni. */
+function putRunner(live: LiveGame, base: number, batterIdx: number): void {
+  const off = offenseSide(live);
+  const b = off.team.lineup[batterIdx];
+  const pid = situation(live).pitcher.id;
+  (live.bases as unknown as unknown[])[base] = { batter: b, pitcherId: pid };
+}
 
 // Doti minime per i test delle formule pure (solo i campi usati).
 const batter = (speed: number, arm = 50): Batter =>
@@ -167,5 +183,114 @@ describe('azioni interattive', () => {
     expect(ok).toBe(true);
     expect(situation(live).pitcher.id).toBe(rel.id);
     expect(situation(live).pitcher.id).not.toBe(prev);
+  });
+});
+
+describe('hit-and-run', () => {
+  it('richiede corridore in prima, seconda libera e <2 out', () => {
+    const { away, home } = generateMatchup(4);
+    const live = createLiveGame(away, home, 4);
+    expect(canHitAndRun(live)).toBe(false); // niente corridori
+    expect(hitAndRun(live)).toBe(false);
+    putRunner(live, 0, 8);
+    expect(canHitAndRun(live)).toBe(true);
+    putRunner(live, 1, 7); // seconda occupata
+    expect(canHitAndRun(live)).toBe(false);
+  });
+
+  it('con corridore in prima esegue l azione e aggiunge un play', () => {
+    const { away, home } = generateMatchup(4);
+    const live = createLiveGame(away, home, 4);
+    putRunner(live, 0, 8);
+    const before = live.play.length;
+    const ok = hitAndRun(live);
+    expect(ok).toBe(true);
+    expect(live.play.length).toBe(before + 1);
+  });
+
+  it('resta coerente (out validi, basi valide) su molti semi', () => {
+    for (let s = 0; s < 80; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 5 + 1);
+      putRunner(live, 0, 8);
+      hitAndRun(live);
+      expect(live.outs).toBeGreaterThanOrEqual(0);
+      expect(live.outs).toBeLessThanOrEqual(3);
+      expect(live.bases.length).toBe(3);
+    }
+  });
+});
+
+describe('pinch-hit', () => {
+  it('sostituisce il battitore senza consumare il turno', () => {
+    const { away, home } = generateMatchup(6);
+    const live = createLiveGame(away, home, 6);
+    const off = offenseSide(live);
+    const benchBefore = off.team.bench.length;
+    expect(benchBefore).toBeGreaterThan(0);
+    const sub = benchFor(live)[0];
+    const idxBefore = off.battingIndex;
+    const outsBefore = live.outs;
+    const curBefore = situation(live).batter.id;
+
+    const ok = pinchHit(live, sub.id);
+    expect(ok).toBe(true);
+    expect(situation(live).batter.id).toBe(sub.id);
+    expect(situation(live).batter.id).not.toBe(curBefore);
+    expect(off.team.bench.length).toBe(benchBefore - 1);
+    expect(live.outs).toBe(outsBefore); // turno non consumato
+    expect(off.battingIndex).toBe(idxBefore);
+  });
+
+  it('un id di panchina inesistente non fa nulla', () => {
+    const { away, home } = generateMatchup(6);
+    const live = createLiveGame(away, home, 6);
+    expect(pinchHit(live, 'nessuno')).toBe(false);
+  });
+});
+
+describe('difesa avanzata — interni dentro', () => {
+  it('taglia i punti da terra ma concede piu valide', () => {
+    let runsN = 0;
+    let hitsN = 0;
+    let runsI = 0;
+    let hitsI = 0;
+    for (let s = 0; s < 300; s++) {
+      const seed = s * 3 + 1;
+      // Normale.
+      const m1 = generateMatchup(s);
+      const gN = createLiveGame(m1.away, m1.home, seed);
+      gN.outs = 0;
+      putRunner(gN, 2, 8);
+      const rN0 = offenseSide(gN).runs;
+      const hN0 = offenseSide(gN).hits;
+      playOffense(gN, 'swing');
+      runsN += offenseSide(gN).runs - rN0;
+      hitsN += offenseSide(gN).hits - hN0;
+      // Interni dentro (stesso seme, stesso evento grezzo).
+      const m2 = generateMatchup(s);
+      const gI = createLiveGame(m2.away, m2.home, seed);
+      gI.outs = 0;
+      putRunner(gI, 2, 8);
+      setInfieldIn(gI, true);
+      const rI0 = offenseSide(gI).runs;
+      const hI0 = offenseSide(gI).hits;
+      playOffense(gI, 'swing');
+      runsI += offenseSide(gI).runs - rI0;
+      hitsI += offenseSide(gI).hits - hI0;
+    }
+    expect(runsI).toBeLessThan(runsN); // meno punti da terra
+    expect(hitsI).toBeGreaterThanOrEqual(hitsN); // piu valide attraverso l'interno
+  });
+
+  it('il flag si attiva/disattiva', () => {
+    const { away, home } = generateMatchup(2);
+    const live = createLiveGame(away, home, 2);
+    expect(live.infieldIn).toBe(false);
+    setInfieldIn(live, true);
+    expect(live.infieldIn).toBe(true);
+    expect(situation(live).infieldIn).toBe(true);
+    setInfieldIn(live, false);
+    expect(live.infieldIn).toBe(false);
   });
 });

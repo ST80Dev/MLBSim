@@ -117,6 +117,8 @@ export interface LiveGame {
   winner?: 'away' | 'home';
   /** Squadra gestita dall'umano (solo suggerimento per la UI). */
   controlled: 'away' | 'home';
+  /** Difesa avanzata "interni dentro" per il turno corrente (tattica difensiva). */
+  infieldIn: boolean;
   maxInnings: number;
   // Tracciamento decisioni W/L/SV.
   leader: 'away' | 'home' | null;
@@ -148,6 +150,7 @@ export function createLiveGame(
     status: 'live',
     finalInning: 1,
     controlled,
+    infieldIn: false,
     maxInnings: MAX_INNINGS,
     leader: null,
     pendingWpSide: null,
@@ -247,6 +250,7 @@ function swingAtBat(l: LiveGame): void {
     makeScoreRunner(l, off, def),
     bLine,
     pLine,
+    l.infieldIn,
   );
   l.outs += res.outsAdded;
   if (res.hit) off.hits += 1;
@@ -475,6 +479,147 @@ export function intentionalWalk(l: LiveGame): void {
   afterPlay(l, runsScored);
 }
 
+/** Condizione per l'hit-and-run: corridore in prima, seconda libera, <2 out. */
+export function canHitAndRun(l: LiveGame): boolean {
+  return l.status === 'live' && !!l.bases[0] && !l.bases[1] && l.outs < 2;
+}
+
+/**
+ * Hit-and-run: il corridore in prima parte col lancio e il battitore protegge
+ * (bias al contatto). Su groundout evita il doppio gioco e avanza; su singolo
+ * vola in terza; su strikeout rischia l'eliminazione in rubata (doppio gioco).
+ */
+export function hitAndRun(l: LiveGame): boolean {
+  if (!canHitAndRun(l)) return false;
+  const off = offense(l);
+  const def = defense(l);
+  const pitcher = currentPitcher(def);
+  const batter = off.team.lineup[off.battingIndex];
+  off.battingIndex = (off.battingIndex + 1) % off.team.lineup.length;
+
+  def.battersFacedByCurrent += 1;
+  const pLine = def.pitchingLines.get(pitcher.id)!;
+  pLine.bf += 1;
+  const bLine = off.battingLines.get(batter.id)!;
+  const scoreRunner = makeScoreRunner(l, off, def);
+  const runner1 = l.bases[0]!; // il corridore che parte
+  const catcher = def.team.lineup.find((b) => b.position === 'C');
+  const name = shortName(batter.name);
+  const runsBefore = off.runs;
+  const bases = l.bases;
+
+  const { event } = resolveAtBat(batter, pitcher, def.battersFacedByCurrent, l.rng);
+  let ev = event;
+  // Il battitore protegge: parte degli strikeout diventa palla in gioco.
+  if (ev === 'SO') {
+    const H = TUNING.hitAndRun;
+    const contact = (batter.ratings.contact - 50) / 10;
+    const save = clamp(
+      H.contactSaveBase + contact * H.contactSavePerContact,
+      H.contactSaveMin,
+      H.contactSaveMax,
+    );
+    if (l.rng.chance(save)) ev = 'IPO';
+  }
+
+  let text: string;
+  if (ev === 'SO') {
+    bLine.ab += 1;
+    bLine.so += 1;
+    pLine.so += 1;
+    pLine.outs += 1;
+    l.outs += 1;
+    const sp = stealSuccessProb(runner1.batter, catcher, pitcher, 1);
+    if (l.rng.chance(sp)) {
+      bases[1] = runner1;
+      bases[0] = null;
+      const rl = off.battingLines.get(runner1.batter.id);
+      if (rl) rl.sb += 1;
+      text = `${name} strikeout, ma il corridore ruba la seconda`;
+    } else {
+      bases[0] = null;
+      l.outs += 1;
+      pLine.outs += 1;
+      const rl = off.battingLines.get(runner1.batter.id);
+      if (rl) rl.cs += 1;
+      text = `${name} strikeout e corridore eliminato: doppio gioco`;
+    }
+  } else if (ev === 'IPO') {
+    // Groundout col corridore in movimento: niente doppio gioco, avanzamento.
+    bLine.ab += 1;
+    pLine.outs += 1;
+    l.outs += 1;
+    if (bases[2]) {
+      scoreRunner(bases[2]);
+      bases[2] = null;
+      bLine.rbi += 1;
+    }
+    if (!bases[2] && l.rng.chance(TUNING.hitAndRun.firstToThird)) bases[2] = runner1;
+    else bases[1] = runner1;
+    bases[0] = null;
+    text = `${name} eliminato, il corridore avanza in movimento`;
+  } else if (ev === '1B') {
+    // Singolo con corridore lanciato: dalla prima vola in terza.
+    bLine.ab += 1;
+    bLine.h += 1;
+    pLine.h += 1;
+    off.hits += 1;
+    if (bases[2]) {
+      scoreRunner(bases[2]);
+      bases[2] = null;
+      bLine.rbi += 1;
+    }
+    bases[2] = runner1;
+    bases[0] = { batter, pitcherId: pitcher.id };
+    text = `${name} singolo, il corridore vola in terza`;
+  } else {
+    // BB/HBP/HR/2B/3B: corsa sulle basi normale.
+    const res = applyEvent(ev, batter, pitcher.id, l.bases, l.outs, l.rng, scoreRunner, bLine, pLine);
+    l.outs += res.outsAdded;
+    if (res.hit) off.hits += 1;
+    text = describe(ev, batter, off.runs - runsBefore);
+  }
+
+  const runsScored = off.runs - runsBefore;
+  const rr = runsScored > 0 ? ` (${runsScored} ${runsScored === 1 ? 'punto' : 'punti'})` : '';
+  pushPlay(l, text + rr, runsScored);
+  afterPlay(l, runsScored);
+  return true;
+}
+
+/** Battitori in panchina disponibili (per il pinch-hit). */
+export function benchFor(l: LiveGame): Batter[] {
+  return offense(l).team.bench;
+}
+
+/**
+ * Pinch-hit: sostituisce il battitore corrente con un giocatore di panchina.
+ * Non consuma il turno: dopo, il pinch-hitter batte normalmente.
+ */
+export function pinchHit(l: LiveGame, benchId: string): boolean {
+  if (l.status !== 'live') return false;
+  const off = offense(l);
+  const idx = off.battingIndex;
+  const current = off.team.lineup[idx];
+  const bi = off.team.bench.findIndex((b) => b.id === benchId);
+  if (bi < 0) return false;
+  const sub = off.team.bench[bi];
+  sub.position = current.position; // eredita il ruolo difensivo dello slot
+  off.team.lineup[idx] = sub;
+  off.team.bench.splice(bi, 1);
+  if (!off.battingLines.has(sub.id)) {
+    off.battingLines.set(sub.id, newBattingLine(sub));
+    off.battingOrder.push(sub.id);
+  }
+  pushPlay(l, `${shortName(sub.name)} entra come pinch-hitter per ${shortName(current.name)}`, 0);
+  return true;
+}
+
+/** Attiva/disattiva la difesa avanzata "interni dentro" per il turno. */
+export function setInfieldIn(l: LiveGame, on: boolean): void {
+  if (l.status === 'live') l.infieldIn = on;
+}
+
 /** Rilievi disponibili (non ancora usati) per una squadra in difesa. */
 export function availableRelievers(s: SideState): Pitcher[] {
   return s.pitchers.slice(s.pitcherIdx + 1);
@@ -545,6 +690,7 @@ function endHalf(l: LiveGame): void {
     l.half = 'bottom';
     l.outs = 0;
     l.bases = [null, null, null];
+    l.infieldIn = false;
     ensureInningSlot(l.homeSide, l.inning);
   } else {
     if (l.inning >= 9 && l.awaySide.runs !== l.homeSide.runs) {
@@ -559,6 +705,7 @@ function endHalf(l: LiveGame): void {
     l.half = 'top';
     l.outs = 0;
     l.bases = [null, null, null];
+    l.infieldIn = false;
     ensureInningSlot(l.awaySide, l.inning);
   }
 }
@@ -638,6 +785,9 @@ export interface LiveSituation {
   controlledBatting: boolean;
   stealFrom: number[];
   canBunt: boolean;
+  canHitAndRun: boolean;
+  bench: Batter[];
+  infieldIn: boolean;
   relievers: Pitcher[];
   winner?: 'away' | 'home';
 }
@@ -661,6 +811,9 @@ export function situation(l: LiveGame): LiveSituation {
     controlledBatting: (l.half === 'top' ? 'away' : 'home') === l.controlled,
     stealFrom: stealableBases(l),
     canBunt: l.outs < 2,
+    canHitAndRun: canHitAndRun(l),
+    bench: off.team.bench,
+    infieldIn: l.infieldIn,
     relievers: availableRelievers(def),
     winner: l.winner,
   };
@@ -710,6 +863,7 @@ function applyEvent(
   scoreRunner: (r: Runner | null) => void,
   bLine: BattingLine,
   pLine: PitchingLine,
+  infieldIn = false,
 ): EventResult {
   const runner: Runner = { batter, pitcherId };
 
@@ -829,6 +983,31 @@ function applyEvent(
     }
     case 'IPO': {
       bLine.ab += 1;
+      // Interni dentro (corridore in terza, <2 out): piu' buchi ma taglia il punto.
+      if (infieldIn && bases[2] && outsBefore < 2) {
+        if (rng.chance(TUNING.infieldIn.hitThrough)) {
+          // Il rimbalzo passa per un singolo: il punto dalla terza segna.
+          bLine.h += 1;
+          pLine.h += 1;
+          scoreRunner(bases[2]);
+          bLine.rbi += 1;
+          bases[2] = null;
+          if (bases[1]) {
+            bases[2] = bases[1];
+            bases[1] = null;
+          }
+          if (bases[0]) {
+            bases[1] = bases[0];
+            bases[0] = null;
+          }
+          bases[0] = runner;
+          return { outsAdded: 0, hit: true };
+        }
+        // Rimbalzo all'interno tirato dentro: battitore eliminato, corridore
+        // tenuto in terza, nessun punto.
+        pLine.outs += 1;
+        return { outsAdded: 1, hit: false };
+      }
       // Doppio gioco: corridore in 1B, meno di 2 out.
       if (bases[0] && outsBefore < 2 && rng.chance(TUNING.gidpProb)) {
         bases[0] = null;

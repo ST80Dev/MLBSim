@@ -16,16 +16,17 @@
     **l'ordine dell'RNG preservato** (calibrazione Fase 0 invariata).
   - **Gestisci una squadra vs CPU**, decidendo ai tuoi turni. Toggle
     **quick-sim** ("Salta a fine partita").
-  - Tattiche del **nucleo**: in attacco Swing / Bunt di sacrificio / Rubata; in
-    difesa cambio lanciatore manuale e base intenzionale.
+  - Tattiche **complete**: in attacco Swing / Bunt di sacrificio / Rubata /
+    **Hit-and-run** / **Pinch-hit** (panchina); in difesa cambio lanciatore
+    manuale / base intenzionale / **interni dentro** (difesa avanzata).
   - Doti prima dormienti ora **attive**: Velocità del corridore + Braccio del
     ricevitore + Difesa (hold) del lanciatore sulle rubate; Difesa del lanciatore
-    sui bunt.
+    sui bunt; Contatto del battitore sull'hit-and-run.
   - **Decisioni W/L/SV** tracciate (pitcher of record sul vantaggio decisivo,
     regola dei 5 inning del partente, save al finisher con vantaggio ≤3). Le W
     restano guidate dal **supporto offensivo**, non dall'ERA.
-  - **Rimandato** a una rifinitura successiva (non nel nucleo): Hit-and-run,
-    Pinch-hit, difesa avanzata (interni dentro).
+  - Le tattiche usano l'RNG **solo nei turni umani**: il quick-sim CPU-vs-CPU e
+    la calibrazione Fase 0 restano identici (test di determinismo verdi).
   - **Nota di design** — il selettore "Gestisci ospite/casa" per singola partita
     è **solo un'affordance di test** di questa fase iniziale (provare in fretta
     entrambi i lati). **A regime la squadra gestita è una scelta persistente**,

@@ -14,6 +14,9 @@ import {
   defenseSide,
   autoManageDefense,
   quickSim,
+  hitAndRun,
+  pinchHit,
+  setInfieldIn,
 } from '../engine/game';
 import { batterOverall, pitcherOverall } from '../engine/ratings';
 import { ratingsAtPosition, activePos, computeSwap } from '../engine/positions';
@@ -735,6 +738,16 @@ function ActionBar({
           Ruba 3ª
         </button>
       )}
+      {sit.canHitAndRun && (
+        <button
+          className="btn sm"
+          onClick={() => act((g) => hitAndRun(g))}
+          title="Hit-and-run: il corridore parte, il battitore protegge"
+        >
+          Mob &amp; corri
+        </button>
+      )}
+      <PinchHitMenu bench={sit.bench} act={act} />
     </div>
   ) : (
     <div className="card actionbar compact">
@@ -753,7 +766,51 @@ function ActionBar({
       >
         Base int.
       </button>
+      {sit.bases[2] && sit.outs < 2 && (
+        <button
+          className={sit.infieldIn ? 'btn sm active' : 'btn sm'}
+          onClick={() => act((g) => setInfieldIn(g, !g.infieldIn))}
+          title="Interni dentro: taglia il punto da terra, ma concede più valide"
+        >
+          Interni dentro
+        </button>
+      )}
       <PitcherChange live={live} act={act} />
+    </div>
+  );
+}
+
+function PinchHitMenu({
+  bench,
+  act,
+}: {
+  bench: Batter[];
+  act: (fn: (g: LiveGame) => void) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (bench.length === 0) return null;
+  return (
+    <div className="pchange">
+      <button className="btn sm" onClick={() => setOpen((o) => !o)} title="Sostituisci il battitore">
+        Pinch-hit ▾
+      </button>
+      {open && (
+        <div className="pchange-menu">
+          {bench.map((b) => (
+            <button
+              key={b.id}
+              className="pchange-item"
+              onClick={() => {
+                act((g) => pinchHit(g, b.id));
+                setOpen(false);
+              }}
+            >
+              <span className="pos">{b.position}</span> {b.name}
+              <span className="pchange-ovr">{stars(batterOverall(b.ratings))}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
