@@ -2063,3 +2063,19 @@ table {
 .app-game .gamefield {
   background: transparent;
 }
+
+/* Sezione "oppure incolla a mano" nel pannello calibrazione */
+.cal-alt {
+  margin-top: 8px;
+}
+.cal-alt summary {
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.cal-alt .cal-out {
+  margin-top: 6px;
+}
+.cal-alt .btn.sm {
+  margin-top: 6px;
+}

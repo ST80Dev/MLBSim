@@ -25,6 +25,7 @@ import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumI
 import type { StadiumImageCandidate } from '../data/stadiumImages';
 import {
   getCalibration,
+  calibrationStem,
   PHOTO_DEFAULT_CALIBRATION,
   CALIBRATION_RANGE,
   CALIBRATION_LABEL,
@@ -446,7 +447,7 @@ const CAL_FIELD_KEYS: NumericCalKey[] = [
   'spreadX',
   'depthY',
   'ofDist',
-  'skewX',
+  'rotation',
   'fan',
 ];
 const CAL_PHOTO_KEYS: NumericCalKey[] = ['bgZoom', 'bgX', 'bgY'];
@@ -461,7 +462,7 @@ function calEntry(id: string, cal: FieldCalibration): string {
   const img = cal.image ? `, image: '${cal.image}'` : '';
   return `  ${id}: { homeX: ${r0(cal.homeX)}, homeY: ${r0(cal.homeY)}, spreadX: ${r2(
     cal.spreadX,
-  )}, depthY: ${r2(cal.depthY)}, ofDist: ${r2(cal.ofDist)}, skewX: ${r0(cal.skewX)}, fan: ${r2(
+  )}, depthY: ${r2(cal.depthY)}, ofDist: ${r2(cal.ofDist)}, rotation: ${r2(cal.rotation)}, fan: ${r2(
     cal.fan,
   )}, bgZoom: ${r2(cal.bgZoom)}, bgX: ${r0(cal.bgX)}, bgY: ${r0(cal.bgY)}${img} },`;
 }
@@ -531,10 +532,26 @@ function CalibrationPanel({
     );
   };
 
+  // Esporta un file JSON nominato come la foto (<STEM>.json), da mettere in
+  // src/data/calibrations/ e committare: si applica al deploy.
+  const stem = calibrationStem(team.id, cal.image);
+  const exportFile = () => {
+    const blob = new Blob([JSON.stringify(cal, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${stem}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const row = (k: NumericCalKey) => {
     const rng = CALIBRATION_RANGE[k];
     const v = cal[k];
-    const nudge = rng.step * 10;
+    // Passo dei pulsanti −/+: 5 px per i parametri in pixel (step 1).
+    const nudge = rng.step * 5;
     return (
       <div className="cal-row" key={k}>
         <div className="cal-row-top">
@@ -607,16 +624,25 @@ function CalibrationPanel({
         >
           Azzera
         </button>
-        <button className="btn primary" onClick={copy}>
-          {copied ? 'Copiato ✓' : 'Copia JSON'}
+        <button className="btn primary" onClick={exportFile} title={`Scarica ${stem}.json`}>
+          ⤓ Esporta file
         </button>
       </div>
-      <textarea className="cal-out" readOnly value={entry} onFocus={(e) => e.target.select()} />
       <div className="cal-hint">
-        La calibrazione è <b>per foto</b>. Incolla la riga in <code>STADIUM_CALIBRATION</code>
-        (<code>src/data/stadiumCalibration.ts</code>) e committala: resta nel <b>repository</b> e
-        viene richiamata ogni volta, su qualsiasi dispositivo.
+        <b>Esporta file</b> → scarica <code>{stem}.json</code>. Mettilo in{' '}
+        <code>src/data/calibrations/</code> e committa: si applica al deploy per la foto{' '}
+        <code>{stem}.jpg</code>, su qualsiasi dispositivo. Nessuna modifica al codice.
       </div>
+      <details className="cal-alt">
+        <summary>oppure incolla la riga a mano</summary>
+        <textarea className="cal-out" readOnly value={entry} onFocus={(e) => e.target.select()} />
+        <button className="btn sm" onClick={copy}>
+          {copied ? 'Copiato ✓' : 'Copia JSON'}
+        </button>
+        <div className="cal-hint">
+          In <code>STADIUM_CALIBRATION</code> (<code>src/data/stadiumCalibration.ts</code>).
+        </div>
+      </details>
     </div>
   );
 }

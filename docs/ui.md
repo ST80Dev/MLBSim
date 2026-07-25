@@ -98,12 +98,16 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
 
 - `homeX`/`homeY`: posizione di casa base (perno).
 - `spreadX`/`depthY`: larghezza e profondità dei marker.
-- `ofDist`: **distanza interni↔esterni** — scala la profondità *oltre* l'interno
-  tenendo fermo l'interno (`<1` avvicina gli esterni = schiaccia la prospettiva).
-- `skewX`: **inclinazione sx/dx** — sposta i marker più lontani a destra/sinistra
-  per raddrizzare un campo storto.
+- `ofDist`: **distanza interni↔esterni** — scala la profondità oltre gli angoli
+  (tiene ferme 1ª/3ª e monte, avvicina 2ª/SS ed esterni). `<1` schiaccia.
+- `rotation`: **rotazione dell'asse** attorno a casa base (in gradi). Ruota
+  *tutti* i marker (basi comprese): a destra l'esterno/angolo di sinistra si
+  allunga e quello di destra si avvicina al piatto (e viceversa). È una vera
+  rotazione geometrica, non un semplice shear.
 - `fan`: apertura prospettica (i marker lontani si allargano di più).
-- `bgZoom`/`bgX`/`bgY`: zoom e pan della foto di sfondo.
+- `bgZoom`/`bgX`/`bgY`: zoom e pan della foto di sfondo. La foto è mostrata
+  **intera** (`meet`, mai ritagliata): con zoom e pan si porta in campo qualsiasi
+  parte (anche casa base ai bordi). Range ampi per foto molto larghe o alte.
 - `image` (opzionale): **variante-foto** scelta. Il pannello rileva
   automaticamente le foto alternative presenti nel repo (`<ID>.jpg`,
   `<ID>2.jpg`, `<ID>3.jpg`, … — provate via `onload`) e mostra dei chip
@@ -123,11 +127,14 @@ produce il **JSON** da incollare in `STADIUM_CALIBRATION` (una voce per stadio,
 chiave = ID franchigia). «Azzera» reimposta la geometria ma **mantiene la foto
 scelta**. È **solo UI**: non tocca il motore.
 
-**Persistenza = repository.** La calibrazione non usa storage del browser: la
-fonte di verità è `src/data/stadiumCalibration.ts` **committato**. Si calibra
-live, si copia la riga JSON in `STADIUM_CALIBRATION` e si committa: da lì la
-calibrazione è permanente e uguale su ogni dispositivo (il sito Pages la
-ricarica al load). La calibrazione è **per foto** (include il campo `image`).
+**Persistenza = repository, via file per-foto.** La calibrazione non usa storage
+del browser. Il pulsante **«⤓ Esporta file»** scarica un JSON **nominato come la
+foto** (`<STEM>.json`, es. `BAL.json`, `SFG3.json`): si mette in
+`src/data/calibrations/` e si committa. I file vengono **impacchettati al build**
+(`import.meta.glob` in `stadiumCalibration.ts`) e applicati al deploy, **senza
+modifiche al codice**. Per uno stadio, se esistono più file, vale il primo tra
+`<ID>.json`, `<ID>2.json`, … In alternativa resta l'override inline in
+`STADIUM_CALIBRATION`. La calibrazione è **per foto** (include il campo `image`).
 
 ## Prossimi passi UI (Fasi 1+/3)
 
