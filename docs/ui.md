@@ -100,10 +100,11 @@ base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
 - `spreadX`/`depthY`: larghezza e profondità dei marker.
 - `ofDist`: **distanza interni↔esterni** — scala la profondità oltre gli angoli
   (tiene ferme 1ª/3ª e monte, avvicina 2ª/SS ed esterni). `<1` schiaccia.
-- `rotation`: **prospettiva laterale** (campo storto). Stira la profondità in
-  base al lato: `>0` allunga le distanze dei marker di **destra** e avvicina
-  quelli di **sinistra** (e viceversa), su esterni **e** angoli 1ª/3ª. Non è una
-  rotazione rigida (niente moto circolare): è uno stiramento prospettico.
+- `rotation`: **rotazione dell'asse** casa base–2ª–CF attorno a casa base (in
+  gradi). `>0` inclina l'asse a destra: **1ª e RF si allungano verso destra** e
+  **3ª e LF salgono** (e viceversa) — l'intero diamante ruota coerentemente per
+  seguire un campo storto in foto. A piccoli angoli è un tilt dell'asse, non un
+  giro. Range ±30°.
 - `fan`: apertura prospettica (i marker lontani si allargano di più).
 - `bgZoom`/`bgX`/`bgY`: zoom e pan della foto di sfondo. La foto è mostrata
   **intera** (`meet`, mai ritagliata): con zoom e pan si porta in campo qualsiasi
