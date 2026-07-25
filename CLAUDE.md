@@ -49,10 +49,11 @@ sessione tocca quell'argomento (vedi la mappa in fondo).
 ## Stato attuale
 
 **Fase 0** (motore + UI base) **live**: https://st80dev.github.io/MLBSim/.
-**Fase 1 — turno interattivo (nucleo) completata**: motore unificato a stati,
-gestisci una squadra vs CPU (Swing/Bunt/Rubata + cambio lanciatore/base
-intenzionale), quick-sim, decisioni W/L/SV. Dettaglio in
-`docs/roadmap-and-status.md`.
+**Fase 1 — turno interattivo completata**: motore unificato a stati, gestisci
+una squadra vs CPU con tutte le tattiche (Swing/Bunt/Rubata/Hit-and-run/Pinch-hit
+in attacco; cambio lanciatore/base intenzionale/interni dentro in difesa),
+quick-sim, decisioni W/L/SV. Le tattiche usano l'RNG solo nei turni umani (Fase 0
+invariata). Dettaglio in `docs/roadmap-and-status.md`.
 
 ## Mappa della documentazione — leggi SOLO ciò che serve
 

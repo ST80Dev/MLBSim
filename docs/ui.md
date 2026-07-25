@@ -36,9 +36,10 @@ Regioni, dall'alto in basso:
     sezioni per inning/mezzo, poche righe con **scroll** (auto verso l'ultima).
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
     battitore corrente evidenziato, lanciatore in pedana).
-  - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**
-    (Battuta/Bunt/Ruba · oppure Lancia/Base int./Cambio lanc.), per lasciare più
-    spazio a casa base.
+  - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
+    in attacco Battuta / Bunt / Ruba / **Mob & corri** (hit-and-run, se corridore
+    in 1ª e 2ª libera) / **Pinch-hit** (menu panchina); in difesa Lancia / Base
+    int. / **Interni dentro** (se corridore in 3ª e <2 out) / Cambio lanc.
   - A partita finita, **overlay del risultato** con Recap/Nuova partita.
 
 Il campo generato disegna **solo il terreno di gioco** (niente tribune/cielo

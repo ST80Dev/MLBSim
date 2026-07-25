@@ -88,4 +88,28 @@ export const TUNING = {
     failMax: 0.35,
     popBase: 0.07,
   },
+
+  /**
+   * Hit-and-run: il corridore parte, il battitore protegge (bias al contatto).
+   * `contactSaveBase` = prob. che uno strikeout diventi palla in gioco (piu' il
+   * contatto e' alto, piu' sale). `firstToThird` = prob. che su groundout il
+   * corridore dalla prima arrivi in terza (di solito va in seconda).
+   */
+  hitAndRun: {
+    contactSaveBase: 0.35,
+    contactSavePerContact: 0.05,
+    contactSaveMin: 0.1,
+    contactSaveMax: 0.6,
+    firstToThird: 0.3,
+  },
+
+  /**
+   * Difesa avanzata "interni dentro": taglia il punto da terra col corridore in
+   * terza, ma lascia piu' buchi. `hitThrough` = prob. che il rimbalzo passi per
+   * un singolo (il punto segna); altrimenti battitore eliminato e corridore
+   * tenuto in terza (niente punto).
+   */
+  infieldIn: {
+    hitThrough: 0.18,
+  },
 };
