@@ -2561,3 +2561,87 @@ table {
   padding-left: 5px;
   padding-right: 5px;
 }
+
+/* --- Home: leader + mini-classifica + calendario a stati ------------ */
+.home-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+@media (max-width: 860px) {
+  .home-cards {
+    grid-template-columns: 1fr;
+  }
+}
+.leader-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.leader {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg2, var(--card2));
+  min-width: 0;
+}
+.leader .lstat {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+.leader .lval {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+.leader .lwho {
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Stati chip calendario */
+.cal-chips.window .gchip {
+  min-width: 78px;
+}
+.gchip.played {
+  opacity: 0.9;
+}
+.gchip.played .gday {
+  color: var(--muted);
+}
+.gchip.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+  background: rgba(79, 157, 255, 0.12);
+}
+.gchip.locked {
+  opacity: 0.5;
+  cursor: default;
+}
+.gchip .gres {
+  margin-left: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.gchip .gres.w {
+  color: var(--win);
+  border: 1px solid rgba(56, 211, 159, 0.5);
+}
+.gchip .gres.l {
+  color: #f0a08a;
+  border: 1px solid rgba(220, 100, 90, 0.5);
+}

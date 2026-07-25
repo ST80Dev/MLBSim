@@ -8,6 +8,7 @@
 // possano essere migrati invece di rompersi.
 
 import type { MatchArrangement } from '../../engine/arrangement';
+import type { SeasonState } from '../season';
 
 // Il "foglio partita" persistente e' definito nel motore (`MatchArrangement`):
 // la persistenza lo importa e basta, cosi' il motore resta la fonte di verita'
@@ -33,6 +34,8 @@ export interface GameSave {
   managedTeamId?: string;
   /** Foglio partita (lineup, difesa, rotazione, bullpen) per teamId — editor Fase 2. */
   lineups?: Record<string, MatchArrangement>;
+  /** Stato di stagione: giorno corrente, record di lega, statistiche reali accumulate. */
+  season?: SeasonState;
 }
 
 /** Metadati di uno slot, senza il payload (per elencare i salvataggi). */

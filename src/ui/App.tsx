@@ -29,9 +29,25 @@ import { saveStore } from '../data/persistence';
 import type { MatchArrangement } from '../data/persistence';
 import { teamStrength } from '../engine/strength';
 import { formatIp } from '../engine/boxscore';
-import { generateLeague, teamById, byDivision, LEAGUE_LABEL, DIVISION_LABEL } from '../data/league';
+import {
+  generateLeague,
+  teamById,
+  byDivision,
+  divisionRivals,
+  LEAGUE_LABEL,
+  DIVISION_LABEL,
+} from '../data/league';
 import { generateSchedule } from '../data/schedule';
 import type { ScheduleGame, Schedule } from '../data/schedule';
+import {
+  createSeason,
+  advanceWithResult,
+  recordOf,
+  winPct,
+  gamesBehind,
+  sortByRecord,
+} from '../data/season';
+import type { SeasonState, SeasonBat, SeasonPit } from '../data/season';
 import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
 import type { StadiumImageCandidate } from '../data/stadiumImages';
 import {
@@ -80,6 +96,9 @@ export function App() {
   // squadra gestita scende in campo con l'ordine di battuta e la difesa scelti
   // nell'editor. Idratati dal salvataggio all'avvio.
   const [arrangements, setArrangements] = useState<Record<string, MatchArrangement>>({});
+  // Stato di stagione: giorno corrente, record di lega reali, statistiche reali
+  // accumulate dalle partite giocate. Idratato dal salvataggio all'avvio.
+  const [season, setSeason] = useState<SeasonState>(() => createSeason());
 
   // La lega (30 squadre) e' generata da un seed unico: calendario, classifiche e
   // leaderboard leggono tutti QUESTA stessa lega. La squadra gestita e' una
@@ -113,6 +132,7 @@ export function App() {
         if (!alive || !rec) return;
         if (rec.payload.managedTeamId) setManagedId(rec.payload.managedTeamId);
         if (rec.payload.lineups) setArrangements(rec.payload.lineups);
+        if (rec.payload.season) setSeason(rec.payload.season);
       })
       .catch(() => {
         /* offline o slot assente: si parte dai default. */
@@ -170,10 +190,25 @@ export function App() {
     forceTick();
   };
 
+  // Gara corrente di regular season (quella che fa avanzare la stagione).
+  const currentRegular = schedule.regular[season.day] ?? null;
+  // La gara attiva e' la giornata corrente di regular season?
+  const isSeasonGame =
+    !!activeGame && activeGame.phase === 'regular' && activeGame.id === currentRegular?.id;
+
+  const persist = (arrs: Record<string, MatchArrangement>, seas: SeasonState) => {
+    saveStore
+      .save(SAVE_SLOT, { managedTeamId: myId, lineups: arrs, season: seas })
+      .catch(() => {
+        /* offline: si continua, si risalvera' piu' tardi. */
+      });
+  };
+
   const newLeague = () => {
     setLeagueSeed(newRandomSeed());
     setManagedId('');
     setActiveGame(null);
+    setSeason(createSeason());
   };
 
   // Dal calendario: scegli la gara. "Gioca" apre la preparazione (Roster), da
@@ -181,6 +216,16 @@ export function App() {
   const playGame = (g: ScheduleGame) => {
     setActiveGame(g);
     setView('roster');
+  };
+
+  // Fine gara di regular season: registra il risultato reale, accumula le
+  // statistiche, quick-simula il resto della lega, avanza di un giorno e salva.
+  const advanceDay = () => {
+    const ns = advanceWithResult(season, toGameResult(live), myId, league, leagueSeed);
+    setSeason(ns);
+    persist(arrangements, ns);
+    setActiveGame(null);
+    setView('home');
   };
 
   // Editor: applica l'assetto alla sola squadra gestita (entra nella sim,
@@ -191,7 +236,7 @@ export function App() {
   const saveManaged = async (arr: MatchArrangement) => {
     const next = { ...arrangements, [myId]: arr };
     setArrangements(next);
-    await saveStore.save(SAVE_SLOT, { managedTeamId: myId, lineups: next });
+    await saveStore.save(SAVE_SLOT, { managedTeamId: myId, lineups: next, season });
   };
 
   return (
@@ -259,15 +304,21 @@ export function App() {
                 Recap
               </button>
               {final ? (
-                <button
-                  className="btn primary"
-                  onClick={() => {
-                    setActiveGame(null);
-                    setView('home');
-                  }}
-                >
-                  Al calendario ▸
-                </button>
+                isSeasonGame ? (
+                  <button className="btn primary" onClick={advanceDay}>
+                    Conferma e avanza ▸
+                  </button>
+                ) : (
+                  <button
+                    className="btn primary"
+                    onClick={() => {
+                      setActiveGame(null);
+                      setView('home');
+                    }}
+                  >
+                    Al calendario ▸
+                  </button>
+                )
               ) : (
                 <button className="btn" onClick={() => act((g) => quickSim(g))}>
                   Salta a fine ⏩
@@ -331,10 +382,15 @@ export function App() {
                 <FinalOverlay
                   result={result}
                   controlled={controlled}
-                  onNew={() => {
-                    setActiveGame(null);
-                    setView('home');
-                  }}
+                  newLabel={isSeasonGame ? 'Conferma e avanza ▸' : 'Al calendario ▸'}
+                  onNew={
+                    isSeasonGame
+                      ? advanceDay
+                      : () => {
+                          setActiveGame(null);
+                          setView('home');
+                        }
+                  }
                   onRecap={() => setRecapOpen(true)}
                 />
               ) : (
@@ -350,7 +406,7 @@ export function App() {
           league={league}
           managedTeam={managedTeam}
           schedule={schedule}
-          activeGameId={activeGame?.id ?? null}
+          season={season}
           onPlay={playGame}
           onManagedChange={(id) => {
             setManagedId(id);
@@ -366,6 +422,7 @@ export function App() {
           team={managedTeam}
           initial={arrangement}
           activeGame={!!activeGame}
+          season={season}
           onApply={applyManaged}
           onSave={saveManaged}
           onStart={() => setView('game')}
@@ -373,7 +430,7 @@ export function App() {
       )}
 
       {view === 'leaderboard' && <LeaderboardPage league={league} />}
-      {view === 'standings' && <StandingsPage league={league} managedId={myId} />}
+      {view === 'standings' && <StandingsPage league={league} season={season} managedId={myId} />}
       {view === 'franchise' && <FranchisePage team={managedTeam} />}
 
       {recapOpen && (
@@ -933,11 +990,13 @@ function OutsDots({ outs }: { outs: number }) {
 function FinalOverlay({
   result,
   controlled,
+  newLabel,
   onNew,
   onRecap,
 }: {
   result: GameResult;
   controlled: Side;
+  newLabel: string;
   onNew: () => void;
   onRecap: () => void;
 }) {
@@ -955,7 +1014,7 @@ function FinalOverlay({
           Recap partita
         </button>
         <button className="btn primary big" onClick={onNew}>
-          Nuova partita ▸
+          {newLabel}
         </button>
       </div>
     </div>
@@ -1446,6 +1505,33 @@ function ipFmt(outs: number): string {
   return `${Math.floor(outs / 3)}.${outs % 3}`;
 }
 
+/** Linea di battuta REALE dalle statistiche accumulate della stagione. */
+function seasonBatLine(a?: SeasonBat): BatLine {
+  const g = a?.g ?? 0, ab = a?.ab ?? 0, h = a?.h ?? 0, bb = a?.bb ?? 0;
+  const d2 = a?.double ?? 0, t3 = a?.triple ?? 0, hr = a?.hr ?? 0;
+  const singles = h - d2 - t3 - hr;
+  const tb = singles + 2 * d2 + 3 * t3 + 4 * hr;
+  return {
+    g,
+    avg: ab ? h / ab : 0,
+    obp: ab + bb ? (h + bb) / (ab + bb) : 0,
+    slg: ab ? tb / ab : 0,
+    h, d2, t3, hr, rbi: a?.rbi ?? 0, bb, so: a?.so ?? 0, sb: a?.sb ?? 0,
+  };
+}
+
+/** Linea di lancio REALE dalle statistiche accumulate della stagione. */
+function seasonPitLine(a?: SeasonPit): PitLine {
+  const outs = a?.outs ?? 0;
+  const ip = outs / 3;
+  const h = a?.h ?? 0, bb = a?.bb ?? 0, k = a?.so ?? 0;
+  return {
+    w: a?.w ?? 0, l: a?.l ?? 0, g: a?.g ?? 0, gs: a?.gs ?? 0, ip, ipOuts: outs,
+    h, bb, k, svo: a?.svo ?? 0, sv: a?.sv ?? 0,
+    whip: ip ? (h + bb) / ip : 0, k9: ip ? (k / ip) * 9 : 0,
+  };
+}
+
 const BAT_COLS = ['G', 'AVG', 'OBP', 'SLG', 'H', '2B', '3B', 'HR', 'RBI', 'BB', 'SO', 'SB'];
 const BAT_RATING_COLS = ['CON', 'POT', 'OCC', 'VEL', 'DIF', 'BRA'];
 const PIT_COLS = ['W', 'L', 'G', 'GS', 'IP', 'H', 'BB', 'K', 'SVO', 'SV', 'WHIP', 'K/9'];
@@ -1455,6 +1541,7 @@ function RosterPage({
   team,
   initial,
   activeGame,
+  season,
   onApply,
   onSave,
   onStart,
@@ -1462,6 +1549,7 @@ function RosterPage({
   team: Team;
   initial?: MatchArrangement;
   activeGame: boolean;
+  season: SeasonState;
   onApply: (arr: MatchArrangement) => void;
   onSave: (arr: MatchArrangement) => Promise<void>;
   onStart: () => void;
@@ -1589,7 +1677,7 @@ function RosterPage({
         </>
       );
     }
-    const s = batLine(b, statMode);
+    const s = statMode === 'season' ? seasonBatLine(season.bat[b.id]) : batLine(b, statMode);
     return (
       <>
         <td>{s.g}</td><td>{pct3(s.avg)}</td><td>{pct3(s.obp)}</td><td>{pct3(s.slg)}</td>
@@ -1608,7 +1696,7 @@ function RosterPage({
         </>
       );
     }
-    const s = pitLine(p, statMode);
+    const s = statMode === 'season' ? seasonPitLine(season.pit[p.id]) : pitLine(p, statMode);
     return (
       <>
         <td>{s.w}</td><td>{s.l}</td><td>{s.g}</td><td>{s.gs}</td><td>{ipFmt(s.ipOuts)}</td>
@@ -1743,11 +1831,17 @@ function RosterPage({
         </div>
       </div>
 
-      {!ratingsMode && (
+      {statMode === 'season' && (
         <div className="page-note">
-          Valori <b>attesi</b> derivati dai rating (segnaposto): la stagione in corso e' a zero
-          finche' non si gioca; i risultati (RBI, W-L, SV) sono stime. I numeri reali arriveranno
-          col motore di stagione.
+          Statistiche <b>reali</b> della stagione in corso, accumulate dalle partite giocate
+          (giornata {season.day}). A 0 finche' non giochi.
+        </div>
+      )}
+      {(statMode === 'last' || statMode === 'hist') && (
+        <div className="page-note">
+          Valori <b>attesi</b> derivati dai rating (backstory): finche' non completi stagioni
+          gestite, "scorsa" e "storico" restano stime; poi si comporranno dagli anni realmente
+          giocati.
         </div>
       )}
 
@@ -1888,26 +1982,32 @@ function RosterPage({
 // delle division. Tutte leggono la stessa lega generata da seed.
 // ---------------------------------------------------------------------------
 
+type ChipState = 'played' | 'current' | 'locked' | 'exhibition' | 'tbd';
+
 function GameChip({
   g,
   league,
-  active,
+  state,
+  result,
   onPlay,
 }: {
   g: ScheduleGame;
   league: Team[];
-  active: boolean;
+  state: ChipState;
+  result?: { us: number; them: number };
   onPlay: (g: ScheduleGame) => void;
 }) {
   const opp = g.opponentId ? teamById(league, g.opponentId) : undefined;
+  const playable = (state === 'current' || state === 'exhibition') && !!opp;
+  const won = result ? result.us > result.them : false;
   return (
     <button
-      className={`gchip${active ? ' active' : ''}${opp ? '' : ' tbd'}`}
-      disabled={!opp}
-      onClick={() => opp && onPlay(g)}
+      className={`gchip ${state}`}
+      disabled={!playable}
+      onClick={() => playable && opp && onPlay(g)}
       title={
         opp
-          ? `Giornata ${g.day}: ${g.home ? 'vs' : '@'} ${opp.name} — gioca`
+          ? `Giornata ${g.day}: ${g.home ? 'vs' : '@'} ${opp.name}${playable ? ' — gioca' : ''}`
           : `${g.round}: avversario da determinare`
       }
     >
@@ -1921,50 +2021,37 @@ function GameChip({
       ) : (
         <span className="gopp tbdlabel">{g.round}</span>
       )}
+      {result && (
+        <span className={`gres ${won ? 'w' : 'l'}`}>
+          {won ? 'V' : 'P'} {result.us}-{result.them}
+        </span>
+      )}
     </button>
   );
 }
 
-function CalSection({
-  title,
-  hint,
-  games,
-  league,
-  activeGameId,
-  onPlay,
-}: {
-  title: string;
-  hint: string;
-  games: ScheduleGame[];
-  league: Team[];
-  activeGameId: string | null;
-  onPlay: (g: ScheduleGame) => void;
-}) {
-  return (
-    <div className="card cal-section">
-      <div className="card-title">
-        {title} <span className="card-sub">{hint}</span>
-      </div>
-      <div className="cal-chips">
-        {games.map((g) => (
-          <GameChip
-            key={g.id}
-            g={g}
-            league={league}
-            active={g.id === activeGameId}
-            onPlay={onPlay}
-          />
-        ))}
-      </div>
-    </div>
-  );
+/** Miglior giocatore per una metrica, tra chi ha almeno `minG` partite. */
+function topBy<T>(
+  players: T[],
+  accOf: (t: T) => SeasonBat | SeasonPit | undefined,
+  metric: (s: any) => number,
+  minG = 1,
+): { t: T; v: number } | null {
+  let best: { t: T; v: number } | null = null;
+  for (const t of players) {
+    const s = accOf(t);
+    if (!s || s.g < minG) continue;
+    const v = metric(s);
+    if (!best || v > best.v) best = { t, v };
+  }
+  return best;
 }
 
 function HomePage({
   league,
   managedTeam,
   schedule,
-  activeGameId,
+  season,
   onPlay,
   onManagedChange,
   onNewLeague,
@@ -1972,13 +2059,59 @@ function HomePage({
   league: Team[];
   managedTeam: Team;
   schedule: Schedule;
-  activeGameId: string | null;
+  season: SeasonState;
   onPlay: (g: ScheduleGame) => void;
   onManagedChange: (id: string) => void;
   onNewLeague: () => void;
 }) {
-  const next = schedule.regular[0];
-  const nextOpp = next?.opponentId ? teamById(league, next.opponentId) : undefined;
+  const day = season.day;
+  const current = schedule.regular[day];
+  const currentOpp = current?.opponentId ? teamById(league, current.opponentId) : undefined;
+  const rec = recordOf(season, managedTeam.id);
+
+  // Leader di squadra (statistiche REALI accumulate).
+  const myBatters = rosterBatters(managedTeam);
+  const myPitchers = rosterPitchers(managedTeam);
+  const batOf = (b: Batter) => season.bat[b.id];
+  const pitOf = (p: Pitcher) => season.pit[p.id];
+  const leaders: Array<{ label: string; who?: string; val: string }> = [
+    (() => {
+      const x = topBy(myBatters, batOf, (s: SeasonBat) => s.hr);
+      return { label: 'HR', who: x?.t.name, val: x ? `${x.v}` : '—' };
+    })(),
+    (() => {
+      const x = topBy(myBatters, batOf, (s: SeasonBat) => s.rbi);
+      return { label: 'RBI', who: x?.t.name, val: x ? `${x.v}` : '—' };
+    })(),
+    (() => {
+      const x = topBy(myBatters, batOf, (s: SeasonBat) => (s.ab ? s.h / s.ab : 0), 5);
+      return { label: 'AVG', who: x?.t.name, val: x ? x.v.toFixed(3).replace(/^0/, '') : '—' };
+    })(),
+    (() => {
+      const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.w);
+      return { label: 'W', who: x?.t.name, val: x ? `${x.v}` : '—' };
+    })(),
+    (() => {
+      const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.so);
+      return { label: 'K', who: x?.t.name, val: x ? `${x.v}` : '—' };
+    })(),
+    (() => {
+      const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.sv);
+      return { label: 'SV', who: x?.t.name, val: x ? `${x.v}` : '—' };
+    })(),
+  ];
+  const played = Object.keys(season.results).length > 0;
+
+  // Mini-classifica della mia division (reale).
+  const myDiv = sortByRecord(season, divisionRivals(league, managedTeam.id));
+  const divLeader = recordOf(season, myDiv[0]?.id ?? managedTeam.id);
+
+  // Calendario a finestra: gare attorno al turno corrente + resto a scorrimento.
+  const regState = (i: number): ChipState =>
+    i < day ? 'played' : i === day ? 'current' : 'locked';
+  const from = Math.max(0, day - 4);
+  const window = schedule.regular.slice(from, day + 6);
+
   return (
     <div className="page home-page">
       <div className="card dash">
@@ -1988,13 +2121,13 @@ function HomePage({
             <div className="dash-name">{managedTeam.name}</div>
             <div className="dash-sub">
               {LEAGUE_LABEL[managedTeam.league]} · {DIVISION_LABEL[managedTeam.division]} ·{' '}
-              {managedTeam.ballpark}
+              {rec.w}-{rec.l} · giornata {day}
             </div>
           </div>
         </div>
-        {next && nextOpp && (
-          <button className="btn primary next-game" onClick={() => onPlay(next)}>
-            ▶ Gioca giornata 1 {next.home ? 'vs' : '@'} {nextOpp.abbrev}
+        {current && currentOpp && (
+          <button className="btn primary next-game" onClick={() => onPlay(current)}>
+            ▶ Gioca giornata {day + 1} {current.home ? 'vs' : '@'} {currentOpp.abbrev}
           </button>
         )}
         <div className="dash-actions">
@@ -2014,75 +2147,182 @@ function HomePage({
         </div>
       </div>
 
-      <CalSection
-        title="Prestagione"
-        hint={`${schedule.preseason.length} amichevoli · usi futuri: draft / trasferimenti`}
-        games={schedule.preseason}
-        league={league}
-        activeGameId={activeGameId}
-        onPlay={onPlay}
-      />
-      <CalSection
-        title="Stagione regolare"
-        hint={`${schedule.regular.length} giornate · clicca una gara per giocarla`}
-        games={schedule.regular}
-        league={league}
-        activeGameId={activeGameId}
-        onPlay={onPlay}
-      />
-      <CalSection
-        title="Playoff"
-        hint="date potenziali · avversari da determinare"
-        games={schedule.playoff}
-        league={league}
-        activeGameId={activeGameId}
-        onPlay={onPlay}
-      />
+      <div className="home-cards">
+        <div className="card">
+          <div className="card-title">
+            Leader di squadra <span className="card-sub">stagione in corso (reali)</span>
+          </div>
+          {!played ? (
+            <p className="muted">Nessuna partita giocata: i leader compaiono appena giochi.</p>
+          ) : (
+            <div className="leader-grid">
+              {leaders.map((l) => (
+                <div className="leader" key={l.label}>
+                  <span className="lstat">{l.label}</span>
+                  <span className="lval">{l.val}</span>
+                  <span className="lwho">{l.who ?? '—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">
+            {DIVISION_LABEL[managedTeam.division]} · {LEAGUE_LABEL[managedTeam.league]}{' '}
+            <span className="card-sub">classifica division</span>
+          </div>
+          <table className="ratings standings">
+            <thead>
+              <tr>
+                <th className="l">Squadra</th>
+                <th>V</th>
+                <th>P</th>
+                <th>GB</th>
+              </tr>
+            </thead>
+            <tbody>
+              {myDiv.map((t) => {
+                const r = recordOf(season, t.id);
+                const gb = gamesBehind(divLeader, r);
+                return (
+                  <tr key={t.id} className={t.id === managedTeam.id ? 'me' : undefined}>
+                    <td className="l">
+                      <TeamBadge team={t} size={16} /> {t.abbrev}
+                    </td>
+                    <td>{r.w}</td>
+                    <td>{r.l}</td>
+                    <td>{gb > 0 ? gb.toFixed(1) : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card cal-section">
+        <div className="card-title">
+          In evidenza <span className="card-sub">attorno alla giornata {day + 1}</span>
+        </div>
+        <div className="cal-chips window">
+          {window.map((g, k) => {
+            const i = from + k;
+            return (
+              <GameChip
+                key={g.id}
+                g={g}
+                league={league}
+                state={regState(i)}
+                result={season.results[i]}
+                onPlay={onPlay}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card cal-section">
+        <div className="card-title">
+          Stagione regolare{' '}
+          <span className="card-sub">{schedule.regular.length} giornate · giocate {day}</span>
+        </div>
+        <div className="cal-chips">
+          {schedule.regular.map((g, i) => (
+            <GameChip
+              key={g.id}
+              g={g}
+              league={league}
+              state={regState(i)}
+              result={season.results[i]}
+              onPlay={onPlay}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="card cal-section">
+        <div className="card-title">
+          Prestagione <span className="card-sub">amichevoli · non incidono su record/stat</span>
+        </div>
+        <div className="cal-chips">
+          {schedule.preseason.map((g) => (
+            <GameChip key={g.id} g={g} league={league} state="exhibition" onPlay={onPlay} />
+          ))}
+        </div>
+      </div>
+
+      <div className="card cal-section">
+        <div className="card-title">
+          Playoff <span className="card-sub">date potenziali · avversari da determinare</span>
+        </div>
+        <div className="cal-chips">
+          {schedule.playoff.map((g) => (
+            <GameChip key={g.id} g={g} league={league} state="tbd" onPlay={onPlay} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function StandingsPage({ league, managedId }: { league: Team[]; managedId: string }) {
+function StandingsPage({
+  league,
+  season,
+  managedId,
+}: {
+  league: Team[];
+  season: SeasonState;
+  managedId: string;
+}) {
   const groups = byDivision(league);
   return (
     <div className="page standings-page">
       <div className="page-note">
-        Record a 0–0: si popoleranno quando la stagione verra' giocata (motore di
-        stagione, Fase 4). La struttura di lega e division e' quella reale.
+        Classifica reale: i record si aggiornano a ogni giornata giocata (le altre partite
+        della lega sono quick-simulate). Giornata corrente: {season.day}.
       </div>
       <div className="standings-grid">
-        {groups.map((grp) => (
-          <div className="card" key={`${grp.league}-${grp.division}`}>
-            <div className="card-title">
-              {LEAGUE_LABEL[grp.league]} {DIVISION_LABEL[grp.division]}
-            </div>
-            <table className="ratings standings">
-              <thead>
-                <tr>
-                  <th className="l">Squadra</th>
-                  <th>V</th>
-                  <th>P</th>
-                  <th>PCT</th>
-                  <th>GB</th>
-                </tr>
-              </thead>
-              <tbody>
-                {grp.teams.map((t) => (
-                  <tr key={t.id} className={t.id === managedId ? 'me' : undefined}>
-                    <td className="l">
-                      <TeamBadge team={t} size={18} /> {t.abbrev}{' '}
-                      <span className="tname">{t.name}</span>
-                    </td>
-                    <td>0</td>
-                    <td>0</td>
-                    <td>—</td>
-                    <td>—</td>
+        {groups.map((grp) => {
+          const ordered = sortByRecord(season, grp.teams);
+          const leader = recordOf(season, ordered[0].id);
+          return (
+            <div className="card" key={`${grp.league}-${grp.division}`}>
+              <div className="card-title">
+                {LEAGUE_LABEL[grp.league]} {DIVISION_LABEL[grp.division]}
+              </div>
+              <table className="ratings standings">
+                <thead>
+                  <tr>
+                    <th className="l">Squadra</th>
+                    <th>V</th>
+                    <th>P</th>
+                    <th>PCT</th>
+                    <th>GB</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+                </thead>
+                <tbody>
+                  {ordered.map((t) => {
+                    const r = recordOf(season, t.id);
+                    const gb = gamesBehind(leader, r);
+                    return (
+                      <tr key={t.id} className={t.id === managedId ? 'me' : undefined}>
+                        <td className="l">
+                          <TeamBadge team={t} size={18} /> {t.abbrev}{' '}
+                          <span className="tname">{t.name}</span>
+                        </td>
+                        <td>{r.w}</td>
+                        <td>{r.l}</td>
+                        <td>{r.w + r.l ? pct3(winPct(r)) : '—'}</td>
+                        <td>{gb > 0 ? gb.toFixed(1) : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
