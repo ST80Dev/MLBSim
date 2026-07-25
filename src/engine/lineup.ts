@@ -52,6 +52,29 @@ export function autoLineup(batters: Batter[]): Batter[] {
   return order;
 }
 
+/**
+ * Riordina il lineup secondo `order` (id dei battitori nell'ordine di battuta
+ * voluto). Robusto e totale: gli id sconosciuti o duplicati in `order` vengono
+ * ignorati; i battitori del lineup non citati restano in coda nell'ordine
+ * originale. Cosi' un `order` salvato non piu' allineato alla rosa (giocatore
+ * ceduto, rosa rigenerata) degrada in modo pulito invece di perdere battitori.
+ * NON muta l'input: ritorna un nuovo array.
+ */
+export function reorderLineup(lineup: Batter[], order: string[]): Batter[] {
+  const byId = new Map(lineup.map((b) => [b.id, b]));
+  const seen = new Set<string>();
+  const out: Batter[] = [];
+  for (const id of order) {
+    const b = byId.get(id);
+    if (b && !seen.has(id)) {
+      out.push(b);
+      seen.add(id);
+    }
+  }
+  for (const b of lineup) if (!seen.has(b.id)) out.push(b);
+  return out;
+}
+
 export interface FieldSetCheck {
   ok: boolean;
   /** Caselle scoperte. */

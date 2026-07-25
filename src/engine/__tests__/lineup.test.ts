@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { autoLineup, validateFieldSet, FIELD_SLOTS } from '../lineup';
+import { autoLineup, validateFieldSet, reorderLineup, FIELD_SLOTS } from '../lineup';
 import type { Batter, BatterRatings, Position } from '../types';
 
 function bat(id: string, r: Partial<BatterRatings>): Batter {
@@ -49,6 +49,34 @@ describe('autoLineup', () => {
     const few = [bat('a', { contact: 40 }), bat('b', { contact: 80 })];
     const order = autoLineup(few);
     expect(order.map((b) => b.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('reorderLineup', () => {
+  const l: Batter[] = [
+    bat('a', {}), bat('b', {}), bat('c', {}), bat('d', {}),
+  ];
+
+  it('riordina secondo gli id dati', () => {
+    const out = reorderLineup(l, ['c', 'a', 'd', 'b']);
+    expect(out.map((b) => b.id)).toEqual(['c', 'a', 'd', 'b']);
+  });
+
+  it('appende in coda i battitori non citati, nell ordine originale', () => {
+    const out = reorderLineup(l, ['d', 'b']);
+    expect(out.map((b) => b.id)).toEqual(['d', 'b', 'a', 'c']);
+  });
+
+  it('ignora id sconosciuti e duplicati senza perdere battitori', () => {
+    const out = reorderLineup(l, ['x', 'b', 'b', 'a']);
+    expect(out.map((b) => b.id)).toEqual(['b', 'a', 'c', 'd']);
+    expect(out).toHaveLength(4);
+  });
+
+  it('non muta l input', () => {
+    const copy = [...l];
+    reorderLineup(l, ['c', 'a']);
+    expect(l).toEqual(copy);
   });
 });
 
