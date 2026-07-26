@@ -165,13 +165,13 @@ export function advanceWithResult(
   const loserId = result.winner === 'home' ? result.away.id : result.home.id;
   bumpRecord(next.records, winnerId, loserId);
 
-  const managedStats =
-    result.home.id === managedId
-      ? result.homeStats
-      : result.away.id === managedId
-        ? result.awayStats
-        : null;
-  if (managedStats) accumulate(next, managedStats);
+  // ENTRAMBE le squadre della MIA partita accumulano statistiche REALI: se un
+  // avversario mi fa 3 HR o il suo lanciatore mi batte, quei numeri finiscono
+  // davvero nel suo score di stagione. La leaderboard li integra SOPRA la
+  // proiezione (reale per le gare contro di me, proiettata per le altre). E' la
+  // stessa architettura che serviranno le trade.
+  accumulate(next, result.homeStats);
+  accumulate(next, result.awayStats);
 
   const managedHome = result.home.id === managedId;
   const oppId = managedHome ? result.away.id : result.home.id;
@@ -196,6 +196,24 @@ export function advanceWithResult(
 
   next.day = season.day + 1;
   return next;
+}
+
+/** Somma due linee di battuta (reale + proiezione di riempimento). */
+export function addBat(a: SeasonBat, b: SeasonBat): SeasonBat {
+  return {
+    g: a.g + b.g, ab: a.ab + b.ab, r: a.r + b.r, h: a.h + b.h, rbi: a.rbi + b.rbi,
+    bb: a.bb + b.bb, so: a.so + b.so, double: a.double + b.double, triple: a.triple + b.triple,
+    hr: a.hr + b.hr, sb: a.sb + b.sb, cs: a.cs + b.cs,
+  };
+}
+
+/** Somma due linee di lancio (reale + proiezione di riempimento). */
+export function addPit(a: SeasonPit, b: SeasonPit): SeasonPit {
+  return {
+    g: a.g + b.g, gs: a.gs + b.gs, outs: a.outs + b.outs, bf: a.bf + b.bf, h: a.h + b.h,
+    r: a.r + b.r, er: a.er + b.er, bb: a.bb + b.bb, so: a.so + b.so, hr: a.hr + b.hr,
+    w: a.w + b.w, l: a.l + b.l, sv: a.sv + b.sv, svo: a.svo + b.svo,
+  };
 }
 
 /** Record di una squadra (0-0 se non ha ancora giocato). */

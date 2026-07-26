@@ -46,6 +46,8 @@ import {
   winPct,
   gamesBehind,
   sortByRecord,
+  addBat,
+  addPit,
 } from '../data/season';
 import type { SeasonState, SeasonBat, SeasonPit } from '../data/season';
 import { projectBatterSeason, projectPitcherSeason, SEASON_GAMES } from '../data/projection';
@@ -2617,10 +2619,18 @@ function LeaderboardPage({
       ];
       for (const { list, tier } of groups) {
         for (const b of list) {
-          const sb =
-            managed && !preseason
-              ? season.bat[b.id]
-              : projectBatterSeason(b, tier, { seed, year: season.year, day: projDay });
+          let sb: SeasonBat | undefined;
+          if (preseason) {
+            sb = projectBatterSeason(b, tier, { seed, year: season.year, day: projDay });
+          } else if (managed) {
+            sb = season.bat[b.id]; // puro reale (undefined se non ha ancora giocato)
+          } else {
+            // Avversario: reale nelle gare contro di me + proiezione nelle altre.
+            const real = season.bat[b.id];
+            const k = real?.g ?? 0;
+            const fill = projectBatterSeason(b, tier, { seed, year: season.year, day: Math.max(0, day - k) });
+            sb = real ? addBat(real, fill) : fill;
+          }
           if (!sb) continue;
           const pa = sb.ab + sb.bb;
           if (pa < minPA) continue;
@@ -2637,10 +2647,17 @@ function LeaderboardPage({
     for (const t of league) {
       const managed = t.id === managedId;
       for (const p of rosterPitchers(t)) {
-        const sp =
-          managed && !preseason
-            ? season.pit[p.id]
-            : projectPitcherSeason(p, { seed, year: season.year, day: projDay });
+        let sp: SeasonPit | undefined;
+        if (preseason) {
+          sp = projectPitcherSeason(p, { seed, year: season.year, day: projDay });
+        } else if (managed) {
+          sp = season.pit[p.id];
+        } else {
+          const real = season.pit[p.id];
+          const k = real?.g ?? 0;
+          const fill = projectPitcherSeason(p, { seed, year: season.year, day: Math.max(0, day - k) });
+          sp = real ? addPit(real, fill) : fill;
+        }
         if (!sp || sp.outs < minOuts) continue;
         out.push({ id: p.id, name: p.name, team: t, managed, line: seasonPitLine(sp) });
       }
