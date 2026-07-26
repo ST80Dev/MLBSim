@@ -106,4 +106,18 @@ describe('buildManagedTeam', () => {
     expect(rosterBatters(built).length).toBe(rosterBatters(team).length);
     expect(rosterPitchers(built).length).toBe(rosterPitchers(team).length);
   });
+
+  it('nomina un RP come closer: lo porta in fondo al bullpen con ruolo CL', () => {
+    const arr = defaultArrangement(team);
+    // Prendo un rilievo che NON e' gia' il closer di default e lo designo.
+    const rp = team.bullpen.find((p) => p.role !== 'CL') ?? team.bullpen[0];
+    arr.closerId = rp.id;
+    if (!arr.bullpen.includes(rp.id)) arr.bullpen = [...arr.bullpen, rp.id];
+    const built = buildManagedTeam(team, arr);
+    const last = built.bullpen[built.bullpen.length - 1];
+    expect(last.id).toBe(rp.id); // chiude la gara (usato per ultimo)
+    expect(last.role).toBe('CL'); // a video e in gara e' CL
+    // Nessun altro rilievo resta marcato CL.
+    expect(built.bullpen.slice(0, -1).every((p) => p.role !== 'CL')).toBe(true);
+  });
 });
