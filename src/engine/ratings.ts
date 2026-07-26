@@ -7,6 +7,7 @@ import type {
 } from './types';
 import { LEAGUE } from './constants';
 import { clamp } from './rng';
+import type { Rng } from './rng';
 
 export const RATING_MIN = 20;
 export const RATING_MAX = 80;
@@ -103,6 +104,19 @@ export function pitcherOverall(r: PitcherRatings): number {
       0.1 * r.groundball +
       0.05 * r.fielding,
   );
+}
+
+/**
+ * Stima un potenziale (tetto 20-80) da abilita' attuale ed eta': headroom
+ * casuale sopra l'overall, piu' ampio da giovani, quasi nullo dopo il picco.
+ * E' una STIMA incerta, NON un dato certo: cosi' un giovane forte *tende* a
+ * crescere ma non e' garantito. Non guarda mai l'esito reale futuro (import
+ * storico): il futuro dal seed non replica la realta'. Solo headroom positivo;
+ * il declino lo gestisce la curva d'eta' (`aging.ts`).
+ */
+export function projectPotential(rng: Rng, overall: number, age: number): number {
+  const boost = age < 24 ? rng.gauss(8, 4) : age < 28 ? rng.gauss(3, 3) : rng.gauss(0, 2);
+  return clampRating(overall + Math.max(0, boost));
 }
 
 /** Stipendio annuale (milioni) da un overall 20-80. */

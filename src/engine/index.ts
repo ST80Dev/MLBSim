@@ -3,6 +3,8 @@ export * from './types';
 export * from './rng';
 export * from './constants';
 export * from './ratings';
+export * from './statsToRatings';
+export * from './names';
 export * from './aging';
 export * from './probabilities';
 export * from './atbat';

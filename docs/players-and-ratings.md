@@ -76,6 +76,29 @@ In `src/engine/ratings.ts`:
 - `batterOverall` / `pitcherOverall` = media pesata delle doti (20-80).
 - `salaryFromOverall` = stipendio annuale (milioni) dall'overall.
 
+## Inversione statistiche → caratteristiche (import storico)
+
+In `src/engine/statsToRatings.ts` — l'**inverso** della derivazione, per
+importare una stagione reale: dal tabellino si stimano le doti che, ri-derivate,
+lo riproducono. `ratingFromMult(mult, perSigma) = 50 + 10·ln(mult)/ln(perSigma)`
+inverte `ratingMult`; `mult` = rate osservato / rate di lega.
+
+- **Battitore** (`ratingsFromBatterStats`): Occhio ← BB (leva pulita); Potenza ←
+  media pesata **HR (0.8)** + 2B (0.2) — l'HR è la leva marcante dell'epoca, i
+  doppi la sfumano; Contatto ← media di singoli e strikeout (dato l'Occhio);
+  Velocità ← media di SB (leva diretta) e tripli (data la Potenza).
+- **Lanciatore** (`ratingsFromPitcherStats`): Dominio ← K; Controllo ← BB (meno
+  = più); Palla-terra ← HR (meno = più); Movimento ← hit non-HR; Resistenza ←
+  battitori per partenza (inverte `deriveStamina`).
+- **Non deducibili dal tabellino**: Difesa/Braccio del battitore (archetipo di
+  ruolo) e Difesa del lanciatore (50). Sono skill di campo, non offensive.
+
+**Round-trip fedele ma non bit-esatto**: dove una dote governa più leve (Potenza
+su HR *e* 2B) le stime sono mediate, quindi restano piccoli residui (misurati nei
+test); e il **soft-cap sulla media** comprime i .350+ storici in derivazione. È
+per costruzione: lo snapshot storico ha le **statistiche** come verità, i rating
+sono una stima per pilotare il motore (vedi `docs/roadmap-and-status.md` § Fase 2).
+
 ## Evoluzione età/potenziale
 
 In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
@@ -87,3 +110,24 @@ In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
 - **Ritiro** automatico quando età alta + overall crollato.
 - Ogni giocatore ha un solo **potenziale** (tetto 20-80). Dopo l'evoluzione le
   statistiche vengono ri-derivate dalle nuove caratteristiche.
+
+### Potenziale come STIMA incerta
+
+`projectPotential(rng, overall, age)` (`ratings.ts`) assegna il tetto come
+**headroom casuale** sopra l'overall attuale: ampio da giovani (`gauss(8,4)` sotto
+i 24), quasi nullo dopo il picco. È una **stima**, non un dato certo — usata sia
+dai giocatori **generati** sia dall'**import storico** (che NON guarda il picco
+reale futuro: dal seed di una stagione il futuro **non è un replay noto**, così
+non sai in anticipo quale giovane diventerà campione).
+
+### Code di sviluppo (bust / breakout)
+
+`developmentTail` aggiunge, a livello di **stagione**, rare deviazioni forti che
+fanno **divergere la carriera** dalla media (e dalla realtà storica):
+- giovani (< 28): ~6% **breakout** (salto inatteso), ~7% **bust/stallo** (il
+  prospetto che non sboccia) → il talento *tende* a emergere, ma non è garantito;
+- veterani (≥ 31): ~8% **crollo** extra (infortunio/caduta improvvisa).
+
+Misurato: 400 carriere con **partenza identica** (giovane, potenziale 78) su 5
+stagioni finiscono tra ~64 e 80 di overall (sd ~2.6) — imprevedibilità reale nei
+singoli, pur mantenendo il **trend medio** corretto (il talento cresce comunque).

@@ -30,6 +30,32 @@ si prepara la squadra, si conferma, si gioca la partita, poi di nuovo gestione.
 - **Niente** luxury tax, multe per sforamento, o gestione finanziaria della
   franchigia. Solo un tetto da non superare.
 
+## Modalità di lega e squilibrio (generata vs import storico)
+
+**Decisione di design.** La lega **generata** ha talento ~gaussiano centrato su
+50: le squadre partono di **forza simile**, quindi il **cap rigido** ha senso
+(parità della sandbox gestionale). L'**import storico** è diverso: le rose reali
+**non sono bilanciate** — le squadre vincenti hanno giocatori con stat/rating
+migliori, le perdenti peggiori. È la **verità dello snapshot** e va **abbracciata,
+non ri-bilanciata** (ri-livellare falserebbe la stagione reale).
+
+Esempio misurato (import 1999): **CLE** ha lineup ovr ~55.6 ma **rotazione ~47**
+(sotto media, com'era davvero), **BOS** rotazione ~55.5 (Pedro); negli scontri
+diretti **CLE vince solo ~35%**. Una squadra realmente scarsa dell'annata starebbe
+molto più in basso.
+
+Conseguenza sul cap: `salaryFromOverall` scala col talento, quindi una corazzata
+storica implica un **monte-ingaggi alto** che sfonderebbe un cap rigido. Perciò:
+
+- **Lega generata** → cap **rigido** (`hard`).
+- **Import storico** → cap **morbido** (`soft`, sforabile) o **off**: non impedire
+  di rivivere l'annata reale.
+
+Fondazione in `src/data/leagueMode.ts`: `LeagueMode` (`source` + `SalaryCapPolicy`
+con `mode: 'hard' | 'soft' | 'off'`), costanti `GENERATED_MODE`/`HISTORICAL_MODE`,
+e utilità `teamPayroll`/`capReport`. L'**enforce** vero (scambi/rinnovi che
+rispettano il cap) arriva col resto del layer gestionale.
+
 ## Scambi
 
 - Valutati da un **"valore giocatore"** = mix di:
@@ -46,6 +72,21 @@ si prepara la squadra, si conferma, si gioca la partita, poi di nuovo gestione.
 - **Semplificato**: un ingresso di giovani nel pool, senza le complicazioni di un
   draft annuale a più giri con scouting profondo.
 - Budget squadra basilare.
+
+### Draft storico — prospetti con tetto *possibile*, non *certo*
+
+Se si importa una **classe di draft reale**, il principio è lo stesso dell'import
+di stagione: importi il **passato** (chi c'era in quella classe), **simuli il
+futuro** (chi sboccia). I prospetti entrano con un **potenziale stimato**
+(`projectPotential`: headroom ampio perché giovani), **mai** pari al loro picco
+reale di carriera. Quindi:
+
+- ✅ *Potenzialmente* i talenti reali possono emergere (il tetto lo consente).
+- ❌ **Non** sai in anticipo *chi* diventerà campione: la realizzazione è
+  stocastica (`developmentTail` in `aging.ts` → breakout/bust).
+- Le **gemme di bassa scelta** che sorprendono sono una **feature**: la classe
+  *contiene* il talento, il sim decide chi lo realizza. Niente draft "col senno
+  di poi" a colpo sicuro.
 
 ## Nota di scope
 

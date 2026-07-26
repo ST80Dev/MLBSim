@@ -17,6 +17,7 @@ import {
   pitcherOverall,
   salaryFromOverall,
   clampRating,
+  projectPotential,
 } from '../engine/ratings';
 import type { Rng } from '../engine/rng';
 import { makeRng } from '../engine/rng';
@@ -56,8 +57,14 @@ const POS_SHAPE: Record<string, { field: number; power: number; speed: number; a
  * realta', piu' facilmente coi cognomi comuni nord-americani e latini. Evita
  * solo l'eccesso (i "3 Ortiz nello stesso lineup").
  */
+export interface GeneratedName {
+  full: string;
+  first: string;
+  last: string;
+}
+
 export interface NameFactory {
-  next(): string;
+  next(): GeneratedName;
 }
 
 const NAME_TOTAL_WEIGHT = NAME_ORIGINS.reduce((s, o) => s + o.weight, 0);
@@ -76,13 +83,14 @@ export function makeNameFactory(rng: Rng): NameFactory {
   };
 
   return {
-    next(): string {
-      let fallback = '';
+    next(): GeneratedName {
+      let fallback: GeneratedName = { full: '', first: '', last: '' };
       for (let attempt = 0; attempt < 10; attempt++) {
         const o = pickOrigin();
-        const full = `${rng.pick(o.first)} ${rng.pick(o.last)}`;
-        const last = full.slice(full.indexOf(' ') + 1);
-        fallback = full;
+        const first = rng.pick(o.first);
+        const last = rng.pick(o.last);
+        const full = `${first} ${last}`;
+        fallback = { full, first, last };
         const seen = lastCount.get(last) ?? 0;
         // Probabilita' di RIFIUTARE la pesca: cresce col numero di doppioni, cosi'
         // un secondo cognome uguale capita ogni tanto, un terzo e' raro, un
@@ -95,7 +103,7 @@ export function makeNameFactory(rng: Rng): NameFactory {
         if (reject > 0 && rng.next() < reject) continue;
         usedFull.add(full);
         lastCount.set(last, seen + 1);
-        return full;
+        return { full, first, last };
       }
       return fallback;
     },
@@ -108,11 +116,6 @@ function batHand(rng: Rng): Hand {
 }
 function throwHand(rng: Rng): ThrowHand {
   return rng.next() < 0.7 ? 'R' : 'L';
-}
-
-function potentialFrom(rng: Rng, overall: number, age: number): number {
-  const boost = age < 24 ? rng.gauss(8, 4) : age < 28 ? rng.gauss(3, 3) : rng.gauss(0, 2);
-  return clampRating(overall + Math.max(0, boost));
 }
 
 function makeBatterRatings(rng: Rng, position: Position): BatterRatings {
@@ -158,16 +161,19 @@ function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position
   const age = rng.int(21, 37);
   const ovr = batterOverall(ratings);
   const secondaryPosition = pickSecondary(rng, position);
+  const nm = names.next();
   return {
     id,
-    name: names.next(),
+    name: nm.full,
+    firstName: nm.first,
+    lastName: nm.last,
     bats: batHand(rng),
     position,
     ...(secondaryPosition ? { secondaryPosition } : {}),
     ratings,
     stats,
     age,
-    potential: potentialFrom(rng, ovr, age),
+    potential: projectPotential(rng, ovr, age),
     salary: salaryFromOverall(ovr),
     retired: false,
   };
@@ -178,16 +184,19 @@ function makePitcher(rng: Rng, names: NameFactory, id: string, role: PitcherRole
   const stats = derivePitcherStats(ratings);
   const age = rng.int(21, 37);
   const ovr = pitcherOverall(ratings);
+  const nm = names.next();
   return {
     id,
-    name: names.next(),
+    name: nm.full,
+    firstName: nm.first,
+    lastName: nm.last,
     throws: throwHand(rng),
     role,
     ratings,
     stats,
     stamina: deriveStamina(ratings.stamina, role),
     age,
-    potential: potentialFrom(rng, ovr, age),
+    potential: projectPotential(rng, ovr, age),
     salary: salaryFromOverall(ovr),
     retired: false,
   };
