@@ -926,6 +926,9 @@ export interface LiveSituation {
   awayScore: number;
   homeScore: number;
   bases: [boolean, boolean, boolean];
+  /** Nomi dei corridori in base (1B, 2B, 3B) o null se libera. Serve alla UI
+   *  per mostrare l'etichetta col nome accanto al marker della base. */
+  baseRunners: [string | null, string | null, string | null];
   offenseSide: 'away' | 'home';
   battingTeam: Team;
   fieldingTeam: Team;
@@ -952,6 +955,11 @@ export function situation(l: LiveGame): LiveSituation {
     awayScore: l.awaySide.runs,
     homeScore: l.homeSide.runs,
     bases: [!!l.bases[0], !!l.bases[1], !!l.bases[2]],
+    baseRunners: [
+      l.bases[0]?.batter.name ?? null,
+      l.bases[1]?.batter.name ?? null,
+      l.bases[2]?.batter.name ?? null,
+    ],
     offenseSide: l.half === 'top' ? 'away' : 'home',
     battingTeam: off.team,
     fieldingTeam: def.team,

@@ -102,12 +102,42 @@ cambio di quei parametri, e forza il re-render dopo ogni azione.
   responsabilità sono dell'utente. Il progetto non fornisce né committa immagini
   reali. Vedi `public/stadiums/README.md`.
 
+### Schermata dedicata «🎯 Stadi» (calibrazione fuori partita)
+
+Con il calendario (niente più partite casuali "al volo") non si può più contare
+sul giocare una gara in ogni stadio per calibrarlo. Il tab **🎯 Stadi** apre una
+**schermata dedicata** (`CalibrationScreen`) che permette di calibrare
+**qualsiasi stadio** senza scendere in campo.
+
+- **Plancia identica al match.** La schermata riusa lo **stesso** componente
+  `GameScreen` della partita (statbar + campo + riquadri lineup/cronaca + barra
+  controlli) su una **partita "mock"** (`createLiveGame`, seme fisso, mai fatta
+  avanzare). Così la foto e i marker appaiono con **la stessa cornice e le
+  stesse proporzioni** che si vedranno in gara: ciò che calibri è ciò che
+  comparirà, senza rischio di doverlo rifare.
+- **Selettore di stadio** in cima al pannello (`<select>` con badge **📷** su
+  chi ha la foto): carica la calibrazione di quello stadio.
+- **Parte già in piazzamento manuale.** Se la calibrazione non ha marker manuali
+  li **semina dalla proiezione** (`withManualMarkers`), così si trascina subito.
+- **Nomi campione** (dai roster) su corridori e battitore, per posizionarne le
+  etichette anche a basi vuote.
+- **Sposta tutti in blocco** (croce ▲◀▼▶): trasla **tutti** i marker insieme
+  mantenendo le distanze, utile se cambia l'inquadratura della foto.
+- **🔒 Blocca marker alla foto** (default attivo): a marker manuali presenti,
+  ogni **zoom/pan** dello sfondo **ri-aggancia** i marker alla foto
+  (`relockMarkers`), così restano incollati proporzionalmente invece di "sfilarsi".
+
+Stessa **persistenza** del resto (**Esporta file → `<STEM>.json`**). Il tab è
+**bloccato durante una partita live**. Il vecchio pulsante **🎯 Calibra campo**
+dell'header resta disponibile *in Partita* (stesso `CalibrationPanel`).
+
 ### Calibrazione del campo sulla foto (🎯 Calibra campo)
 
 Le foto reali sono scattate da angolazioni diverse, non perfettamente in asse
-con casa base. Il pulsante **🎯 Calibra campo** (header, in Partita) apre un
-**pannello live** (`CalibrationPanel`) che ri-proietta i marker tenendo **casa
-base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
+con casa base. Il pulsante **🎯 Calibra campo** (header, in Partita) e la
+schermata **🎯 Stadi** aprono un **pannello live** (`CalibrationPanel`) che
+ri-proietta i marker tenendo **casa base come perno**. Parametri
+(`src/data/stadiumCalibration.ts`):
 
 - `homeX`/`homeY`: posizione di casa base (perno).
 - `spreadX`/`depthY`: larghezza e profondità dei marker.
@@ -139,6 +169,17 @@ nel file `<STEM>.json` via **Esporta file**; se presenti, hanno la **precedenza*
 sulla proiezione parametrica. «↩︎ Torna ai parametri» le rimuove. Convenzione
 anti-sovrapposizione: etichette difensori **sopra**, basi/runner **sotto**.
 Durante il drag i pannelli laterali sono non-interattivi (`.gamefield.editing`).
+
+**Etichette-nome su basi e battitore.** Oltre ai 9 difensori (che hanno già
+l'etichetta col ruolo+cognome), anche i **3 marker delle basi** e il **marker
+del battitore** (casa base) portano un'**etichetta col nome**, agganciata al
+marker: si sposta **insieme** ad esso nel drag (come i difensori). Sotto la
+base compare il cognome del corridore, sotto il battitore quello di chi è alla
+battuta. In partita l'etichetta del corridore appare **solo se la base è
+occupata** (il motore espone `LiveSituation.baseRunners`); in calibrazione (e
+nella schermata **🎯 Stadi**) sono sempre visibili — con nomi campione — per
+poterle posizionare. Il `Diamond` riceve i nomi via le prop `runners` (basi) e
+`batterName`.
 
 **Default dedicato alle foto**: gli stadi con foto partono da
 `PHOTO_DEFAULT_CALIBRATION` (casa base più in alto e esterni un po' compressi),

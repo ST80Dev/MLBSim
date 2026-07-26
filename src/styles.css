@@ -2288,6 +2288,76 @@ table {
   stroke-dasharray: 3 3;
 }
 
+/* --- Schermata dedicata "🎯 Stadi": selettore + blocco marker + lock ---- */
+/* Il selettore di stadio in cima al pannello di calibrazione. */
+.cal-picker {
+  margin-bottom: 6px;
+}
+.cal-select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+/* Croce direzionale per spostare tutti i marker in blocco. */
+.cal-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  grid-template-rows: repeat(2, 30px);
+  gap: 4px;
+  justify-content: center;
+  margin: 4px 0 8px;
+}
+.cal-padbtn {
+  border: 1px solid var(--line);
+  background: var(--card2);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cal-padbtn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--card2));
+}
+.cal-padbtn.up {
+  grid-column: 2;
+  grid-row: 1;
+}
+.cal-padbtn.left {
+  grid-column: 1;
+  grid-row: 2;
+}
+.cal-padbtn.right {
+  grid-column: 3;
+  grid-row: 2;
+}
+.cal-padbtn.down {
+  grid-column: 2;
+  grid-row: 2;
+}
+.cal-lock {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 6px 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(79, 157, 255, 0.08);
+  margin-bottom: 8px;
+}
+
 /* --- Editor "Gestisci" (Fase 2): foglio partita --------------------- */
 .manage-head {
   display: flex;

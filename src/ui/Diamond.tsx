@@ -86,6 +86,49 @@ function lastNameOf(name: string): string {
   return i < 0 ? name : name.slice(i + 1);
 }
 
+/** Etichetta col solo nome (senza ruolo), per corridori in base e battitore.
+ *  Sta SOTTO il marker (convenzione anti-sovrapposizione) e lo segue nel drag. */
+function NameChip({
+  x,
+  y,
+  name,
+  color,
+}: {
+  x: number;
+  y: number;
+  name: string;
+  color: string;
+}) {
+  const label = lastNameOf(name);
+  const w = Math.max(32, label.length * 6.4 + 12);
+  const lx = Math.min(VB.w - 8 - w / 2, Math.max(8 + w / 2, x));
+  return (
+    <g transform={`translate(${lx}, ${y})`}>
+      <rect
+        x={-w / 2}
+        y={0}
+        width={w}
+        height={16}
+        rx={5}
+        fill="rgba(6,12,24,0.82)"
+        stroke={color}
+        strokeWidth={1.1}
+      />
+      <text
+        x={0}
+        y={11.5}
+        textAnchor="middle"
+        fontSize={10.5}
+        fontWeight={700}
+        fill="#eaf1ff"
+        fontFamily="system-ui, sans-serif"
+      >
+        {label}
+      </text>
+    </g>
+  );
+}
+
 function playerAt(team: Team, pos: Position): string {
   if (pos === 'P') return team.rotation[0]?.name ?? '';
   const b = team.lineup.find((p) => p.position === pos);
@@ -151,6 +194,8 @@ export function Diamond({
   away,
   background,
   bases,
+  runners,
+  batterName,
   cal = DEFAULT_CALIBRATION,
   editable,
   onMarkerMove,
@@ -159,6 +204,12 @@ export function Diamond({
   away: Team;
   background?: boolean;
   bases?: [boolean, boolean, boolean];
+  /** Nomi dei corridori in base (1B, 2B, 3B); null/assente = base libera.
+   *  In calibrazione (editable) le etichette si mostrano comunque, per poterle
+   *  posizionare; in partita solo sulle basi occupate. */
+  runners?: (string | null)[];
+  /** Nome del battitore a casa base (etichetta accanto al marker battitore). */
+  batterName?: string | null;
   cal?: FieldCalibration;
   editable?: boolean;
   onMarkerMove?: (id: string, pos: { x: number; y: number }) => void;
@@ -297,6 +348,10 @@ export function Diamond({
       {baseData.map(([id, b, i, lab]) => {
         const on = !!bases && bases[i];
         const s = on ? 8 : 5;
+        const rname = runners?.[i] ?? null;
+        // Etichetta corridore: in calibrazione sempre (per posizionarla), in
+        // partita solo se la base è occupata e conosciamo il nome.
+        const showRunner = editable || (on && !!rname);
         return grab(
           id,
           b.x,
@@ -313,10 +368,11 @@ export function Diamond({
               transform={`rotate(45 ${b.x} ${b.y})`}
             />
             {editable && (
-              <text x={b.x} y={b.y + 18} textAnchor="middle" fontSize={10} fontWeight={800} fill="#ffd15c">
+              <text x={b.x} y={b.y - 12} textAnchor="middle" fontSize={10} fontWeight={800} fill="#ffd15c">
                 {lab}
               </text>
             )}
+            {showRunner && <NameChip x={b.x} y={b.y + 12} name={rname ?? 'Corridore'} color="#ffd15c" />}
           </>,
         );
       })}
@@ -334,7 +390,17 @@ export function Diamond({
         'batter',
         pBatter.x,
         pBatter.y,
-        <circle cx={pBatter.x} cy={pBatter.y} r={7.5} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.4} />,
+        <>
+          <circle cx={pBatter.x} cy={pBatter.y} r={7.5} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.4} />
+          {(editable || !!batterName) && (
+            <NameChip
+              x={pBatter.x}
+              y={pBatter.y + 10}
+              name={batterName || 'Battitore'}
+              color={away.primaryColor || '#f4f6fb'}
+            />
+          )}
+        </>,
       )}
 
       {FIELDERS.map((pos) => {
