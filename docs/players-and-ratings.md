@@ -112,6 +112,10 @@ Le linee di **stagione proiettata** (backstory "scorsa"/"storico" nel roster e l
   giocato molto — coda ~12%).
 - **Età** (`ageplayFactor`) — giovanissimi (call-up/part-time) e veterani
   (logorio) giocano meno del picco 24-34.
+- **Overall** (`ovrplayFactor`) — i migliori reggono il posto (~1.0 dal 3° stellato
+  in su), i **1-2 stelle giocano poco** anche se in rosa (alternati, spediti in
+  minor, rimpiazzati): un 2★ ha mediana ~42 gare, ~92 se costretto titolare in una
+  squadra debole, contro le ~160 di un 4★ titolare.
 - **Annata** — forma/infortunio (`prof.paMult`), che fa galleggiare le gare.
 
 La squadra dell'utente, appena gioca, usa comunque le stat **reali** dai box score

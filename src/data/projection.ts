@@ -1,5 +1,5 @@
 import type { Batter, Pitcher } from '../engine/types';
-import { deriveBatterStats, derivePitcherStats, pitcherOverall, RATING_AVG } from '../engine/ratings';
+import { deriveBatterStats, derivePitcherStats, batterOverall, pitcherOverall, RATING_AVG } from '../engine/ratings';
 import { makeRng, clamp } from '../engine/rng';
 import type { SeasonBat, SeasonPit } from './season';
 
@@ -185,13 +185,22 @@ const R = Math.round;
 //    la panchina e soprattutto le RISERVE hanno spread ampio, dal "primo backup"
 //    quasi-titolare al ragazzo sceso in campo pochissimo. Coda rara nelle riserve:
 //    chi e' arrivato da un'altra squadra e ha accumulato molte gare.
+//  - OVERALL: i giocatori scarsi (1-2 stelle) giocano poco anche se in rosa
+//    (alternati, spediti in minor, rimpiazzati). I 3+ stelle reggono il posto.
 // La componente d'annata (forma/infortunio) resta in `prof.paMult`.
 function ageplayFactor(age: number): number {
   if (age <= 23) return 0.70 + (age - 21) * 0.1; // 21->.70 22->.80 23->.90
   if (age >= 35) return clamp(1 - (age - 34) * 0.13, 0.5, 1); // 35->.87 ... 37->.61
   return 1;
 }
-function seasonalPA(seed: number, id: string, year: number, tier: BatTier, age: number, paMult: number): number {
+/** Piu' impiego ai migliori: ~1.0 dal 3° stellato in su, cala per i 2 stelle e
+ *  crolla per gli scarsi. Cap in alto (il tetto e' comunque la fascia di rosa). */
+function ovrplayFactor(ovr: number): number {
+  return clamp(1 + (ovr - 70) / 32, 0.4, 1.1);
+}
+function seasonalPA(
+  seed: number, id: string, year: number, tier: BatTier, age: number, ovr: number, paMult: number,
+): number {
   const rng = makeRng(keyNum(seed, id, year, 'pa-time'));
   let roleF = 1;
   if (tier === 'bench') {
@@ -200,7 +209,7 @@ function seasonalPA(seed: number, id: string, year: number, tier: BatTier, age: 
     roleF = clamp(rng.gauss(0.85, 0.5), 0.1, 1.9);
     if (rng.next() < 0.12) roleF = clamp(rng.gauss(2.5, 0.6), 1.6, 3.6); // ex-titolare altrove
   }
-  return Math.max(1, R(TIER_PA[tier] * paMult * ageplayFactor(age) * roleF));
+  return Math.max(1, R(TIER_PA[tier] * paMult * ageplayFactor(age) * ovrplayFactor(ovr) * roleF));
 }
 
 function batterFull(b: Batter, pa: number, prof: BatProfile): SeasonBat {
@@ -248,8 +257,10 @@ function batterFull(b: Batter, pa: number, prof: BatProfile): SeasonBat {
 
 function pitcherFull(p: Pitcher, prof: PitProfile): SeasonPit {
   const load = PITCH_LOAD[p.role] ?? PITCH_LOAD.RP;
-  // Carico ridotto per i giovanissimi (limiti d'inning, call-up) e i veterani.
-  const ageF = ageplayFactor(p.age);
+  const ovr = pitcherOverall(p.ratings);
+  // Carico ridotto per i giovanissimi (limiti d'inning, call-up), i veterani e i
+  // lanciatori scarsi (1-2 stelle: pochi inning, rimpiazzati). ipMult = annata.
+  const ageF = ageplayFactor(p.age) * ovrplayFactor(ovr);
   const bf = Math.max(1, R(load.bf * prof.ipMult * ageF));
   const base = derivePitcherStats(p.ratings, bf);
   const bb = R(base.bb * prof.bbMult);
@@ -264,7 +275,6 @@ function pitcherFull(p: Pitcher, prof: PitProfile): SeasonPit {
   const load2 = prof.ipMult * ageF;
   const g = Math.max(1, R(load.g * load2));
   const gs = R(load.gs * load2);
-  const ovr = pitcherOverall(p.ratings);
   const wp = clamp(0.5 + (ovr - RATING_AVG) / 60, 0.35, 0.68);
   const dec = R((p.role === 'SP' ? 21 : p.role === 'CL' ? 6 : 8) * load2);
   const w = clamp(R(dec * wp * prof.wLuck), 0, dec);
@@ -299,7 +309,7 @@ export function projectBatterSeason(b: Batter, tier: BatTier, opts: ProjectOpts)
   const total = opts.total ?? SEASON_GAMES;
   const gp = clamp(opts.day, 0, total);
   const prof = batterProfile(opts.seed, b.id, opts.year);
-  const pa = seasonalPA(opts.seed, b.id, opts.year, tier, b.age, prof.paMult);
+  const pa = seasonalPA(opts.seed, b.id, opts.year, tier, b.age, batterOverall(b.ratings), prof.paMult);
   const full = batterFull(b, pa, prof);
   if (gp <= 0) return { g: 0, ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, double: 0, triple: 0, hr: 0, sb: 0, cs: 0 };
   const k = (salt: string) => keyNum(opts.seed, b.id, opts.year, salt);
