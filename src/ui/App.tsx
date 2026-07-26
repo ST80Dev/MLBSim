@@ -61,6 +61,8 @@ import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumI
 import type { StadiumImageCandidate } from '../data/stadiumImages';
 import {
   getCalibration,
+  getCalibrationFor,
+  calibratedVariants,
   calibrationStem,
   PHOTO_DEFAULT_CALIBRATION,
   CALIBRATION_RANGE,
@@ -177,9 +179,19 @@ export function App() {
   const homeId = teams.home.id;
   // Calibrazione dal repository (STADIUM_CALIBRATION, committato) o default.
   const [cal, setCal] = useState<FieldCalibration>(() => getCalibration(homeId));
+  // Ad ogni gara, lo sfondo dello stadio di casa varia (in modo deterministico
+  // per-partita) tra le foto CALIBRATE disponibili: principale + eventuali
+  // doppioni `<ID>2.jpg`… così i marker restano allineati. Se ce n'è una sola,
+  // resta quella; se nessuna è calibrata, si usa la calibrazione di default.
   useEffect(() => {
-    setCal(getCalibration(homeId));
-  }, [homeId]);
+    const variants = calibratedVariants(homeId);
+    if (variants.length === 0) {
+      setCal(getCalibration(homeId));
+      return;
+    }
+    const pick = variants[Math.abs(gameSeed(leagueSeed, gnum)) % variants.length];
+    setCal(getCalibrationFor(homeId, pick.image));
+  }, [homeId, gnum, leagueSeed]);
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
@@ -737,6 +749,15 @@ function calEntry(id: string, cal: FieldCalibration): string {
 /** Seme fisso della partita mock (nessun RNG interattivo: resta al 1° inning). */
 const CAL_MOCK_SEED = 20260726;
 
+/** Una foto-stadio selezionabile (principale o doppione), rilevata nel repo. */
+interface PhotoOption {
+  teamId: string;
+  /** undefined = principale; altrimenti `stadiums/<ID><n>.jpg`. */
+  image?: string;
+  label: string;
+  key: string;
+}
+
 function CalibrationScreen({
   league,
   teamId,
@@ -748,35 +769,33 @@ function CalibrationScreen({
   setTeamId: (id: string) => void;
   onClose: () => void;
 }) {
-  // Rileva quali stadi hanno davvero la foto principale nel repo (per il badge
-  // 📷 e il filtro del selettore): prova a caricarle tutte una volta.
-  const [photos, setPhotos] = useState<Set<string>>(new Set());
+  // Elenca TUTTE le foto presenti nel repo — principale E doppioni (`<ID>2.jpg`,
+  // `<ID>3.jpg`…) — provando a caricarle: così sono selezionabili e calibrabili
+  // a sé, anche le varianti non ancora calibrate.
+  const [options, setOptions] = useState<PhotoOption[]>([]);
   useEffect(() => {
     let alive = true;
-    const ok: Record<string, boolean> = {};
-    Promise.all(
-      league.map(
-        (t) =>
-          new Promise<void>((res) => {
-            const url = stadiumImage(t.id);
-            if (!url) {
-              ok[t.id] = false;
-              return res();
-            }
+    const jobs: Promise<PhotoOption | null>[] = [];
+    for (const t of league) {
+      stadiumImageCandidates(t.id).forEach((c, i) => {
+        jobs.push(
+          new Promise((res) => {
             const img = new Image();
-            img.onload = () => {
-              ok[t.id] = true;
-              res();
-            };
-            img.onerror = () => {
-              ok[t.id] = false;
-              res();
-            };
-            img.src = url;
+            img.onload = () =>
+              res({
+                teamId: t.id,
+                image: i === 0 ? undefined : c.path,
+                label: `📷 ${t.abbrev} · ${c.label} — ${t.ballpark}`,
+                key: `${t.id}|${i === 0 ? '' : c.path}`,
+              });
+            img.onerror = () => res(null);
+            img.src = c.url;
           }),
-      ),
-    ).then(() => {
-      if (alive) setPhotos(new Set(Object.keys(ok).filter((id) => ok[id])));
+        );
+      });
+    }
+    Promise.all(jobs).then((r) => {
+      if (alive) setOptions(r.filter((o): o is PhotoOption => o !== null));
     });
     return () => {
       alive = false;
@@ -796,12 +815,19 @@ function CalibrationScreen({
   const sit = useMemo(() => situation(live), [live]);
   const [statsMode, setStatsMode] = useState<StatsMode>('season');
 
-  // Calibrazione dello stadio scelto: parte GIÀ in piazzamento manuale (marker
-  // seminati dalla proiezione), così si trascina subito senza passaggi.
-  const [cal, setCal] = useState<FieldCalibration>(() => withManualMarkers(getCalibration(teamId)));
-  useEffect(() => {
-    setCal(withManualMarkers(getCalibration(teamId)));
-  }, [teamId]);
+  // Foto selezionata (principale o doppione) e sua calibrazione. Parte GIÀ in
+  // piazzamento manuale (marker seminati dalla proiezione se assenti).
+  const [image, setImage] = useState<string | undefined>(undefined);
+  const [cal, setCal] = useState<FieldCalibration>(() =>
+    withManualMarkers(getCalibrationFor(teamId, undefined)),
+  );
+  // Selezionare una foto (dal dropdown o dai chip varianti) ne CARICA la
+  // calibrazione salvata: ogni doppione si calibra e si esporta a sé.
+  const selectPhoto = (tId: string, img?: string) => {
+    setTeamId(tId);
+    setImage(img);
+    setCal(withManualMarkers(getCalibrationFor(tId, img)));
+  };
 
   const editing = !!cal.markers;
   const moveMarker = (id: string, pos: { x: number; y: number }) => {
@@ -813,18 +839,25 @@ function CalibrationScreen({
   const sampleRunners = team.lineup.slice(0, 3).map((b) => b.name);
   const sampleBatter = away.lineup[0]?.name ?? sit.batter.name;
 
+  const currentKey = `${teamId}|${image ?? ''}`;
+  const opts: PhotoOption[] = options.length
+    ? options
+    : [{ teamId, image: undefined, label: `📷 ${team.abbrev} · Principale — ${team.ballpark}`, key: currentKey }];
+
   const picker = (
     <div className="cal-picker">
-      <div className="cal-group">Stadio</div>
+      <div className="cal-group">Stadio / foto (incl. doppioni)</div>
       <select
         className="cal-select"
-        value={teamId}
-        onChange={(e) => setTeamId(e.target.value)}
+        value={currentKey}
+        onChange={(e) => {
+          const o = opts.find((x) => x.key === e.target.value);
+          if (o) selectPhoto(o.teamId, o.image);
+        }}
       >
-        {league.map((t) => (
-          <option key={t.id} value={t.id}>
-            {photos.has(t.id) ? '📷 ' : '— '}
-            {t.abbrev} · {t.ballpark}
+        {opts.map((o) => (
+          <option key={o.key} value={o.key}>
+            {o.label}
           </option>
         ))}
       </select>
@@ -853,6 +886,7 @@ function CalibrationScreen({
         onClose={onClose}
         picker={picker}
         blockTools
+        onPickImage={(img) => selectPhoto(teamId, img)}
       />
     </>
   );
@@ -901,6 +935,7 @@ function CalibrationPanel({
   onClose,
   picker,
   blockTools,
+  onPickImage,
 }: {
   team: Team;
   hasPhoto: boolean;
@@ -911,6 +946,9 @@ function CalibrationPanel({
   picker?: ReactNode;
   /** Mostra spostamento in blocco + "blocca alla foto" (schermata Stadi). */
   blockTools?: boolean;
+  /** Se presente, scegliere una variante-foto delega qui (per ricaricarne la
+   *  calibrazione salvata) invece di limitarsi a cambiare `cal.image`. */
+  onPickImage?: (path: string | undefined) => void;
 }) {
   const [copied, setCopied] = useState(false);
   // "Blocca marker alla foto": quando è attivo, ogni zoom/pan dello sfondo
@@ -979,7 +1017,11 @@ function CalibrationPanel({
   };
 
   const pickImage = (path: string | undefined) => {
-    setCal({ ...cal, image: path });
+    if (onPickImage) {
+      onPickImage(path);
+    } else {
+      setCal({ ...cal, image: path });
+    }
     setCopied(false);
   };
 

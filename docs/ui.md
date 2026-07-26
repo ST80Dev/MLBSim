@@ -115,8 +115,12 @@ sul giocare una gara in ogni stadio per calibrarlo. Il tab **🎯 Stadi** apre u
   avanzare). Così la foto e i marker appaiono con **la stessa cornice e le
   stesse proporzioni** che si vedranno in gara: ciò che calibri è ciò che
   comparirà, senza rischio di doverlo rifare.
-- **Selettore di stadio** in cima al pannello (`<select>` con badge **📷** su
-  chi ha la foto): carica la calibrazione di quello stadio.
+- **Selettore di stadio/foto** in cima al pannello (`<select>`): elenca **tutte**
+  le foto presenti nel repo — principale **e doppioni** (`<ID>2.jpg`,
+  `<ID>3.jpg`… come *Alt 2 / Alt 3*, rilevati provando a caricarli). Sceglierne
+  una **carica la sua calibrazione** (`getCalibrationFor`, stem-specifica) e la
+  esporta a sé (`<STEM>.json`): così **ogni doppione si calibra separatamente**.
+  Anche i chip *Principale/Alt* del pannello passano per lo stesso caricamento.
 - **Parte già in piazzamento manuale.** Se la calibrazione non ha marker manuali
   li **semina dalla proiezione** (`withManualMarkers`), così si trascina subito.
 - **Nomi campione** (dai roster) su corridori e battitore, per posizionarne le
@@ -130,6 +134,17 @@ sul giocare una gara in ogni stadio per calibrarlo. Il tab **🎯 Stadi** apre u
 Stessa **persistenza** del resto (**Esporta file → `<STEM>.json`**). Il tab è
 **bloccato durante una partita live**. Il vecchio pulsante **🎯 Calibra campo**
 dell'header resta disponibile *in Partita* (stesso `CalibrationPanel`).
+
+### Sfondo-stadio variabile in partita
+
+Ad ogni gara lo sfondo dello stadio di **casa** varia tra le foto **calibrate**
+disponibili (principale + doppioni con file JSON): `calibratedVariants(homeId)`
+elenca solo quelle già allineate — così i marker restano coerenti — e la scelta
+è **deterministica per-partita** (indice dal `gameSeed`), quindi stabile nella
+gara ma diversa tra una gara e l'altra. Con una sola foto calibrata resta quella;
+senza nessuna, si usa la calibrazione di default. Le varianti **non ancora
+calibrate** non entrano nella rotazione (si mostrano solo dopo averle sistemate
+nella schermata 🎯 Stadi).
 
 ### Calibrazione del campo sulla foto (🎯 Calibra campo)
 
