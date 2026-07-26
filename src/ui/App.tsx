@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { Batter, Pitcher, Position, Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
 import type { LiveGame, LiveSituation } from '../engine/game';
@@ -101,6 +102,8 @@ export function App() {
   const [statsMode, setStatsMode] = useState<StatsMode>('game');
   const [recapOpen, setRecapOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
+  // Stadio selezionato nella schermata dedicata "🎯 Stadi".
+  const [calTeamId, setCalTeamId] = useState('');
   const [, forceTick] = useReducer((x) => x + 1, 0);
   // Assetti applicati (per teamId) che entrano DAVVERO nella simulazione: la
   // squadra gestita scende in campo con l'ordine di battuta e la difesa scelti
@@ -185,7 +188,15 @@ export function App() {
   const inLiveGame = view === 'game' && !!activeGame && !final;
   // Sfondo-stadio ambientale (attenuato) dietro tutta la plancia: riempie i bordi
   // e sfuma sotto testata/pannelli, per ridurre il nero. La stessa foto scelta.
-  const backdropUrl = cal.image ? assetUrl(cal.image) : stadiumImage(homeId);
+  // Layout "immersivo" (100% altezza + sfondo) sia in partita sia in calibrazione.
+  const calId = calTeamId || league[0].id;
+  const immersive = view === 'game' || view === 'calibrate';
+  const backdropUrl =
+    view === 'calibrate'
+      ? stadiumImage(calId)
+      : cal.image
+        ? assetUrl(cal.image)
+        : stadiumImage(homeId);
   // Modalità piazzamento manuale dei marker (attiva col pannello aperto).
   const manual = !!cal.markers;
   const editing = calOpen && manual && !!stadiumImage(homeId);
@@ -250,8 +261,8 @@ export function App() {
   };
 
   return (
-    <div className={view === 'game' ? 'app app-game' : 'app'}>
-      {view === 'game' && backdropUrl && (
+    <div className={immersive ? 'app app-game' : 'app'}>
+      {immersive && backdropUrl && (
         <div
           className="stadium-backdrop"
           style={{ backgroundImage: `url("${backdropUrl}")` }}
@@ -341,79 +352,37 @@ export function App() {
       </header>
 
       {view === 'game' && activeGame && (
-        <div className="game-screen">
-          <StatBar
-            result={result}
-            sit={sit}
-            statsMode={statsMode}
-            setStatsMode={setStatsMode}
-          />
-
-          <div className={editing ? 'gamefield editing' : 'gamefield'}>
-            <Diamond
-              home={result.home}
-              away={result.away}
-              background
-              bases={sit.bases}
-              runners={sit.baseRunners}
-              batterName={sit.batter.name}
-              cal={cal}
-              editable={editing}
-              onMarkerMove={moveMarker}
-            />
-
-            {!editing && <PlayBanner result={result} />}
-
-            <div className="cronaca-corner left">
-              <CronacaTeam result={result} side="away" />
-            </div>
-            <div className="cronaca-corner right">
-              <CronacaTeam result={result} side="home" />
-            </div>
-
-            <div className="lineup-corner left">
-              <LineupSide
-                side="away"
-                team={result.away}
-                stats={result.awayStats}
-                sit={sit}
-                mode={statsMode}
-                setMode={setStatsMode}
+        <GameScreen
+          result={result}
+          sit={sit}
+          statsMode={statsMode}
+          setStatsMode={setStatsMode}
+          editing={editing}
+          cal={cal}
+          onMarkerMove={moveMarker}
+          runners={sit.baseRunners}
+          batterName={sit.batter.name}
+          controls={
+            final ? (
+              <FinalOverlay
+                result={result}
+                controlled={controlled}
+                newLabel={isSeasonGame ? 'Conferma e avanza ▸' : 'Al calendario ▸'}
+                onNew={
+                  isSeasonGame
+                    ? advanceDay
+                    : () => {
+                        setActiveGame(null);
+                        setView('home');
+                      }
+                }
+                onRecap={() => setRecapOpen(true)}
               />
-            </div>
-            <div className="lineup-corner right">
-              <LineupSide
-                side="home"
-                team={result.home}
-                stats={result.homeStats}
-                sit={sit}
-                mode={statsMode}
-                setMode={setStatsMode}
-              />
-            </div>
-
-            <div className="controls-overlay">
-              {final ? (
-                <FinalOverlay
-                  result={result}
-                  controlled={controlled}
-                  newLabel={isSeasonGame ? 'Conferma e avanza ▸' : 'Al calendario ▸'}
-                  onNew={
-                    isSeasonGame
-                      ? advanceDay
-                      : () => {
-                          setActiveGame(null);
-                          setView('home');
-                        }
-                  }
-                  onRecap={() => setRecapOpen(true)}
-                />
-              ) : (
-                <ActionBar live={live} sit={sit} act={act} />
-              )}
-            </div>
-          </div>
-        </div>
+            ) : (
+              <ActionBar live={live} sit={sit} act={act} />
+            )
+          }
+        />
       )}
 
       {view === 'home' && (
@@ -450,7 +419,12 @@ export function App() {
       {view === 'standings' && <StandingsPage league={league} season={season} managedId={myId} />}
       {view === 'franchise' && <FranchisePage team={managedTeam} />}
       {view === 'calibrate' && (
-        <CalibrationScreen league={league} onClose={() => setView('home')} />
+        <CalibrationScreen
+          league={league}
+          teamId={calId}
+          setTeamId={setCalTeamId}
+          onClose={() => setView('home')}
+        />
       )}
 
       {recapOpen && (
@@ -471,6 +445,89 @@ export function App() {
           onClose={() => setCalOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plancia di gioco (statbar + campo con marker + riquadri lineup/cronaca +
+// overlay controlli). Estratta perché la usano IDENTICA sia la partita sia la
+// schermata di calibrazione "🎯 Stadi": così ciò che si calibra è esattamente
+// ciò che comparirà in match (stessa cornice, stesse proporzioni del campo).
+// ---------------------------------------------------------------------------
+
+function GameScreen({
+  result,
+  sit,
+  statsMode,
+  setStatsMode,
+  editing,
+  cal,
+  onMarkerMove,
+  runners,
+  batterName,
+  controls,
+}: {
+  result: GameResult;
+  sit: LiveSituation;
+  statsMode: StatsMode;
+  setStatsMode: (m: StatsMode) => void;
+  editing: boolean;
+  cal: FieldCalibration;
+  onMarkerMove: (id: string, pos: { x: number; y: number }) => void;
+  runners?: (string | null)[];
+  batterName?: string | null;
+  controls: ReactNode;
+}) {
+  return (
+    <div className="game-screen">
+      <StatBar result={result} sit={sit} statsMode={statsMode} setStatsMode={setStatsMode} />
+
+      <div className={editing ? 'gamefield editing' : 'gamefield'}>
+        <Diamond
+          home={result.home}
+          away={result.away}
+          background
+          bases={sit.bases}
+          runners={runners}
+          batterName={batterName}
+          cal={cal}
+          editable={editing}
+          onMarkerMove={onMarkerMove}
+        />
+
+        {!editing && <PlayBanner result={result} />}
+
+        <div className="cronaca-corner left">
+          <CronacaTeam result={result} side="away" />
+        </div>
+        <div className="cronaca-corner right">
+          <CronacaTeam result={result} side="home" />
+        </div>
+
+        <div className="lineup-corner left">
+          <LineupSide
+            side="away"
+            team={result.away}
+            stats={result.awayStats}
+            sit={sit}
+            mode={statsMode}
+            setMode={setStatsMode}
+          />
+        </div>
+        <div className="lineup-corner right">
+          <LineupSide
+            side="home"
+            team={result.home}
+            stats={result.homeStats}
+            sit={sit}
+            mode={statsMode}
+            setMode={setStatsMode}
+          />
+        </div>
+
+        <div className="controls-overlay">{controls}</div>
+      </div>
     </div>
   );
 }
@@ -670,14 +727,29 @@ function calEntry(id: string, cal: FieldCalibration): string {
 
 // ---------------------------------------------------------------------------
 // Schermata dedicata "🎯 Stadi": calibra i marker di QUALSIASI stadio senza
-// dover giocare una partita lì. Sceglie la squadra, mostra il campo con la foto
-// e il pannello di calibrazione, con etichette-nome campione su basi e battitore
-// così da poterle posizionare. Persistenza = stessa (Esporta file → JSON).
+// giocarci una partita. Rende la PLANCIA IDENTICA a un match (GameScreen su una
+// partita "mock"), così la foto e i marker appaiono con la stessa cornice e le
+// stesse proporzioni che si vedranno in gara — niente rischio di ricalibrare.
+// Parte già in piazzamento manuale; il pannello ospita il selettore di stadio,
+// lo spostamento in blocco e il "blocca alla foto". Persistenza = Esporta file.
 // ---------------------------------------------------------------------------
 
-function CalibrationScreen({ league, onClose }: { league: Team[]; onClose: () => void }) {
+/** Seme fisso della partita mock (nessun RNG interattivo: resta al 1° inning). */
+const CAL_MOCK_SEED = 20260726;
+
+function CalibrationScreen({
+  league,
+  teamId,
+  setTeamId,
+  onClose,
+}: {
+  league: Team[];
+  teamId: string;
+  setTeamId: (id: string) => void;
+  onClose: () => void;
+}) {
   // Rileva quali stadi hanno davvero la foto principale nel repo (per il badge
-  // 📷 e il filtro "solo con foto"): prova a caricarle tutte una volta.
+  // 📷 e il filtro del selettore): prova a caricarle tutte una volta.
   const [photos, setPhotos] = useState<Set<string>>(new Set());
   useEffect(() => {
     let alive = true;
@@ -711,84 +783,114 @@ function CalibrationScreen({ league, onClose }: { league: Team[]; onClose: () =>
     };
   }, [league]);
 
-  const [teamId, setTeamId] = useState(league[0].id);
   const team = teamById(league, teamId) ?? league[0];
-  // Avversario fittizio: serve solo per colore del battitore e nomi campione.
   const away = league.find((t) => t.id !== teamId) ?? league[0];
-  const [cal, setCal] = useState<FieldCalibration>(() => getCalibration(teamId));
-  useEffect(() => setCal(getCalibration(teamId)), [teamId]);
 
-  // Drag dei marker attivo solo in piazzamento manuale (come in partita).
-  const manual = !!cal.markers;
-  const editing = manual;
+  // Partita mock (away @ team-scelto): dà la stessa plancia del match. Non la si
+  // fa avanzare, quindi resta all'inizio (nessun corridore reale in base).
+  const live = useMemo(
+    () => createLiveGame(away, team, CAL_MOCK_SEED, 'home'),
+    [away, team],
+  );
+  const result = useMemo(() => toGameResult(live), [live]);
+  const sit = useMemo(() => situation(live), [live]);
+  const [statsMode, setStatsMode] = useState<StatsMode>('season');
+
+  // Calibrazione dello stadio scelto: parte GIÀ in piazzamento manuale (marker
+  // seminati dalla proiezione), così si trascina subito senza passaggi.
+  const [cal, setCal] = useState<FieldCalibration>(() => withManualMarkers(getCalibration(teamId)));
+  useEffect(() => {
+    setCal(withManualMarkers(getCalibration(teamId)));
+  }, [teamId]);
+
+  const editing = !!cal.markers;
   const moveMarker = (id: string, pos: { x: number; y: number }) => {
     setCal({ ...cal, markers: { ...(cal.markers ?? {}), [id]: pos } });
   };
 
-  // Nomi campione per popolare le etichette (corridori sulle basi + battitore).
+  // Nomi campione per le etichette (basi + battitore): la partita mock è a
+  // basi vuote, quindi passiamo dei nomi dai roster per renderle posizionabili.
   const sampleRunners = team.lineup.slice(0, 3).map((b) => b.name);
-  const sampleBatter = away.lineup[0]?.name ?? 'Battitore';
+  const sampleBatter = away.lineup[0]?.name ?? sit.batter.name;
 
-  const [onlyPhotos, setOnlyPhotos] = useState(true);
-  const shown = league.filter(
-    (t) => !onlyPhotos || photos.size === 0 || photos.has(t.id),
+  const picker = (
+    <div className="cal-picker">
+      <div className="cal-group">Stadio</div>
+      <select
+        className="cal-select"
+        value={teamId}
+        onChange={(e) => setTeamId(e.target.value)}
+      >
+        {league.map((t) => (
+          <option key={t.id} value={t.id}>
+            {photos.has(t.id) ? '📷 ' : '— '}
+            {t.abbrev} · {t.ballpark}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 
   return (
-    <div className="cal-screen">
-      <div className="cal-screen-bar">
-        <div className="cal-screen-title">
-          🎯 Calibrazione stadi — scegli uno stadio e sistema i marker sulla foto
-        </div>
-        <label className="cal-only">
-          <input
-            type="checkbox"
-            checked={onlyPhotos}
-            onChange={(e) => setOnlyPhotos(e.target.checked)}
-          />
-          Solo con foto
-        </label>
-      </div>
-
-      <div className="cal-teamgrid">
-        {shown.map((t) => (
-          <button
-            key={t.id}
-            className={`cal-team${t.id === teamId ? ' active' : ''}`}
-            onClick={() => setTeamId(t.id)}
-            title={t.ballpark}
-            style={{ ['--tc' as string]: t.primaryColor }}
-          >
-            <TeamBadge team={t} size={20} />
-            <span className="cal-team-ab">{t.abbrev}</span>
-            {photos.has(t.id) && <span className="cal-team-cam" title="Foto disponibile">📷</span>}
-          </button>
-        ))}
-      </div>
-
-      <div className={editing ? 'cal-stage editing' : 'cal-stage'}>
-        <Diamond
-          home={team}
-          away={away}
-          background
-          bases={[true, true, true]}
-          runners={sampleRunners}
-          batterName={sampleBatter}
-          cal={cal}
-          editable={editing}
-          onMarkerMove={moveMarker}
-        />
-      </div>
-
+    <>
+      <GameScreen
+        result={result}
+        sit={sit}
+        statsMode={statsMode}
+        setStatsMode={setStatsMode}
+        editing={editing}
+        cal={cal}
+        onMarkerMove={moveMarker}
+        runners={sampleRunners}
+        batterName={sampleBatter}
+        controls={<ActionBar live={live} sit={sit} act={() => {}} />}
+      />
       <CalibrationPanel
         team={team}
         hasPhoto={!!stadiumImage(teamId)}
         cal={cal}
         setCal={setCal}
         onClose={onClose}
+        picker={picker}
+        blockTools
       />
-    </div>
+    </>
   );
+}
+
+/** Assicura che la calibrazione sia in piazzamento manuale: se non ha già i
+ *  marker, li semina dalla proiezione corrente (così la schermata Stadi parte
+ *  subito in modalità trascinamento). */
+function withManualMarkers(cal: FieldCalibration): FieldCalibration {
+  return cal.markers ? cal : { ...cal, markers: computeMarkers(cal) };
+}
+
+// --- Aggancio marker↔foto: la foto è resa in un box che scala/trasla con
+// bgZoom/bgX/bgY (viewBox 900×420). Un marker a coord. viewBox corrisponde a un
+// punto normalizzato del box; ricollocandolo con i nuovi parametri resta
+// "incollato" alla foto (stessa scala e traslazione del box). ------------------
+const CAL_VB = { w: 900, h: 420 };
+function photoBox(zoom: number, x: number, y: number) {
+  const iw = CAL_VB.w * zoom;
+  const ih = CAL_VB.h * zoom;
+  return { ix: (CAL_VB.w - iw) / 2 + x, iy: (CAL_VB.h - ih) / 2 + y, iw, ih };
+}
+/** Ricolloca i marker perché seguano la foto quando cambiano i parametri bg. */
+function relockMarkers(
+  markers: Record<string, { x: number; y: number }>,
+  prev: FieldCalibration,
+  next: { bgZoom: number; bgX: number; bgY: number },
+): Record<string, { x: number; y: number }> {
+  const a = photoBox(prev.bgZoom, prev.bgX, prev.bgY);
+  const b = photoBox(next.bgZoom, next.bgX, next.bgY);
+  const out: Record<string, { x: number; y: number }> = {};
+  for (const id in markers) {
+    const m = markers[id];
+    const u = (m.x - a.ix) / a.iw;
+    const v = (m.y - a.iy) / a.ih;
+    out[id] = { x: Math.round(b.ix + u * b.iw), y: Math.round(b.iy + v * b.ih) };
+  }
+  return out;
 }
 
 function CalibrationPanel({
@@ -797,14 +899,23 @@ function CalibrationPanel({
   cal,
   setCal,
   onClose,
+  picker,
+  blockTools,
 }: {
   team: Team;
   hasPhoto: boolean;
   cal: FieldCalibration;
   setCal: (c: FieldCalibration) => void;
   onClose: () => void;
+  /** Nodo opzionale (selettore di stadio) mostrato in cima al pannello. */
+  picker?: ReactNode;
+  /** Mostra spostamento in blocco + "blocca alla foto" (schermata Stadi). */
+  blockTools?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  // "Blocca marker alla foto": quando è attivo, ogni zoom/pan dello sfondo
+  // ri-aggancia i marker alla foto (restano incollati proporzionalmente).
+  const [locked, setLocked] = useState(true);
 
   // Rileva le varianti-foto presenti nel repo (principale + XXX2/XXX3/…):
   // prova a caricarle e tiene solo quelle che esistono.
@@ -834,12 +945,36 @@ function CalibrationPanel({
     };
   }, [team.id]);
 
-  const set = (k: NumericCalKey, val: number) => {
+  const clampKey = (k: NumericCalKey, val: number) => {
     const rng = CALIBRATION_RANGE[k];
     const clamped = Math.max(rng.min, Math.min(rng.max, val));
     const dec = rng.step >= 1 ? 0 : 2;
     const p = Math.pow(10, dec);
-    setCal({ ...cal, [k]: Math.round(clamped * p) / p });
+    return Math.round(clamped * p) / p;
+  };
+  const set = (k: NumericCalKey, val: number) => {
+    setCal({ ...cal, [k]: clampKey(k, val) });
+    setCopied(false);
+  };
+  // Setter per i parametri della FOTO: se "blocca alla foto" è attivo e ci sono
+  // marker manuali, li ri-aggancia così seguono zoom/pan (restano sulla foto).
+  const setBg = (k: NumericCalKey, val: number) => {
+    const next: FieldCalibration = { ...cal, [k]: clampKey(k, val) };
+    if (locked && cal.markers) {
+      next.markers = relockMarkers(cal.markers, cal, next);
+    }
+    setCal(next);
+    setCopied(false);
+  };
+  // Sposta TUTTI i marker in blocco (le 4 direzioni), utile se cambia
+  // l'inquadratura della foto: tiene le distanze relative.
+  const nudgeAll = (dx: number, dy: number) => {
+    if (!cal.markers) return;
+    const next: Record<string, { x: number; y: number }> = {};
+    for (const id in cal.markers) {
+      next[id] = { x: cal.markers[id].x + dx, y: cal.markers[id].y + dy };
+    }
+    setCal({ ...cal, markers: next });
     setCopied(false);
   };
 
@@ -880,7 +1015,7 @@ function CalibrationPanel({
     URL.revokeObjectURL(url);
   };
 
-  const row = (k: NumericCalKey) => {
+  const row = (k: NumericCalKey, setter: (k: NumericCalKey, v: number) => void = set) => {
     const rng = CALIBRATION_RANGE[k];
     const v = cal[k];
     // Passo dei pulsanti −/+: 5 px per i parametri in pixel (step 1).
@@ -892,7 +1027,7 @@ function CalibrationPanel({
           <span className="cal-val">{fmtCalNum(v, rng.step)}</span>
         </div>
         <div className="cal-ctrl">
-          <button className="cal-step" onClick={() => set(k, v - nudge)} aria-label="diminuisci">
+          <button className="cal-step" onClick={() => setter(k, v - nudge)} aria-label="diminuisci">
             −
           </button>
           <input
@@ -901,9 +1036,9 @@ function CalibrationPanel({
             max={rng.max}
             step={rng.step}
             value={v}
-            onChange={(e) => set(k, parseFloat(e.target.value))}
+            onChange={(e) => setter(k, parseFloat(e.target.value))}
           />
-          <button className="cal-step" onClick={() => set(k, v + nudge)} aria-label="aumenta">
+          <button className="cal-step" onClick={() => setter(k, v + nudge)} aria-label="aumenta">
             +
           </button>
         </div>
@@ -919,6 +1054,7 @@ function CalibrationPanel({
           ✕
         </button>
       </div>
+      {picker}
       {!hasPhoto && (
         <div className="cal-note">
           Nessuna foto per questo stadio: stai calibrando sul campo generato. Aggiungi
@@ -955,9 +1091,41 @@ function CalibrationPanel({
         <>
           <div className="cal-group">Piazzamento manuale</div>
           <div className="cal-note">
-            Trascina i <b>14 marker</b> sulla foto (9 difensori, 3 basi, casa base,
-            battitore). La foto è fissata: regola prima <b>zoom/pan</b> qui sotto.
+            Trascina i marker sulla foto: <b>9 difensori</b>, <b>3 basi</b>, casa base
+            e <b>battitore</b>. Le <b>etichette-nome</b> (corridori sulle basi e
+            battitore) si spostano <b>insieme</b> al marker.
           </div>
+          {blockTools && (
+            <>
+              <div className="cal-group">Sposta tutti in blocco</div>
+              <div className="cal-note">
+                Muove <b>tutti</b> i marker insieme, tenendo le distanze — utile se
+                cambi l'inquadratura della foto.
+              </div>
+              <div className="cal-pad">
+                <button className="cal-padbtn up" onClick={() => nudgeAll(0, -4)} aria-label="su">
+                  ▲
+                </button>
+                <button className="cal-padbtn left" onClick={() => nudgeAll(-4, 0)} aria-label="sinistra">
+                  ◀
+                </button>
+                <button className="cal-padbtn right" onClick={() => nudgeAll(4, 0)} aria-label="destra">
+                  ▶
+                </button>
+                <button className="cal-padbtn down" onClick={() => nudgeAll(0, 4)} aria-label="giù">
+                  ▼
+                </button>
+              </div>
+              <label className="cal-lock">
+                <input
+                  type="checkbox"
+                  checked={locked}
+                  onChange={(e) => setLocked(e.target.checked)}
+                />
+                🔒 Blocca marker alla foto (seguono zoom/pan)
+              </label>
+            </>
+          )}
           <button className="btn" onClick={exitManual}>
             ↩︎ Torna ai parametri
           </button>
@@ -965,18 +1133,22 @@ function CalibrationPanel({
       ) : (
         <>
           <div className="cal-group">Campo (perno = casa base)</div>
-          {CAL_FIELD_KEYS.map(row)}
+          {CAL_FIELD_KEYS.map((k) => row(k))}
           <button className="btn" onClick={enterManual} title="Sposta i marker a mano sulla foto">
             ✋ Piazza marker a mano
           </button>
         </>
       )}
       <div className="cal-group">Foto di sfondo</div>
-      {CAL_PHOTO_KEYS.map(row)}
+      {CAL_PHOTO_KEYS.map((k) => row(k, setBg))}
       <div className="cal-actions">
         <button
           className="btn"
-          onClick={() => setCal({ ...PHOTO_DEFAULT_CALIBRATION, image: cal.image })}
+          onClick={() => {
+            const base: FieldCalibration = { ...PHOTO_DEFAULT_CALIBRATION, image: cal.image };
+            // In manuale mantieni la modalità (ri-semina i marker), altrimenti torna ai parametri.
+            setCal(cal.markers ? { ...base, markers: computeMarkers(base) } : base);
+          }}
           title="Riporta ai valori iniziali per le foto (mantiene la foto scelta)"
         >
           Azzera

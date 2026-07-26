@@ -107,19 +107,29 @@ cambio di quei parametri, e forza il re-render dopo ogni azione.
 Con il calendario (niente più partite casuali "al volo") non si può più contare
 sul giocare una gara in ogni stadio per calibrarlo. Il tab **🎯 Stadi** apre una
 **schermata dedicata** (`CalibrationScreen`) che permette di calibrare
-**qualsiasi stadio** senza scendere in campo:
+**qualsiasi stadio** senza scendere in campo.
 
-- **Griglia squadre** in alto: tutte le franchigie, con badge **📷** su quelle
-  che hanno davvero la foto principale nel repo (rilevate provando a caricare
-  l'immagine). Filtro **«Solo con foto»** (default attivo).
-- Selezionando una squadra si carica la sua foto-stadio e lo **stesso pannello**
-  di calibrazione (`CalibrationPanel`) usato in partita, con la stessa
-  persistenza (**Esporta file → `<STEM>.json`**).
-- Il campo mostra **nomi campione** (dai roster) su corridori e battitore, così
-  le loro etichette sono visibili e posizionabili anche fuori da una partita.
+- **Plancia identica al match.** La schermata riusa lo **stesso** componente
+  `GameScreen` della partita (statbar + campo + riquadri lineup/cronaca + barra
+  controlli) su una **partita "mock"** (`createLiveGame`, seme fisso, mai fatta
+  avanzare). Così la foto e i marker appaiono con **la stessa cornice e le
+  stesse proporzioni** che si vedranno in gara: ciò che calibri è ciò che
+  comparirà, senza rischio di doverlo rifare.
+- **Selettore di stadio** in cima al pannello (`<select>` con badge **📷** su
+  chi ha la foto): carica la calibrazione di quello stadio.
+- **Parte già in piazzamento manuale.** Se la calibrazione non ha marker manuali
+  li **semina dalla proiezione** (`withManualMarkers`), così si trascina subito.
+- **Nomi campione** (dai roster) su corridori e battitore, per posizionarne le
+  etichette anche a basi vuote.
+- **Sposta tutti in blocco** (croce ▲◀▼▶): trasla **tutti** i marker insieme
+  mantenendo le distanze, utile se cambia l'inquadratura della foto.
+- **🔒 Blocca marker alla foto** (default attivo): a marker manuali presenti,
+  ogni **zoom/pan** dello sfondo **ri-aggancia** i marker alla foto
+  (`relockMarkers`), così restano incollati proporzionalmente invece di "sfilarsi".
 
-Il tab è **bloccato durante una partita live** come le altre sezioni. Il vecchio
-pulsante **🎯 Calibra campo** dell'header resta disponibile *in Partita*.
+Stessa **persistenza** del resto (**Esporta file → `<STEM>.json`**). Il tab è
+**bloccato durante una partita live**. Il vecchio pulsante **🎯 Calibra campo**
+dell'header resta disponibile *in Partita* (stesso `CalibrationPanel`).
 
 ### Calibrazione del campo sulla foto (🎯 Calibra campo)
 
