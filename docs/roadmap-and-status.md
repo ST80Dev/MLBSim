@@ -47,6 +47,18 @@
     resta pieno per i giocatori **generati** (che evolvono); lo snapshot storico
     non evolve. Import di **stagioni intere** dal Lahman via pipeline di build
     (JSON compatti per annata, non CSV a runtime).
+  - **Import storico — FATTO (prima prova end-to-end):** l'inversione
+    *statistiche → rating 20-80* vive in `engine/statsToRatings.ts`
+    (`ratingsFromBatterStats`/`ratingsFromPitcherStats`, inverse esatte di
+    `deriveBatterStats`/`derivePitcherStats`; vedi `docs/players-and-ratings.md`).
+    Un primo dataset di prova (`data/historical/season1999.ts`, linee reali
+    approssimate di CLE e BOS 1999) + importatore (`data/historical/import.ts`)
+    costruiscono squadre pronte al motore con **stats ri-derivate dai rating
+    stimati**. Verifica: round-trip fedele (BA/HR/BB/K), i **campioni** escono
+    campioni (R.Alomar ~1.11 OPS, Nomar ~1.01, Pedro ~1.4 ERA/390 K vs media),
+    gli **scarsi** affondano (D.Lewis ~.58 OPS), e gli aggregati closed-loop
+    restano nell'epoca (BA ~.271, R/G ~5.15, HR/G ~1.27). Manca: pipeline Lahman
+    completa (30 squadre × annata) e UI di selezione.
   - **Persistenza — FATTO (fondamenta):** salvataggi su **Supabase** dietro
     l'interfaccia `SaveStore` (`src/data/persistence/`). Cloud sorgente primaria,
     niente auth, RLS aperta per scelta, save versionati (`schema_version`).

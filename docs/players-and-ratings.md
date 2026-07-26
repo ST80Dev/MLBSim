@@ -76,6 +76,29 @@ In `src/engine/ratings.ts`:
 - `batterOverall` / `pitcherOverall` = media pesata delle doti (20-80).
 - `salaryFromOverall` = stipendio annuale (milioni) dall'overall.
 
+## Inversione statistiche → caratteristiche (import storico)
+
+In `src/engine/statsToRatings.ts` — l'**inverso** della derivazione, per
+importare una stagione reale: dal tabellino si stimano le doti che, ri-derivate,
+lo riproducono. `ratingFromMult(mult, perSigma) = 50 + 10·ln(mult)/ln(perSigma)`
+inverte `ratingMult`; `mult` = rate osservato / rate di lega.
+
+- **Battitore** (`ratingsFromBatterStats`): Occhio ← BB (leva pulita); Potenza ←
+  media pesata **HR (0.8)** + 2B (0.2) — l'HR è la leva marcante dell'epoca, i
+  doppi la sfumano; Contatto ← media di singoli e strikeout (dato l'Occhio);
+  Velocità ← media di SB (leva diretta) e tripli (data la Potenza).
+- **Lanciatore** (`ratingsFromPitcherStats`): Dominio ← K; Controllo ← BB (meno
+  = più); Palla-terra ← HR (meno = più); Movimento ← hit non-HR; Resistenza ←
+  battitori per partenza (inverte `deriveStamina`).
+- **Non deducibili dal tabellino**: Difesa/Braccio del battitore (archetipo di
+  ruolo) e Difesa del lanciatore (50). Sono skill di campo, non offensive.
+
+**Round-trip fedele ma non bit-esatto**: dove una dote governa più leve (Potenza
+su HR *e* 2B) le stime sono mediate, quindi restano piccoli residui (misurati nei
+test); e il **soft-cap sulla media** comprime i .350+ storici in derivazione. È
+per costruzione: lo snapshot storico ha le **statistiche** come verità, i rating
+sono una stima per pilotare il motore (vedi `docs/roadmap-and-status.md` § Fase 2).
+
 ## Evoluzione età/potenziale
 
 In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
