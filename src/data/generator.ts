@@ -118,15 +118,36 @@ function throwHand(rng: Rng): ThrowHand {
   return rng.next() < 0.7 ? 'R' : 'L';
 }
 
+// Archetipi offensivi: molti giocatori sono SPECIALISTI con tradeoff marcati
+// (non versioni scalate dello stesso profilo). Danno varieta' realistica tra
+// compagni "a prescindere dall'overall": un velocista scarso di media puo' avere
+// tante rubate/tripli e pochi HR; un'occhio-lungo tanti BB con poca potenza; uno
+// slugger 40 HR ma media bassa. I tilt spostano la MEDIA delle doti quasi a somma
+// zero sulla popolazione (non gonfiano gli aggregati di lega, solo la forma).
+function batterArchetype(rng: Rng): { contact: number; power: number; eye: number; speed: number } {
+  const t = { contact: 0, power: 0, eye: 0, speed: 0 };
+  const a = rng.next();
+  if (a < 0.16) { t.power += 17; t.contact -= 12; t.eye -= 3; } // slugger da bombe
+  else if (a < 0.32) { t.contact += 15; t.power -= 11; t.eye += 2; } // contact / slap hitter
+  else if (a < 0.45) { t.eye += 18; t.power -= 4; t.contact -= 4; } // occhio / OBP
+  else if (a < 0.6) { t.speed += 18; t.power -= 12; t.contact += 4; } // velocista
+  else if (a < 0.7) { t.power += 10; t.contact += 7; t.eye += 5; } // stella completa (raro)
+  // resto (~30%): profilo equilibrato, nessun tilt.
+  return t;
+}
+
 function makeBatterRatings(rng: Rng, position: Position): BatterRatings {
-  const talent = rng.gauss(0, 6);
+  const talent = rng.gauss(0, 4.5);
   const shape = POS_SHAPE[position] ?? { field: 0, power: 0, speed: 0, arm: 0 };
+  const t = batterArchetype(rng);
+  // Meno talento CONDIVISO (che appiattiva tutti sullo stesso profilo) + archetipi
+  // marcati: la dispersione totale cresce ed e' STRUTTURATA (specialisti veri).
   const draw = (sd: number, bonus = 0) => clampRating(50 + talent + bonus + rng.gauss(0, sd));
   return {
-    contact: draw(8),
-    power: draw(9, shape.power),
-    eye: draw(8),
-    speed: draw(10, shape.speed),
+    contact: draw(6.5, t.contact),
+    power: draw(7.5, shape.power + t.power),
+    eye: draw(6.5, t.eye),
+    speed: draw(8.5, shape.speed + t.speed),
     fielding: draw(9, shape.field),
     arm: draw(9, shape.arm),
   };

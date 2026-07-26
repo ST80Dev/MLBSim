@@ -32,11 +32,11 @@ const round = Math.round;
  */
 export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
   const so = round(pa * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
-  const bb = round(pa * LEAGUE.bb * ratingMult(r.eye, 1.24));
+  const bb = round(pa * LEAGUE.bb * ratingMult(r.eye, 1.32));
   const hbp = round(pa * LEAGUE.hbp);
   const hr = round(pa * LEAGUE.hr * ratingMult(r.power, 1.34));
   const triple = round(pa * LEAGUE.triple * ratingMult(r.speed, 1.6) * ratingMult(r.power, 0.9));
-  const double = round(pa * LEAGUE.double * ratingMult(r.power, 1.11));
+  const double = round(pa * LEAGUE.double * ratingMult(r.power, 1.2) * ratingMult(r.contact, 1.05));
   let single = round(pa * LEAGUE.single * ratingMult(r.contact, 1.1));
 
   const ab = Math.max(1, pa - bb - hbp);
@@ -58,7 +58,8 @@ export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
     h = single + double + triple + hr;
   }
 
-  const sb = Math.max(0, round(((r.speed - 45) / 35) * 30));
+  // I velocisti veri rubano molto (40-55), non un tetto piatto a 30.
+  const sb = Math.max(0, round(((r.speed - 48) / 32) * 50));
   const cs = round(sb * 0.28);
 
   return { pa, h, double, triple, hr, bb, so, hbp, sb, cs };

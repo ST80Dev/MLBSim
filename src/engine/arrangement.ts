@@ -21,6 +21,12 @@ export interface MatchArrangement {
   rotation: string[];
   /** Bullpen: id rilievi nell'ordine d'uso. */
   bullpen: string[];
+  /**
+   * Closer designato: il rilievo che CHIUDE (usato per ultimo), mostrato come CL.
+   * Il ruolo NON e' rigido: qualsiasi rilievo puo' essere nominato closer per la
+   * stagione. Se assente, chiude semplicemente l'ultimo del bullpen.
+   */
+  closerId?: string;
 }
 
 /** Tutti i battitori della rosa (titolari + panca + riserve di profondita'). */
@@ -41,11 +47,13 @@ export function rosterPitchers(t: Team): Pitcher[] {
 export function defaultArrangement(t: Team): MatchArrangement {
   const defense: Record<string, Position> = {};
   for (const b of t.lineup) defense[b.id] = b.position;
+  const closer = t.bullpen.find((p) => p.role === 'CL');
   return {
     order: t.lineup.map((b) => b.id),
     defense,
     rotation: t.rotation.map((p) => p.id),
     bullpen: t.bullpen.map((p) => p.id),
+    closerId: closer?.id,
   };
 }
 
@@ -88,8 +96,18 @@ export function buildManagedTeam(t: Team, arr: MatchArrangement): Team {
   };
   const seenP = new Set<string>();
   let rotation = pick(arr.rotation, seenP);
-  const bullpen = pick(arr.bullpen, seenP);
+  let bullpen = pick(arr.bullpen, seenP);
   if (rotation.length === 0) rotation = t.rotation; // il motore esige uno starter
+
+  // Closer designato: lo si porta in fondo al bullpen (chiude la gara) e a video
+  // e' CL; gli altri eventuali CL tornano RP. Il ruolo non e' rigido.
+  if (arr.closerId && bullpen.some((p) => p.id === arr.closerId)) {
+    const closer = bullpen.find((p) => p.id === arr.closerId)!;
+    const rest = bullpen
+      .filter((p) => p.id !== arr.closerId)
+      .map((p) => (p.role === 'CL' ? { ...p, role: 'RP' as const } : p));
+    bullpen = [...rest, closer.role === 'CL' ? closer : { ...closer, role: 'CL' as const }];
+  }
 
   const usedB = new Set(lineup.map((b) => b.id));
   const usedP = new Set([...rotation, ...bullpen].map((p) => p.id));

@@ -98,10 +98,10 @@ function batterProfile(seed: number, id: string, year: number): BatProfile {
   if (rng.next() < 0.08) paMult *= clamp(rng.next() * 0.5 + 0.4, 0.35, 0.9); // infortunio
 
   return {
-    hrMult: clamp(level + 0.13 * power + 0.2 * powerSpike + rng.gauss(0, 0.05), 0.5, 1.66),
-    xbhMult: clamp(level + 0.1 * power + 0.11 * powerSpike + rng.gauss(0, 0.05), 0.55, 1.5),
+    hrMult: clamp(level + 0.13 * power + 0.15 * powerSpike + rng.gauss(0, 0.05), 0.5, 1.62),
+    xbhMult: clamp(level + 0.1 * power + 0.09 * powerSpike + rng.gauss(0, 0.05), 0.55, 1.48),
     // Singoli: anti-correlata alla potenza (modesta) + rara gemma di contatto.
-    avgMult: clamp(level - 0.04 * power + 0.16 * contactSpike + rng.gauss(0, 0.03), 0.86, 1.32),
+    avgMult: clamp(level - 0.04 * power + 0.12 * contactSpike + rng.gauss(0, 0.03), 0.86, 1.3),
     bbMult: clamp(level + rng.gauss(0, 0.1), 0.7, 1.4),
     kMult: clamp((1 + 0.05 * power - 0.1 * contactSpike) * (1 + rng.gauss(0, 0.09)), 0.7, 1.4),
     speedMult: clamp(1 + rng.gauss(0, 0.15), 0.6, 1.5),
@@ -136,7 +136,7 @@ function pitcherProfile(seed: number, id: string, year: number): PitProfile {
   if (rng.next() < 0.1) ipMult *= clamp(rng.next() * 0.5 + 0.4, 0.35, 0.9);
 
   return {
-    kMult: clamp(1 + 0.07 * form + 0.16 * kSpike + rng.gauss(0, 0.07), 0.72, 1.5),
+    kMult: clamp(1 + 0.07 * form + 0.12 * kSpike + rng.gauss(0, 0.07), 0.72, 1.45),
     bbMult: clamp((1 - 0.05 * form) * (1 + rng.gauss(0, 0.12)), 0.68, 1.5),
     hrMult: clamp(levelBad + rng.gauss(0, 0.11), 0.6, 1.6),
     hMult: clamp(levelBad + rng.gauss(0, 0.06), 0.8, 1.28),

@@ -3007,3 +3007,94 @@ table {
   max-width: 78ch;
   line-height: 1.45;
 }
+
+/* --- Roster: stelle OVR, font ruoli/età, drag visibile, split difesa ------ */
+.stars { display: inline-flex; gap: 1px; font-size: 15px; line-height: 1; letter-spacing: 0.5px; white-space: nowrap; }
+.stars .st.full { color: #ffcf40; text-shadow: 0 0 4px rgba(255, 200, 60, 0.35); }
+.stars .st.empty { color: rgba(150, 170, 205, 0.32); }
+.roster-tbl .ovr { min-width: 84px; }
+.roster-tbl .roles { font-size: 12.5px; color: #b7c6e6; font-weight: 600; }
+.roster-tbl td.age { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.roster-tbl .pos { font-size: 13px; min-width: 30px; }
+.roster-tbl .pos.moved { color: #f0b053; }
+
+/* Drag: riga presa BEN visibile; il bersaglio mostra dove cade il giocatore. */
+.roster-tbl .drow.dragging {
+  opacity: 0.92;
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  background: rgba(120, 180, 255, 0.16);
+}
+.roster-tbl .drow.over {
+  box-shadow: inset 0 3px 0 -1px var(--accent), inset 0 -3px 0 -1px var(--accent);
+  background: rgba(120, 180, 255, 0.12);
+}
+.view-seg { margin-left: 10px; }
+
+/* Campo difensivo semplificato: caselle FISSE, giocatori spostabili. */
+.def-field {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 4px auto 2px;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  background:
+    radial-gradient(125% 95% at 50% 102%, rgba(60, 115, 72, 0.4), rgba(22, 42, 32, 0.12) 62%, transparent 72%),
+    var(--card2, #0d1730);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.def-field::before {
+  content: '';
+  position: absolute; left: 50%; top: 63%;
+  width: 40%; height: 40%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border: 1px solid rgba(150, 180, 220, 0.18);
+  border-radius: 4px;
+}
+.fpos {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 68px;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: rgba(12, 22, 44, 0.92);
+  border: 1px solid var(--line);
+  cursor: grab;
+  transition: box-shadow 0.1s ease, background 0.1s ease;
+}
+.fpos.dh { top: 90%; left: 13%; flex-direction: row; gap: 6px; background: rgba(46, 34, 58, 0.92); }
+.fpos-lbl { font-family: var(--mono); font-weight: 800; font-size: 11px; color: var(--accent); }
+.fpos-name { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.fpos-ovr .stars { font-size: 11px; }
+.fpos.warn { border-color: #f0b053; }
+.fpos.over { box-shadow: 0 0 0 2px var(--accent); background: rgba(120, 180, 255, 0.24); }
+.fpos.dragging { opacity: 0.92; outline: 2px dashed var(--accent); }
+
+/* Closer: slot dedicato, ogni rilievo puo' esserlo. */
+.closer-card.over { box-shadow: inset 0 0 0 2px var(--accent); }
+.closer-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
+.closer-slot {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 11px; border-radius: 8px;
+  background: rgba(120, 180, 255, 0.08); border: 1px solid var(--line); cursor: grab;
+}
+.closer-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.closer-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.roster-tbl .rolebadge, .rolebadge {
+  display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 800;
+  padding: 1px 5px; border-radius: 4px; color: #b7c6e6; border: 1px solid var(--line);
+}
+.rolebadge.cl { color: #1a1a1a; background: #ffcf40; border-color: #ffcf40; }
+
+/* --- Home: card leader con NOME grande a sinistra, numero sulla stessa riga */
+.leader {
+  flex-direction: row; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 9px 12px;
+}
+.leader .lmain { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.leader .lwho { font-size: 15px; font-weight: 700; color: var(--text); }
+.leader .lstat { font-size: 10px; }
+.leader .lval { font-size: 24px; flex: none; }

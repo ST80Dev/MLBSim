@@ -148,12 +148,26 @@ lega-annate; p50 / p90 / max — gemma = coda rara "ogni tanto"):
 
 | | p50 | p90 | max | %gemma |
 |---|---|---|---|---|
-| HR | 53 | 60 | 72 | 60+ ≈ 10% |
-| BA | .374 | .398 | .424 | .400+ ≈ 8% |
-| K | 261 | 297 | 359 | 300+ ≈ 8% |
-| ERA | 2.38 | 2.07 | 1.77 | ≤2.10 ≈ 15% |
+| HR | 55 | 60 | 65 | 60+ ≈ 13% |
+| BA | .379 | .402 | .42 | .400+ ≈ 13% |
+| K | 264 | 307 | — | 300+ ≈ 17% |
+| ERA | 2.39 | 1.96 | — | ≤2.10 ≈ 15% |
 
 Giocatore tipico (mediana titolari): **BA ~.263, ~20 HR**; ERA SP mediana ~4.78.
 Ri-tarare: gli SD di routine restano piccoli (il **max su ~600** amplifica già la
 coda ~3σ), le gemme sono termini **additivi e limitati**; misura con uno script
 Monte-Carlo nello scratchpad (distribuzione del leader + % gemme), non a occhio.
+
+## Varietà tra compagni: archetipi offensivi
+
+I giocatori generati NON sono versioni scalate dello stesso profilo: `generator.ts`
+(`batterArchetype`) assegna a molti un **archetipo** con tradeoff marcati
+(**slugger** HR+/media−, **contact/slap** media+/HR−, **occhio/OBP** BB+, **velocista**
+3B+SB+/HR−, e la rara **stella completa**), riducendo il talento CONDIVISO che
+appiattiva tutti sulle medie. Così, a **parità di overall**, la *forma* varia
+davvero: nasce il velocista da 50 SB e 14 tripli con pochi HR, l'occhio-lungo da 90+
+BB, lo slugger da 40 HR e media bassa. I tilt sono ~a somma zero sulla popolazione
+(non spostano gli aggregati di lega: HR/600 ~20, BA di lega ~.272), solo la
+dispersione. La risposta derivata di **doppi** (potenza+contatto) e **basi ball**
+(occhio) è stata resa un po' più ampia perché la varietà dei rating si traduca in
+varietà di statistiche (σ 2B ~7-8, σ BB ~16 tra i 9 titolari, non più ~4 e ~11).
