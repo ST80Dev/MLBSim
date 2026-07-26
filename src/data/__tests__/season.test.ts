@@ -49,6 +49,21 @@ describe('advanceWithResult', () => {
     expect(s1.pit[starter.id].outs).toBe(starter.outs);
   });
 
+  it('accumula le stat REALI di ENTRAMBE le squadre della mia partita', () => {
+    const res = playOne();
+    const s1 = advanceWithResult(createSeason(), res, home.id, teams, 2024);
+    // Sia la mia squadra sia l'avversario hanno stat reali accumulate.
+    const oppFirst = res.homeStats.batting[0];
+    const myFirst = res.awayStats.batting[0];
+    expect(s1.bat[oppFirst.id]?.g).toBe(1);
+    expect(s1.bat[myFirst.id]?.g).toBe(1);
+    expect(s1.bat[oppFirst.id].hr).toBe(oppFirst.hr);
+    // Una squadra NON coinvolta ha solo il record, nessuna stat giocatore.
+    const other = teams.find((t) => t.id !== home.id && t.id !== away.id)!;
+    const anyBat = other.lineup.some((b) => s1.bat[b.id] !== undefined);
+    expect(anyBat).toBe(false);
+  });
+
   it('quick-simula il resto della lega: tutte le squadre giocano', () => {
     const s1 = advanceWithResult(createSeason(), playOne(), home.id, teams, 2024);
     const played = teams.filter((t) => {
