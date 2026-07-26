@@ -40,8 +40,8 @@ export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
   const so = round(pa * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
   const bb = round(pa * LEAGUE.bb * ratingMult(r.eye, 1.32));
   const hbp = round(pa * LEAGUE.hbp);
-  const hr = round(pa * LEAGUE.hr * ratingMult(r.power, 1.34));
-  const triple = round(pa * LEAGUE.triple * ratingMult(r.speed, 1.6) * ratingMult(r.power, 0.9));
+  const hr = round(pa * LEAGUE.hr * ratingMult(r.power, 1.42));
+  const triple = round(pa * LEAGUE.triple * ratingMult(r.speed, 1.82) * ratingMult(r.power, 0.9));
   const double = round(pa * LEAGUE.double * ratingMult(r.power, 1.2) * ratingMult(r.contact, 1.05));
   let single = round(pa * LEAGUE.single * ratingMult(r.contact, 1.1));
 

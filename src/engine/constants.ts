@@ -12,8 +12,8 @@ export const LEAGUE: PaRates = {
   bb: 0.085,
   hbp: 0.01,
   so: 0.18,
-  hr: 0.028,
-  triple: 0.005,
+  hr: 0.026,
+  triple: 0.0032,
   double: 0.045,
   single: 0.153,
   outInPlay: 0, // calcolato come resto

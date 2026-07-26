@@ -24,7 +24,9 @@ export const SECONDARY_OPTIONS: Partial<Record<Position, Position[]>> = {
   LF: ['RF', 'CF', '1B'],
   CF: ['LF', 'RF'],
   RF: ['LF', 'CF', '1B'],
-  DH: ['1B', 'LF'],
+  // Il DH e' un bat-first con una vera casa difensiva d'angolo/ricevitore (vedi
+  // DH_HOME_POSITIONS nel generatore): quando riprende il guanto gioca la'.
+  DH: ['1B', 'LF', 'RF', '3B', 'C'],
 };
 
 /** Domanda difensiva del ruolo (alto = piu' difficile). */
@@ -51,8 +53,12 @@ export function canPlay(b: Batter, pos: Position): boolean {
 
 /** Fielding effettivo del battitore se schierato in `pos`. */
 export function fieldingAtPosition(b: Batter, pos: Position): number {
-  if (pos === b.position) return b.ratings.fielding;
-  const demandDelta = (POS_FIELD_DEMAND[b.position] ?? 0) - (POS_FIELD_DEMAND[pos] ?? 0);
+  // Il ruolo 'DH' non e' una casa difensiva: la vera casa di un DH e' la sua
+  // posizione secondaria (il ruolo che gioca quando riprende il guanto). Cosi'
+  // difende bene la' e paga la penalita' d'adattamento solo altrove.
+  const home = b.position === 'DH' && b.secondaryPosition ? b.secondaryPosition : b.position;
+  if (pos === home) return b.ratings.fielding;
+  const demandDelta = (POS_FIELD_DEMAND[home] ?? 0) - (POS_FIELD_DEMAND[pos] ?? 0);
   return clampRating(b.ratings.fielding + demandDelta - ADAPT_PENALTY);
 }
 

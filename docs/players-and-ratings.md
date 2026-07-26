@@ -56,9 +56,19 @@ entrambi i blocchi di caratteristiche e compare sia nel lineup sia nello staff.
 
 ## Seconda posizione difensiva
 
-Campo opzionale `secondaryPosition` sul `Batter`: **solo alcuni** giocatori
-(~35%) hanno un secondo ruolo, scelto da un insieme **fisso** di coppie
-plausibili (`SECONDARY_OPTIONS` in `src/engine/positions.ts`) — niente "ovunque".
+Campo opzionale `secondaryPosition` sul `Batter`: **quasi tutti** i giocatori
+(~95%) hanno un secondo ruolo, scelto da un insieme **fisso** di coppie
+plausibili e adiacenti (`SECONDARY_OPTIONS` in `src/engine/positions.ts`) — niente
+"ovunque". Serve a garantire abbastanza **duttilità** dentro ogni rosa: anche se i
+ruoli PRIMARI sono un po' sbilanciati, ogni casella ha di norma ≥2 coperture (fine
+delle rose con "3 SS e 1 solo LF"). Le fasce panchina/profondità sono anch'esse
+distribuite per non accumulare doppioni.
+
+Il **DH** non è un ruolo difensivo ma uno slot di battuta: il generatore gli dà una
+**vera casa difensiva** (un angolo/ricevitore, `DH_HOME_POSITIONS`) come posizione
+secondaria, e `fieldingAtPosition` la tratta come casa naturale (difende bene lì,
+paga la penalità solo altrove). Così un DH è "un 1B/angolo che oggi riposa il
+guanto", non un vuoto difensivo, e può rientrare in campo.
 
 Se schierato nella seconda posizione, cambia **solo la difesa** (fielding): è una
 skill legata al ruolo, mentre contatto/potenza/occhio/velocità/braccio sono del
