@@ -3120,3 +3120,22 @@ table {
 .leader .lwho { font-size: 15px; font-weight: 700; color: var(--text); }
 .leader .lstat { font-size: 10px; }
 .leader .lval { font-size: 24px; flex: none; }
+
+/* --- Sintesi di squadra (OVR / Attacco / Difesa / staff Lanciatori) -------- */
+.team-synth {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 8px 12px; margin-bottom: 10px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card2, #0d1730);
+}
+.ts-team { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13px; }
+.ts-item { display: inline-flex; align-items: baseline; gap: 5px; }
+.ts-item b { font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--muted); }
+.ts-item i { font-style: normal; font-family: var(--mono); font-weight: 800; font-size: 17px; }
+.ts-item.ovrbig i { font-size: 20px; }
+.ts-item.pit b { color: #9ec5ff; }
+.ts-hint { margin-left: auto; font-size: 11px; color: var(--muted); }
+/* Versione compatta in partita */
+.ingame-synth { display: inline-flex; align-items: center; gap: 9px; }
+.ingame-synth .ts-item i { font-size: 14px; }
+.ingame-synth .ts-item.ovrbig i { font-size: 15px; }

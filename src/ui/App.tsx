@@ -21,6 +21,8 @@ import {
 import { batterOverall, pitcherOverall, deriveBatterStats, derivePitcherStats } from '../engine/ratings';
 import { disambiguateLastNames } from '../engine/names';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
+import { teamSynthesis, staffSynthesis } from '../engine/teamRatings';
+import type { TeamSynth } from '../engine/teamRatings';
 import { autoLineup, FIELD_SLOTS } from '../engine/lineup';
 import {
   defaultArrangement,
@@ -31,7 +33,6 @@ import {
 } from '../engine/arrangement';
 import { saveStore } from '../data/persistence';
 import type { MatchArrangement } from '../data/persistence';
-import { teamStrength } from '../engine/strength';
 import { formatIp } from '../engine/boxscore';
 import {
   generateLeague,
@@ -559,17 +560,23 @@ function TeamStatSide({
   setMode: (m: StatsMode) => void;
   win: boolean;
 }) {
-  const s = teamStrength(team);
+  // Sintesi dei TITOLARI COINVOLTI ora (il lineup riflette i pinch-hit) + il
+  // lanciatore sul monte quando la squadra difende (staff se sta battendo).
+  const synth = teamSynthesis(team.lineup.map((b) => ({ b, pos: b.position })));
   const items: StatItem[] =
     involved.kind === 'batter'
       ? batterStatLine(mode, involved.batLine, involved.batter!)
       : pitcherStatLine(mode, involved.pitLine, involved.pitcher!);
   const player = involved.kind === 'batter' ? involved.batter! : involved.pitcher!;
+  const lan =
+    involved.kind === 'pitcher'
+      ? pitcherOverall(involved.pitcher!.ratings)
+      : staffSynthesis(team.rotation, team.bullpen);
   const strength: [string, number][] = [
-    ['TOT', s.total],
-    ['ATT', s.attack],
-    ['DIF', s.defense],
-    ['LAN', s.pitching],
+    ['OVR', synth.ovr],
+    ['ATT', synth.off],
+    ['DIF', synth.def],
+    ['LAN', lan],
   ];
   return (
     <div className={`team-stat ${side}${win ? ' win' : ''}`} style={{ ['--tc' as string]: team.primaryColor }}>
@@ -1546,6 +1553,25 @@ function Rating({ v }: { v: number }) {
   );
 }
 
+/** Badge di sintesi squadra (OVR / Attacco / Difesa / staff Lanciatori). Riusato
+ *  nel Roster (schieramento corrente) e in partita (titolari coinvolti). */
+function SynthBadges({ synth, staff }: { synth: TeamSynth; staff: number }) {
+  const item = (lbl: string, v: number, cls = '') => (
+    <span className={`ts-item ${cls}`.trim()}>
+      <b>{lbl}</b>
+      <i style={{ color: ratingColor(v) }}>{v}</i>
+    </span>
+  );
+  return (
+    <>
+      {item('OVR', synth.ovr, 'ovrbig')}
+      {item('ATT', synth.off)}
+      {item('DIF', synth.def)}
+      {item('LAN', staff, 'pit')}
+    </>
+  );
+}
+
 /** Voto in stelle 1..5 dall'overall: piene evidenti, vuote smorzate. */
 function Stars({ overall }: { overall: number }) {
   const n = Math.max(1, Math.min(5, Math.round((overall - 20) / 15) + 1));
@@ -1818,6 +1844,13 @@ function RosterPage({
   const posRank = (p: Position) => FIELD_SLOTS.indexOf(p);
   const defOrder = [...lineup].sort(
     (a, b) => posRank(arr.defense[a.id] ?? a.position) - posRank(arr.defense[b.id] ?? b.position),
+  );
+  // Sintesi di squadra dello schieramento CORRENTE: si aggiorna a ogni mossa,
+  // cosi' si vede subito se una sostituzione migliora o peggiora.
+  const synth = teamSynthesis(lineup.map((b) => ({ b, pos: arr.defense[b.id] ?? b.position })));
+  const staff = staffSynthesis(
+    arr.rotation.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
+    arr.bullpen.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
   );
 
   const update = (patch: Partial<MatchArrangement>) => {
@@ -2140,6 +2173,14 @@ function RosterPage({
             {saveState === 'error' && 'Errore (offline?)'}
           </span>
         </div>
+      </div>
+
+      <div className="team-synth">
+        <span className="ts-team">
+          <TeamBadge team={team} size={16} /> {team.abbrev}
+        </span>
+        <SynthBadges synth={synth} staff={staff} />
+        <span className="ts-hint">sintesi dello schieramento attuale · si aggiorna a ogni mossa</span>
       </div>
 
       {statMode === 'season' && (
