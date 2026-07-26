@@ -33,13 +33,17 @@
     fatta una volta all'avvio del gioco / in setup franchigia, non ripetuta ad
     ogni partita: la sostituzione avverrà con Fase 2/5 (vedi sotto).
 
+- **Fase 2 — Costruzione squadra & import storico: QUASI COMPLETA.**
+  - Editor rosa con **UI drag&drop**, **foglio partita** che entra nella
+    simulazione, **squadra gestita persistente**, **persistenza Supabase**,
+    **import storico** end-to-end (inversione stat→rating, prova 1999) e
+    **fondazione modalità lega + salary cap**. In più, anticipati dalla Fase 4:
+    **calendario**, **classifiche**, **Leaderboard** e accumulo stat reali.
+  - **Manca per chiudere la fase:** pipeline Lahman completa (30 squadre ×
+    annata) + UI di selezione stagione/sorgente. Dettaglio sotto.
+
 ## Roadmap
-- **Fase 2 — Costruzione squadra & import storico** *(in corso)*
-  - Editor di lineup/rotazione; import di **giocatori e franchigie storiche
-    reali** (database Lahman, pubblico).
-  - **Scelta della squadra gestita resa persistente**: la si sceglie una volta
-    (setup) e vale per tutte le partite; il selettore per-partita della Fase 1
-    diventa strumento di test/debug, non il flusso principale.
+- **Fase 2 — Costruzione squadra & import storico** *(quasi completa)*
   - **Import storico — decisione di design**: le stagioni reali sono *snapshot
     congelati*, quindi le **statistiche** dell'annata sono la verità di quel
     giocatore storico e i rating 20-80 si **stimano** dalle stat solo per
@@ -47,38 +51,59 @@
     resta pieno per i giocatori **generati** (che evolvono); lo snapshot storico
     non evolve. Import di **stagioni intere** dal Lahman via pipeline di build
     (JSON compatti per annata, non CSV a runtime).
-  - **Import storico — FATTO (prima prova end-to-end):** l'inversione
-    *statistiche → rating 20-80* vive in `engine/statsToRatings.ts`
-    (`ratingsFromBatterStats`/`ratingsFromPitcherStats`, inverse esatte di
+  - **Import storico — FATTO (prova end-to-end):** l'inversione *statistiche →
+    rating 20-80* vive in `engine/statsToRatings.ts`
+    (`ratingsFromBatterStats`/`ratingsFromPitcherStats`, inverse di
     `deriveBatterStats`/`derivePitcherStats`; vedi `docs/players-and-ratings.md`).
-    Un primo dataset di prova (`data/historical/season1999.ts`, linee reali
-    approssimate di CLE e BOS 1999) + importatore (`data/historical/import.ts`)
-    costruiscono squadre pronte al motore con **stats ri-derivate dai rating
-    stimati**. Verifica: round-trip fedele (BA/HR/BB/K), i **campioni** escono
-    campioni (R.Alomar ~1.11 OPS, Nomar ~1.01, Pedro ~1.4 ERA/390 K vs media),
-    gli **scarsi** affondano (D.Lewis ~.58 OPS), e gli aggregati closed-loop
-    restano nell'epoca (BA ~.271, R/G ~5.15, HR/G ~1.27). Manca: pipeline Lahman
-    completa (30 squadre × annata) e UI di selezione.
+    Dataset di prova (`data/historical/season1999.ts`, linee reali approssimate di
+    CLE e BOS 1999) + importatore (`data/historical/import.ts`) costruiscono
+    squadre pronte al motore con **stats ri-derivate dai rating stimati**. Nomi
+    reali separati nome/cognome (`engine/names.ts`); **potenziale stimato**
+    all'import (`projectPotential`) con code bust/breakout in `aging.ts` (lo
+    sviluppo futuro dal seed NON replica la realtà). Verifica: round-trip fedele,
+    i **campioni** escono campioni e gli **scarsi** affondano, aggregati
+    closed-loop nell'epoca. **Manca:** pipeline Lahman completa (30 squadre ×
+    annata) e **UI di selezione stagione/sorgente**.
+  - **Editor squadra — FATTO (motore/dati + UI):** roster **25 attivi + ~10
+    depth**, split **14/11**, **sempre DH**, posizioni **libere con malus**
+    (`engine/lineup.ts`: `autoLineup` + `validateFieldSet`). La **UI** è la
+    pagina **Roster** (linguette Fielders/Pitchers, **drag&drop** ordine/ruoli/
+    panca, tabelle stat con toggle Stagione/Scorsa/Storico/Caratteristiche). Il
+    **foglio partita** (`engine/arrangement.ts`: `MatchArrangement`) entra
+    davvero nella simulazione (`buildManagedTeam`) ed è **persistito**
+    (`lineups` in `GameSave`).
+  - **Squadra gestita persistente — FATTO:** `managedTeamId` scelto e salvato
+    (selettore nella Home); il selettore per-partita della Fase 1 resta solo
+    strumento di test.
   - **Persistenza — FATTO (fondamenta):** salvataggi su **Supabase** dietro
-    l'interfaccia `SaveStore` (`src/data/persistence/`). Cloud sorgente primaria,
-    niente auth, RLS aperta per scelta, save versionati (`schema_version`).
-    Dettaglio in `docs/architecture.md` § Persistenza.
-  - **Editor lineup — FATTO (base motore/dati):** roster **25 attivi + ~10
-    depth** (`reserveBatters`/`reservePitchers` su `Team`, generati anche per le
-    squadre procedurali); split **14/11**; **sempre DH** in questa fase;
-    posizioni **libere con malus**. `engine/lineup.ts`: `autoLineup` (euristica
-    ordine di battuta) + `validateFieldSet`. Manca la **UI** dell'editor e il
-    wiring su `saveStore` (prossimo passo).
-- **Fase 3 — UI stile SBS/OOTP**
+    `SaveStore` (`src/data/persistence/`). Cloud sorgente primaria, niente auth,
+    RLS aperta per scelta, save versionati. Vedi `docs/architecture.md`.
+  - **Modalità lega + salary cap — FONDAZIONE:** `data/leagueMode.ts` distingue
+    lega **generata** (talento ~gaussiano → cap **rigido**, sandbox paritaria) da
+    import **storico** (rose sbilanciate reali → cap **morbido/off**). Tipi +
+    utilità sul monte-ingaggi; l'enforce (scambi/rinnovi) è del layer gestionale.
+    Vedi `docs/franchise.md` § Modalità e squilibrio.
+- **Fase 3 — UI stile SBS/OOTP** *(avviata)*
   - Campo con etichette, card giocatore ricche, pannelli colorati, pulsanti.
-- **Fase 4 — Stagione**
-  - Calendario, classifiche, playoff, statistiche accumulate; qui emergono le
-    annate individuali con la loro varianza (ERA/W realistiche).
-  - Introdurre **difesa dietro il lanciatore** e **fattore stadio** (scollegatori
-    ERA-vs-talento).
+  - **FATTO (primi passi):** struttura a **pagine** con header di navigazione
+    (Home/Roster/Leaderboard/Classifiche/Franchigia); **banner di cronaca a fasi**
+    sopra la foto stadio + **micro-eventi** partita (lancio pazzo / palla passata
+    / balk) — vedi `src/ui/commentary.ts` e `docs/engine-calibration.md`.
+- **Fase 4 — Stagione** *(gran parte anticipata in Fase 2)*
+  - **FATTO:** **calendario** (10 prestagione + 162 regular + slot playoff,
+    `data/schedule.ts`); **stagione a stati** (`data/season.ts`) che accumula i
+    box score **reali** di entrambe le squadre nelle mie partite e **quick-sima**
+    il resto della lega per classifiche reali; pagina **Classifiche** (record di
+    division reali) e pagina **Leaderboard** (Batting/Pitching: numeri reali per
+    la mia squadra, **proiezione** d'annata credibile per le altre 29, con
+    identità statistiche rispettate — `data/projection.ts`).
+  - **Manca:** **playoff giocabili** (ora slot placeholder); **rollover di
+    stagione** (stagione → scorsa → carriera dai dati reali degli anni gestiti);
+    scollegatori ERA-vs-talento (**difesa dietro il lanciatore**, **fattore
+    stadio**).
 - **Fase 5 — Franchigia (gestione leggera)**
   - Vedi `docs/franchise.md`: stipendi annuali, salary cap rigido, scambi a
-    valore, draft semplice.
+    valore, draft semplice. Fondazione modalità/cap già presente (vedi Fase 2).
 
 ## Modello di gioco a regime (bussola per Fasi 4/5)
 
