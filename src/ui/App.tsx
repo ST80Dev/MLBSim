@@ -19,7 +19,7 @@ import {
   pinchHit,
   setInfieldIn,
 } from '../engine/game';
-import { batterOverall, pitcherOverall, deriveBatterStats, derivePitcherStats } from '../engine/ratings';
+import { batterOverall, pitcherOverall, RATING_MIN, RATING_AVG } from '../engine/ratings';
 import { disambiguateLastNames } from '../engine/names';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import { teamSynthesis, staffSynthesis } from '../engine/teamRatings';
@@ -429,6 +429,7 @@ export function App() {
         <RosterPage
           key={myId}
           team={managedTeam}
+          seed={leagueSeed}
           initial={arrangement}
           activeGame={!!activeGame}
           season={season}
@@ -1487,7 +1488,7 @@ function TeamBadge({ team, size = 46 }: { team: Team; size?: number }) {
 }
 
 function strengthColor(v: number): string {
-  const t = Math.max(0, Math.min(1, (v - 30) / 45));
+  const t = Math.max(0, Math.min(1, (v - (RATING_AVG - 20)) / 45));
   return `hsl(${Math.round(t * 125)} 60% 46%)`;
 }
 
@@ -1931,7 +1932,7 @@ function SynthBadges({ synth, staff }: { synth: TeamSynth; staff: number }) {
 
 /** Voto in stelle 1..5 dall'overall: piene evidenti, vuote smorzate. */
 function Stars({ overall }: { overall: number }) {
-  const n = Math.max(1, Math.min(5, Math.round((overall - 20) / 15) + 1));
+  const n = Math.max(1, Math.min(5, Math.round((overall - RATING_MIN) / 15) + 1));
   return (
     <span className="stars" title={`${overall} OVR`}>
       {Array.from({ length: 5 }, (_, i) => (
@@ -1986,71 +1987,9 @@ interface BatLine {
   h: number; d2: number; t3: number; hr: number; rbi: number; bb: number; so: number; sb: number;
 }
 
-/** Linea di battuta ATTESA dai rating (o zeri per la stagione in corso). */
-function batLine(b: Batter, mode: RosterStat): BatLine {
-  if (mode === 'season') {
-    return { g: 0, avg: 0, obp: 0, slg: 0, h: 0, d2: 0, t3: 0, hr: 0, rbi: 0, bb: 0, so: 0, sb: 0 };
-  }
-  const s = deriveBatterStats(b.ratings);
-  const ab = Math.max(1, s.pa - s.bb - s.hbp);
-  const singles = s.h - s.double - s.triple - s.hr;
-  const tb = singles + 2 * s.double + 3 * s.triple + 4 * s.hr;
-  return {
-    g: round(s.pa / 4.3),
-    avg: s.h / ab,
-    obp: (s.h + s.bb + s.hbp) / s.pa,
-    slg: tb / ab,
-    h: s.h, d2: s.double, t3: s.triple, hr: s.hr,
-    rbi: round(s.hr * 1.9 + (s.h - s.hr) * 0.35), // stima: risultato, non peripheral
-    bb: s.bb, so: s.so, sb: s.sb,
-  };
-}
-
 interface PitLine {
   w: number; l: number; g: number; gs: number; ip: number; ipOuts: number; era: number;
   h: number; bb: number; k: number; svo: number; sv: number; whip: number; k9: number;
-}
-
-/** Stima dei punti guadagnati (ER) da una linea attesa: ERA e' un risultato. */
-function estimateER(h: number, hr: number, bb: number): number {
-  return 0.32 * (h - hr) + 1.44 * hr + 0.11 * bb;
-}
-
-/** Carico stagionale atteso per ruolo (partite, aperture, battitori affrontati). */
-const PITCH_LOAD: Record<string, { g: number; gs: number; bf: number }> = {
-  SP: { g: 32, gs: 32, bf: 800 },
-  RP: { g: 65, gs: 0, bf: 280 },
-  CL: { g: 62, gs: 0, bf: 248 },
-};
-
-/** Linea di lancio ATTESA dai rating (peripherals derivati; risultati stimati). */
-function pitLine(p: Pitcher, mode: RosterStat): PitLine {
-  if (mode === 'season') {
-    return { w: 0, l: 0, g: 0, gs: 0, ip: 0, ipOuts: 0, era: 0, h: 0, bb: 0, k: 0, svo: 0, sv: 0, whip: 0, k9: 0 };
-  }
-  const load = PITCH_LOAD[p.role] ?? PITCH_LOAD.RP;
-  const s = derivePitcherStats(p.ratings, load.bf);
-  const outs = Math.max(1, load.bf - s.h - s.bb - s.hbp);
-  const ip = outs / 3;
-  const ovr = pitcherOverall(p.ratings);
-  const wp = clamp01(0.5 + (ovr - 50) / 60, 0.35, 0.68);
-  const dec = p.role === 'SP' ? 20 : p.role === 'CL' ? 6 : 8;
-  const w = round(dec * wp);
-  let svo = 0;
-  let sv = 0;
-  if (p.role === 'CL') {
-    svo = round(38 + (ovr - 55) * 0.4);
-    sv = round(svo * clamp01(0.8 + (ovr - 55) / 120, 0.7, 0.93));
-  } else if (p.role === 'RP') {
-    svo = 6;
-    sv = round(svo * 0.5);
-  }
-  return {
-    w, l: dec - w, g: load.g, gs: load.gs, ip, ipOuts: outs,
-    era: (estimateER(s.h, s.hr, s.bb) / ip) * 9,
-    h: s.h, bb: s.bb, k: s.so, svo, sv,
-    whip: (s.h + s.bb) / ip, k9: (s.so / ip) * 9,
-  };
 }
 
 /** IP in notazione baseball: interi + terzi (es. 200.1). */
@@ -2114,7 +2053,7 @@ function defLine(pos: Position, g: number, fielding: number): DefLine {
   const chances = m.ch * g;
   const a = round(chances * m.aShare);
   const po = round(chances - a);
-  const e = round(chances * m.err * clamp01(1 - (fielding - 50) / 60, 0.4, 1.7));
+  const e = round(chances * m.err * clamp01(1 - (fielding - RATING_AVG) / 60, 0.4, 1.7));
   const tc = po + a + e;
   return { e, a, po, fp: tc ? (po + a) / tc : 0 };
 }
@@ -2165,6 +2104,7 @@ function DefenseFieldSVG() {
 
 function RosterPage({
   team,
+  seed,
   initial,
   activeGame,
   season,
@@ -2173,6 +2113,7 @@ function RosterPage({
   onStart,
 }: {
   team: Team;
+  seed: number;
   initial?: MatchArrangement;
   activeGame: boolean;
   season: SeasonState;
@@ -2197,6 +2138,20 @@ function RosterPage({
   const bench = batters.filter((b) => !starterIds.has(b.id));
   const check = validateArrangement(team, arr);
   const ratingsMode = statMode === 'ratings';
+
+  // Minutaggio realistico nella "scorsa"/"storico": la linea attesa NON e' 650 PA
+  // per tutti. Si proietta per FASCIA di rosa (titolare/panca/riserva, dalle liste
+  // originali della squadra) cosi' le riserve hanno PA/gare da riserve e i titolari
+  // non giocano tutti 162 uguali (vedi data/projection.ts: eta' + ruolo + annata).
+  const batTierOf = new Map<string, BatTier>();
+  team.lineup.forEach((b) => batTierOf.set(b.id, 'starter'));
+  team.bench.forEach((b) => batTierOf.set(b.id, 'bench'));
+  team.reserveBatters.forEach((b) => batTierOf.set(b.id, 'reserve'));
+  const projYear = () => season.year - (statMode === 'hist' ? 2 : 1);
+  const projBat = (b: Batter): BatLine =>
+    seasonBatLine(projectBatterSeason(b, batTierOf.get(b.id) ?? 'bench', { seed, year: projYear(), day: SEASON_GAMES }));
+  const projPit = (p: Pitcher): PitLine =>
+    seasonPitLine(projectPitcherSeason(p, { seed, year: projYear(), day: SEASON_GAMES }));
   const lastName = (n: string) => n.split(' ').slice(-1)[0] || n;
   const posRank = (p: Position) => FIELD_SLOTS.indexOf(p);
   const defOrder = [...lineup].sort(
@@ -2336,7 +2291,7 @@ function RosterPage({
         </>
       );
     }
-    const s = statMode === 'season' ? seasonBatLine(season.bat[b.id]) : batLine(b, statMode);
+    const s = statMode === 'season' ? seasonBatLine(season.bat[b.id]) : projBat(b);
     return (
       <>
         <td>{s.g}</td><td>{pct3(s.avg)}</td><td>{pct3(s.obp)}</td><td>{pct3(s.slg)}</td>
@@ -2354,7 +2309,7 @@ function RosterPage({
         </>
       );
     }
-    const g = statMode === 'season' ? seasonBatLine(season.bat[b.id]).g : batLine(b, statMode).g;
+    const g = statMode === 'season' ? seasonBatLine(season.bat[b.id]).g : projBat(b).g;
     const d = defLine(pos, g, rp.fielding);
     return (
       <>
@@ -2372,7 +2327,7 @@ function RosterPage({
         </>
       );
     }
-    const s = statMode === 'season' ? seasonPitLine(season.pit[p.id]) : pitLine(p, statMode);
+    const s = statMode === 'season' ? seasonPitLine(season.pit[p.id]) : projPit(p);
     return (
       <>
         <td>{s.w}</td><td>{s.l}</td><td>{s.g}</td><td>{s.gs}</td><td>{ipFmt(s.ipOuts)}</td>

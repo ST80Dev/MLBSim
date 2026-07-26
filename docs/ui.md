@@ -76,7 +76,7 @@ le righe del giocatore coinvolto e il **Recap**. Le righe sono calcolate in
 **box score completo** di entrambe le squadre (battuta + lancio, V/P/SV), col
 toggle stat. Chiudibile con ✕, click fuori o Esc.
 
-- **Scheda "Rose & caratteristiche"**: doti 20-80 colorate per lineup e rotazione,
+- **Scheda "Rose & caratteristiche"**: doti 40-100 colorate per lineup e rotazione,
   con OVR a stelle e lo scambio difensivo (seconda posizione).
 
 La partita interattiva (`LiveGame`) è **mutabile** e vive tra i render: `App`

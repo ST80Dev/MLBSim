@@ -9,7 +9,7 @@ import type { BatterRatings, PitcherRatings } from '../types';
 
 describe('ratingFromMult', () => {
   it('inverte ratingMult', () => {
-    for (const rating of [30, 45, 50, 62, 78]) {
+    for (const rating of [50, 65, 70, 82, 98]) {
       for (const perSigma of [0.72, 0.88, 1.1, 1.34]) {
         const back = ratingFromMult(ratingMult(rating, perSigma), perSigma);
         expect(back).toBeCloseTo(rating, 4);
@@ -18,33 +18,33 @@ describe('ratingFromMult', () => {
   });
 
   it('e\' robusto agli input degeneri', () => {
-    expect(ratingFromMult(0, 1.2)).toBe(50); // rate nullo
-    expect(ratingFromMult(1.5, 1)).toBe(50); // perSigma neutro
+    expect(ratingFromMult(0, 1.2)).toBe(70); // rate nullo -> media di lega
+    expect(ratingFromMult(1.5, 1)).toBe(70); // perSigma neutro -> media di lega
   });
 });
 
 describe('ratingsFromBatterStats', () => {
-  it('ricava ~50 dalle statistiche del giocatore medio (round-trip)', () => {
+  it('ricava ~70 dalle statistiche del giocatore medio (round-trip)', () => {
     const stats = deriveBatterStats(
-      { contact: 50, power: 50, eye: 50, speed: 50, fielding: 50, arm: 50 },
+      { contact: 70, power: 70, eye: 70, speed: 70, fielding: 70, arm: 70 },
       650,
     );
     const r = ratingsFromBatterStats({ ...stats, position: 'LF' });
     for (const dote of ['contact', 'power', 'eye', 'speed'] as const) {
-      expect(r[dote]).toBeGreaterThanOrEqual(46);
-      expect(r[dote]).toBeLessThanOrEqual(54);
+      expect(r[dote]).toBeGreaterThanOrEqual(66);
+      expect(r[dote]).toBeLessThanOrEqual(74);
     }
   });
 
   it('recupera un profilo forte partendo dalle sue statistiche derivate', () => {
-    const strong: BatterRatings = { contact: 62, power: 70, eye: 68, speed: 55, fielding: 50, arm: 50 };
+    const strong: BatterRatings = { contact: 82, power: 90, eye: 88, speed: 75, fielding: 70, arm: 70 };
     const stats = deriveBatterStats(strong, 650);
     const back = ratingsFromBatterStats({ ...stats, position: 'RF' });
     // La Potenza (leva HR, dominante) e l'Occhio (leva BB, pulita) tornano vicini.
-    expect(back.power).toBeGreaterThan(62);
-    expect(back.eye).toBeGreaterThan(62);
+    expect(back.power).toBeGreaterThan(82);
+    expect(back.eye).toBeGreaterThan(82);
     // Il contatto resta sopra la media.
-    expect(back.contact).toBeGreaterThan(52);
+    expect(back.contact).toBeGreaterThan(72);
   });
 
   it('ordina le fasce: campione > medio > scarso', () => {
@@ -58,24 +58,24 @@ describe('ratingsFromBatterStats', () => {
 });
 
 describe('ratingsFromPitcherStats', () => {
-  it('ricava ~50 dalle statistiche del lanciatore medio (round-trip)', () => {
+  it('ricava ~70 dalle statistiche del lanciatore medio (round-trip)', () => {
     const stats = derivePitcherStats(
-      { stuff: 50, control: 50, movement: 50, groundball: 50, stamina: 50, fielding: 50 },
+      { stuff: 70, control: 70, movement: 70, groundball: 70, stamina: 70, fielding: 70 },
       1000,
     );
     const r = ratingsFromPitcherStats({ ...stats, role: 'SP', gs: 34 });
     for (const dote of ['stuff', 'control', 'movement', 'groundball'] as const) {
-      expect(r[dote]).toBeGreaterThanOrEqual(46);
-      expect(r[dote]).toBeLessThanOrEqual(54);
+      expect(r[dote]).toBeGreaterThanOrEqual(66);
+      expect(r[dote]).toBeLessThanOrEqual(74);
     }
   });
 
   it('un asso ha Dominio alto e pochi BB concessi -> Controllo alto', () => {
-    const strong: PitcherRatings = { stuff: 72, control: 68, movement: 60, groundball: 62, stamina: 62, fielding: 50 };
+    const strong: PitcherRatings = { stuff: 92, control: 88, movement: 80, groundball: 82, stamina: 82, fielding: 70 };
     const stats = derivePitcherStats(strong, 1000);
     const back = ratingsFromPitcherStats({ ...stats, role: 'SP', gs: 33 });
-    expect(back.stuff).toBeGreaterThan(64);
-    expect(back.control).toBeGreaterThan(60);
-    expect(back.groundball).toBeGreaterThan(55);
+    expect(back.stuff).toBeGreaterThan(84);
+    expect(back.control).toBeGreaterThan(80);
+    expect(back.groundball).toBeGreaterThan(75);
   });
 });

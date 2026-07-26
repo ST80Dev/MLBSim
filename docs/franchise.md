@@ -33,9 +33,12 @@ si prepara la squadra, si conferma, si gioca la partita, poi di nuovo gestione.
 ## Modalità di lega e squilibrio (generata vs import storico)
 
 **Decisione di design.** La lega **generata** ha talento ~gaussiano centrato su
-50: le squadre partono di **forza simile**, quindi il **cap rigido** ha senso
-(parità della sandbox gestionale). L'**import storico** è diverso: le rose reali
-**non sono bilanciate** — le squadre vincenti hanno giocatori con stat/rating
+70 (media di lega), ma con un **offset di squadra** (`teamTalent`, σ≈5): le rose
+NON partono tutte uguali — alcune sono da contender, altre da cantina, così le
+stagioni simulate non finiscono tutte sul filo del .500. Restano comunque entro
+una forbice gestibile dal **cap rigido** (la media di lega non si sposta).
+L'**import storico** è diverso: le rose reali **non sono bilanciate** — le squadre
+vincenti hanno giocatori con stat/rating
 migliori, le perdenti peggiori. È la **verità dello snapshot** e va **abbracciata,
 non ri-bilanciata** (ri-livellare falserebbe la stagione reale).
 

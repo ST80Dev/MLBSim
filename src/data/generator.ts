@@ -18,6 +18,7 @@ import {
   salaryFromOverall,
   clampRating,
   projectPotential,
+  RATING_AVG,
 } from '../engine/ratings';
 import type { Rng } from '../engine/rng';
 import { makeRng } from '../engine/rng';
@@ -25,16 +26,22 @@ import { SECONDARY_OPTIONS } from '../engine/positions';
 import { NAME_ORIGINS } from './names';
 import { FRANCHISES, Franchise } from './franchises';
 
-// Quota di giocatori (non tutti!) con una seconda posizione difensiva.
-const SECONDARY_CHANCE = 0.35;
+// Quasi tutti i giocatori hanno una seconda posizione difensiva (adiacente e
+// coerente, vedi SECONDARY_OPTIONS): serve a garantire un backup plausibile per
+// ogni ruolo anche quando i ruoli PRIMARI della rosa sono sbilanciati (evita le
+// rose con 3 SS e 1 solo LF senza copertura). La difesa fuori ruolo e' comunque
+// penalizzata (fielding effettivo, vedi engine/positions.ts).
+const SECONDARY_CHANCE = 0.95;
 
 const LINEUP_POSITIONS: Position[] = [
   'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH',
 ];
-const BENCH_POSITIONS: Position[] = ['C', 'SS', 'CF', '1B', '3B'];
-// Profondita' (depth) oltre i 25 attivi: riserve per gestione/scambi. Coprono
-// posizioni varie cosi' che ci sia sempre un sostituto plausibile da promuovere.
-const DEPTH_BATTER_POSITIONS: Position[] = ['C', 'SS', '2B', '3B', 'CF', '1B'];
+// Panchina e profondita' distribuite per NON accumulare troppi doppioni sugli
+// stessi ruoli (backup C sempre presente, poi utility interni ed esterni sparsi):
+// insieme alle seconde posizioni garantiscono copertura equilibrata di ogni casella.
+const BENCH_POSITIONS: Position[] = ['C', 'CF', 'SS', '3B', 'RF'];
+// Profondita' (depth) oltre i 25 attivi: riserve per gestione/scambi.
+const DEPTH_BATTER_POSITIONS: Position[] = ['C', '1B', '2B', 'LF', '3B', 'CF'];
 
 // Modellazione per ruolo: i difensori centrali difendono meglio, gli angoli
 // picchiano di piu', ecc. (bonus applicati alle doti in generazione).
@@ -127,22 +134,29 @@ function throwHand(rng: Rng): ThrowHand {
 function batterArchetype(rng: Rng): { contact: number; power: number; eye: number; speed: number } {
   const t = { contact: 0, power: 0, eye: 0, speed: 0 };
   const a = rng.next();
-  if (a < 0.16) { t.power += 17; t.contact -= 12; t.eye -= 3; } // slugger da bombe
-  else if (a < 0.32) { t.contact += 15; t.power -= 11; t.eye += 2; } // contact / slap hitter
-  else if (a < 0.45) { t.eye += 18; t.power -= 4; t.contact -= 4; } // occhio / OBP
-  else if (a < 0.6) { t.speed += 18; t.power -= 12; t.contact += 4; } // velocista
+  if (a < 0.16) { t.power += 13; t.contact -= 12; t.eye -= 3; } // slugger da bombe
+  else if (a < 0.32) { t.contact += 15; t.power -= 16; t.eye += 2; } // contact / slap hitter (pochi HR)
+  else if (a < 0.45) { t.eye += 18; t.power -= 6; t.contact -= 4; } // occhio / OBP
+  else if (a < 0.6) { t.speed += 18; t.power -= 17; t.contact += 4; } // velocista (spesso pochissimi HR)
   else if (a < 0.7) { t.power += 10; t.contact += 7; t.eye += 5; } // stella completa (raro)
   // resto (~30%): profilo equilibrato, nessun tilt.
   return t;
 }
 
-function makeBatterRatings(rng: Rng, position: Position): BatterRatings {
-  const talent = rng.gauss(0, 4.5);
+function makeBatterRatings(rng: Rng, position: Position, teamTalent = 0): BatterRatings {
+  // Talento CONDIVISO: la spina dorsale del giocatore, l'unica componente che
+  // SOPRAVVIVE alla media dell'overall (il rumore per-dote si annulla). Si compone
+  // di due parti: `teamTalent` (offset della SQUADRA: rende alcune rose davvero
+  // piu' forti di altre, cosi' le stagioni non finiscono tutte sul .500) + una
+  // parte INDIVIDUALE. Coda rara di GEMME (~4%): campioni che sfondano verso le 5
+  // stelle e, con l'archetipo, dominano una categoria. Entrambe centrate su 0:
+  // gli aggregati di lega (epoca "alta offesa") non si spostano, cambia solo la
+  // DISPERSIONE (fra squadre e fra compagni).
+  const gem = rng.next() < 0.04 ? Math.abs(rng.gauss(0, 1)) * 9 + 6 : 0;
+  const talent = teamTalent + rng.gauss(0, 7) + gem;
   const shape = POS_SHAPE[position] ?? { field: 0, power: 0, speed: 0, arm: 0 };
   const t = batterArchetype(rng);
-  // Meno talento CONDIVISO (che appiattiva tutti sullo stesso profilo) + archetipi
-  // marcati: la dispersione totale cresce ed e' STRUTTURATA (specialisti veri).
-  const draw = (sd: number, bonus = 0) => clampRating(50 + talent + bonus + rng.gauss(0, sd));
+  const draw = (sd: number, bonus = 0) => clampRating(RATING_AVG + talent + bonus + rng.gauss(0, sd));
   return {
     contact: draw(6.5, t.contact),
     power: draw(7.5, shape.power + t.power),
@@ -153,10 +167,13 @@ function makeBatterRatings(rng: Rng, position: Position): BatterRatings {
   };
 }
 
-function makePitcherRatings(rng: Rng, role: PitcherRole): PitcherRatings {
-  const talent = rng.gauss(0, 6);
-  const draw = (sd: number, bonus = 0) => clampRating(50 + talent + bonus + rng.gauss(0, sd));
-  const staminaBase = role === 'SP' ? 52 : role === 'CL' ? 30 : 38;
+function makePitcherRatings(rng: Rng, role: PitcherRole, teamTalent = 0): PitcherRatings {
+  // Stessa filosofia dei battitori: offset di SQUADRA + parte individuale + coda
+  // rara di gemme (~4%), tutto centrato su 0 per non spostare l'epoca.
+  const gem = rng.next() < 0.04 ? Math.abs(rng.gauss(0, 1)) * 9 + 6 : 0;
+  const talent = teamTalent + rng.gauss(0, 7.5) + gem;
+  const draw = (sd: number, bonus = 0) => clampRating(RATING_AVG + talent + bonus + rng.gauss(0, sd));
+  const staminaBase = role === 'SP' ? RATING_AVG + 2 : role === 'CL' ? RATING_AVG - 20 : RATING_AVG - 12;
   return {
     stuff: draw(8, role === 'SP' ? 0 : 4),
     control: draw(8),
@@ -176,12 +193,22 @@ function pickSecondary(rng: Rng, primary: Position): Position | undefined {
   return rng.next() < SECONDARY_CHANCE ? choice : undefined;
 }
 
-function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position): Batter {
-  const ratings = makeBatterRatings(rng, position);
+// Posizioni difensive "di casa" plausibili per chi occupa lo slot DH: quasi
+// sempre un bat-first d'angolo (1B/angoli esterni/3B) o un ricevitore a riposo.
+const DH_HOME_POSITIONS: Position[] = ['1B', '1B', '1B', 'LF', 'LF', 'RF', '3B', '3B', 'C'];
+
+function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position, teamTalent = 0): Batter {
+  // Il DH non e' un ruolo difensivo, e' uno slot di battuta: spesso lo occupa la
+  // riserva di un altro ruolo che oggi riposa il guanto. Quindi gli diamo una
+  // VERA posizione difensiva naturale (secondaria) e ne deriviamo doti e difesa,
+  // invece del vuoto difensivo fisso.
+  const isDH = position === 'DH';
+  const ratingsPos = isDH ? rng.pick(DH_HOME_POSITIONS) : position;
+  const ratings = makeBatterRatings(rng, ratingsPos, teamTalent);
   const stats = deriveBatterStats(ratings);
   const age = rng.int(21, 37);
   const ovr = batterOverall(ratings);
-  const secondaryPosition = pickSecondary(rng, position);
+  const secondaryPosition = isDH ? ratingsPos : pickSecondary(rng, position);
   const nm = names.next();
   return {
     id,
@@ -200,8 +227,8 @@ function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position
   };
 }
 
-function makePitcher(rng: Rng, names: NameFactory, id: string, role: PitcherRole): Pitcher {
-  const ratings = makePitcherRatings(rng, role);
+function makePitcher(rng: Rng, names: NameFactory, id: string, role: PitcherRole, teamTalent = 0): Pitcher {
+  const ratings = makePitcherRatings(rng, role, teamTalent);
   const stats = derivePitcherStats(ratings);
   const age = rng.int(21, 37);
   const ovr = pitcherOverall(ratings);
@@ -226,31 +253,35 @@ function makePitcher(rng: Rng, names: NameFactory, id: string, role: PitcherRole
 export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   // Una fabbrica di nomi per squadra: nomi unici, cognomi vari.
   const names = makeNameFactory(rng);
+  // Offset di talento della SQUADRA: sposta TUTTI i suoi giocatori su/giu' insieme,
+  // cosi' alcune rose sono davvero da contender e altre da cantina (le stagioni
+  // non finiscono tutte sul filo del .500). Centrato su 0: la media di lega resta.
+  const teamTalent = rng.gauss(0, 5);
   const lineup = LINEUP_POSITIONS.map((pos, i) =>
-    makeBatter(rng, names, `${f.abbrev}-B${i}`, pos),
+    makeBatter(rng, names, `${f.abbrev}-B${i}`, pos, teamTalent),
   );
   // Ordine di battuta semplice: i migliori bastoni piu' in alto.
   // (L'ottimizzazione realistica del lineup arrivera' in Fase 2.)
   lineup.sort((a, b) => batterOverall(b.ratings) - batterOverall(a.ratings));
 
   const bench = BENCH_POSITIONS.map((pos, i) =>
-    makeBatter(rng, names, `${f.abbrev}-BN${i}`, pos),
+    makeBatter(rng, names, `${f.abbrev}-BN${i}`, pos, teamTalent),
   );
   const rotation = Array.from({ length: 5 }, (_, i) =>
-    makePitcher(rng, names, `${f.abbrev}-SP${i}`, 'SP'),
+    makePitcher(rng, names, `${f.abbrev}-SP${i}`, 'SP', teamTalent),
   );
   const bullpen: Pitcher[] = [
-    ...Array.from({ length: 5 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-RP${i}`, 'RP')),
-    makePitcher(rng, names, `${f.abbrev}-CL`, 'CL'),
+    ...Array.from({ length: 5 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-RP${i}`, 'RP', teamTalent)),
+    makePitcher(rng, names, `${f.abbrev}-CL`, 'CL', teamTalent),
   ];
 
   // Profondita': ~6 battitori + 4 lanciatori (2 SP + 2 RP) di riserva.
   const reserveBatters = DEPTH_BATTER_POSITIONS.map((pos, i) =>
-    makeBatter(rng, names, `${f.abbrev}-DB${i}`, pos),
+    makeBatter(rng, names, `${f.abbrev}-DB${i}`, pos, teamTalent),
   );
   const reservePitchers: Pitcher[] = [
-    ...Array.from({ length: 2 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-DSP${i}`, 'SP')),
-    ...Array.from({ length: 2 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-DRP${i}`, 'RP')),
+    ...Array.from({ length: 2 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-DSP${i}`, 'SP', teamTalent)),
+    ...Array.from({ length: 2 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-DRP${i}`, 'RP', teamTalent)),
   ];
 
   return {

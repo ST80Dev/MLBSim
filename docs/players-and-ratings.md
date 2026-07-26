@@ -2,9 +2,24 @@
 
 ## Scala
 
-Tutte le caratteristiche usano la **scala scout 20-80**: **50 = media di lega**,
+Tutte le caratteristiche usano la **scala 40-100**: **70 = media di lega**,
 ~10 punti = una deviazione standard. Confrontabile fra giocatori. Definita in
-`src/engine/ratings.ts` (`RATING_MIN/MAX/AVG`, `clampRating`).
+`src/engine/ratings.ts` (`RATING_MIN=40`, `RATING_MAX=100`, `RATING_AVG=70`,
+`clampRating`).
+
+Scelta di design: ogni giocatore MLB è già un atleta d'élite, quindi il
+**pavimento è 40** (nessun professionista sotto quel livello) e le **gemme
+arrivano a 100**. L'ampiezza (60 punti) è la stessa della vecchia 20-80: tutti
+gli ancoraggi del motore sono espressi *relativamente* a `RATING_AVG`, così la
+scala si sposta senza cambiare l'output simulato (stat, ERA, stipendi). Le
+**stelle** (UI, `format.ts`/`App.tsx`) mappano 40→1★, 70≈3★, 100→5★
+(secchielli da 15 punti).
+
+Il **generatore** (`src/data/generator.ts`) disperde il talento con `sd` ampio
+(≈8.5 battitori, ≈9 lanciatori) più una **coda rara di gemme** (~4%): così
+l'overall spazia davvero da 2 a 4 stelle con qualche 5★, invece di incollarsi a
+3★. Il talento resta **centrato**, quindi cambia la *dispersione*, non gli
+aggregati di lega (epoca "alta offesa").
 
 ## Caratteristiche del battitore (6) — `BatterRatings`
 
@@ -41,9 +56,19 @@ entrambi i blocchi di caratteristiche e compare sia nel lineup sia nello staff.
 
 ## Seconda posizione difensiva
 
-Campo opzionale `secondaryPosition` sul `Batter`: **solo alcuni** giocatori
-(~35%) hanno un secondo ruolo, scelto da un insieme **fisso** di coppie
-plausibili (`SECONDARY_OPTIONS` in `src/engine/positions.ts`) — niente "ovunque".
+Campo opzionale `secondaryPosition` sul `Batter`: **quasi tutti** i giocatori
+(~95%) hanno un secondo ruolo, scelto da un insieme **fisso** di coppie
+plausibili e adiacenti (`SECONDARY_OPTIONS` in `src/engine/positions.ts`) — niente
+"ovunque". Serve a garantire abbastanza **duttilità** dentro ogni rosa: anche se i
+ruoli PRIMARI sono un po' sbilanciati, ogni casella ha di norma ≥2 coperture (fine
+delle rose con "3 SS e 1 solo LF"). Le fasce panchina/profondità sono anch'esse
+distribuite per non accumulare doppioni.
+
+Il **DH** non è un ruolo difensivo ma uno slot di battuta: il generatore gli dà una
+**vera casa difensiva** (un angolo/ricevitore, `DH_HOME_POSITIONS`) come posizione
+secondaria, e `fieldingAtPosition` la tratta come casa naturale (difende bene lì,
+paga la penalità solo altrove). Così un DH è "un 1B/angolo che oggi riposa il
+guanto", non un vuoto difensivo, e può rientrare in campo.
 
 Se schierato nella seconda posizione, cambia **solo la difesa** (fielding): è una
 skill legata al ruolo, mentre contatto/potenza/occhio/velocità/braccio sono del
@@ -68,19 +93,40 @@ davvero (Fase 4); per ora cambia posizioni mostrate e forza difensiva.
 
 In `src/engine/ratings.ts`:
 - `deriveBatterStats(ratings, pa=650)` e `derivePitcherStats(ratings, bf=1000)`
-  usano `ratingMult(rating, perSigma)` = moltiplicatore 1.0 a 50, ×`perSigma`
-  ogni 10 punti. A tutte le doti a 50 si ottengono le medie di lega.
+  usano `ratingMult(rating, perSigma)` = moltiplicatore 1.0 a `RATING_AVG` (70),
+  ×`perSigma` ogni 10 punti. A tutte le doti = 70 si ottengono le medie di lega.
 - I moltiplicatori sono **tarati** (vedi `docs/engine-calibration.md`): non
   toccarli senza rimisurare gli aggregati.
 - `deriveStamina(rating, role)` converte la Resistenza in soglia di battitori.
-- `batterOverall` / `pitcherOverall` = media pesata delle doti (20-80).
+- `batterOverall` / `pitcherOverall` = media pesata delle doti (40-100).
 - `salaryFromOverall` = stipendio annuale (milioni) dall'overall.
+
+## Minutaggio: PA/gare non uniformi
+
+Le linee di **stagione proiettata** (backstory "scorsa"/"storico" nel roster e le
+29 squadre CPU nella leaderboard) non danno 650 PA a tutti. `data/projection.ts`
+(`seasonalPA`) modella il minutaggio per:
+- **Fascia di rosa** — `starter` (~150 gare, ma con varianza: dai 46 ai 162),
+  `bench` (primo backup, ~63 gare mediane), `reserve` (poche gare, mediana ~27,
+  da chi è sceso in campo pochissimo a chi è arrivato da un'altra squadra e ha
+  giocato molto — coda ~12%).
+- **Età** (`ageplayFactor`) — giovanissimi (call-up/part-time) e veterani
+  (logorio) giocano meno del picco 24-34.
+- **Overall** (`ovrplayFactor`) — i migliori reggono il posto (~1.0 dal 3° stellato
+  in su), i **1-2 stelle giocano poco** anche se in rosa (alternati, spediti in
+  minor, rimpiazzati): un 2★ ha mediana ~42 gare, ~92 se costretto titolare in una
+  squadra debole, contro le ~160 di un 4★ titolare.
+- **Annata** — forma/infortunio (`prof.paMult`), che fa galleggiare le gare.
+
+La squadra dell'utente, appena gioca, usa comunque le stat **reali** dai box score
+(`data/season.ts`): la proiezione è solo la backstory finché non esistono stagioni
+davvero giocate.
 
 ## Inversione statistiche → caratteristiche (import storico)
 
 In `src/engine/statsToRatings.ts` — l'**inverso** della derivazione, per
 importare una stagione reale: dal tabellino si stimano le doti che, ri-derivate,
-lo riproducono. `ratingFromMult(mult, perSigma) = 50 + 10·ln(mult)/ln(perSigma)`
+lo riproducono. `ratingFromMult(mult, perSigma) = 70 + 10·ln(mult)/ln(perSigma)`
 inverte `ratingMult`; `mult` = rate osservato / rate di lega.
 
 - **Battitore** (`ratingsFromBatterStats`): Occhio ← BB (leva pulita); Potenza ←
@@ -108,7 +154,7 @@ In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
   Dominio, Resistenza, Braccio) e **poi le tecniche** (Contatto, Occhio,
   Controllo, Movimento, Difesa).
 - **Ritiro** automatico quando età alta + overall crollato.
-- Ogni giocatore ha un solo **potenziale** (tetto 20-80). Dopo l'evoluzione le
+- Ogni giocatore ha un solo **potenziale** (tetto 40-100). Dopo l'evoluzione le
   statistiche vengono ri-derivate dalle nuove caratteristiche.
 
 ### Potenziale come STIMA incerta

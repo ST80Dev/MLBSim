@@ -13,7 +13,7 @@ export type Position =
   | 'C' | '1B' | '2B' | '3B' | 'SS' | 'LF' | 'CF' | 'RF' | 'DH' | 'P';
 
 // ---------------------------------------------------------------------------
-// Caratteristiche (scala scout 20-80: 50 = media di lega, ~10 pt = 1 sigma)
+// Caratteristiche (scala scout 40-100: 70 = media di lega, ~10 pt = 1 sigma)
 // ---------------------------------------------------------------------------
 
 /** Sei doti del battitore. Ognuna governa UNA leva del motore (zero ridondanza). */

@@ -27,17 +27,17 @@ describe('importHistoricalTeam (stagione 1999)', () => {
     const bb = byName(bos);
 
     // Manny Ramirez: potenza da campione.
-    expect(cb.get('Manny Ramirez')!.ratings.power).toBeGreaterThanOrEqual(70);
+    expect(cb.get('Manny Ramirez')!.ratings.power).toBeGreaterThanOrEqual(90);
     // Omar Vizquel: contatto/velocita' alti, potenza scarsa.
-    expect(cb.get('Omar Vizquel')!.ratings.power).toBeLessThanOrEqual(35);
-    expect(cb.get('Omar Vizquel')!.ratings.speed).toBeGreaterThanOrEqual(65);
+    expect(cb.get('Omar Vizquel')!.ratings.power).toBeLessThanOrEqual(55);
+    expect(cb.get('Omar Vizquel')!.ratings.speed).toBeGreaterThanOrEqual(85);
     // Darren Lewis: potenza da fondo scala.
-    expect(bb.get('Darren Lewis')!.ratings.power).toBeLessThanOrEqual(30);
+    expect(bb.get('Darren Lewis')!.ratings.power).toBeLessThanOrEqual(50);
 
     // Pedro Martinez: dominio da asso, controllo alto.
     const pedro = bos.team.rotation.find((p) => p.name === 'Pedro Martinez')!;
-    expect(pedro.ratings.stuff).toBeGreaterThanOrEqual(72);
-    expect(pedro.ratings.control).toBeGreaterThanOrEqual(65);
+    expect(pedro.ratings.stuff).toBeGreaterThanOrEqual(92);
+    expect(pedro.ratings.control).toBeGreaterThanOrEqual(85);
   });
 
   it('assegna un potenziale STIMATO (headroom), non appiattito sull\'attuale', () => {

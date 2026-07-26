@@ -28,8 +28,8 @@ import { clampRating, RATING_AVG } from './ratings';
 // ---------------------------------------------------------------------------
 
 /**
- * Inverte `ratingMult(rating, perSigma) = perSigma^((rating-50)/10)`:
- *   rating = 50 + 10 * ln(mult) / ln(perSigma)
+ * Inverte `ratingMult(rating, perSigma) = perSigma^((rating-RATING_AVG)/10)`:
+ *   rating = RATING_AVG + 10 * ln(mult) / ln(perSigma)
  * `mult` e' il rapporto fra rate osservato e rate di lega. Robusta a input
  * degeneri (rate 0 o perSigma 1 -> ritorna la media).
  */
@@ -82,7 +82,7 @@ export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
 
   // Velocita: SB e' la leva diretta (invertendo la formula lineare di sb);
   // i tripli confermano (data la Potenza gia' stimata).
-  const speedSb = 45 + (s.sb / 30) * 35;
+  const speedSb = (RATING_AVG - 5) + (s.sb / 30) * 35;
   const powerTriMult = Math.pow(0.9, (power - RATING_AVG) / 10);
   const speedTri = ratingFromMult(s.triple / pa / LEAGUE.triple / powerTriMult, 1.6);
   const speed = 0.6 * speedSb + 0.4 * speedTri;
@@ -112,7 +112,7 @@ export interface PitcherImportInput extends PitcherStats {
  * - Palla-terra<- HR concessi (meno HR = piu' groundball)
  * - Movimento  <- hit non-HR concesse
  * - Resistenza <- battitori per partenza (SP) / default per ruolo (RP/CL)
- * - Difesa     <- 50 (non deducibile dal tabellino concesso)
+ * - Difesa     <- media di lega (non deducibile dal tabellino concesso)
  */
 export function ratingsFromPitcherStats(s: PitcherImportInput): PitcherRatings {
   const bf = Math.max(1, s.bf);
@@ -132,7 +132,7 @@ export function ratingsFromPitcherStats(s: PitcherImportInput): PitcherRatings {
     const bfPerStart = bf / s.gs;
     stamina = RATING_AVG + ((bfPerStart - 24) / 3) * 10;
   } else {
-    stamina = role === 'CL' ? 42 : role === 'RP' ? 45 : 60;
+    stamina = role === 'CL' ? RATING_AVG - 8 : role === 'RP' ? RATING_AVG - 5 : RATING_AVG + 10;
   }
 
   return {
