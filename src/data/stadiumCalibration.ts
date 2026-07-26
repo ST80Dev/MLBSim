@@ -182,3 +182,33 @@ export function getCalibration(teamId: string): FieldCalibration {
   const override = fileCalibration(teamId) ?? STADIUM_CALIBRATION[teamId] ?? {};
   return { ...PHOTO_DEFAULT_CALIBRATION, ...override };
 }
+
+/**
+ * Calibrazione per una FOTO specifica (principale o variante "doppione"). Carica
+ * il file JSON con lo STESSO stem della foto (es. `SFG3.json` per `SFG3.jpg`), se
+ * presente; altrimenti default-foto (+ override inline). Include `image` quando
+ * si tratta di una variante, così ogni doppione si calibra e si salva a sé.
+ */
+export function getCalibrationFor(teamId: string, image?: string): FieldCalibration {
+  const stem = calibrationStem(teamId, image);
+  const override = CAL_FILES[stem] ?? STADIUM_CALIBRATION[teamId] ?? {};
+  const base: FieldCalibration = { ...PHOTO_DEFAULT_CALIBRATION, ...override };
+  return image ? { ...base, image } : base;
+}
+
+/**
+ * Foto-stadio CALIBRATE (con file JSON) per uno stadio: principale + eventuali
+ * varianti. La principale ha `image` undefined; le altre `stadiums/<ID><n>.jpg`.
+ * Serve al match per variare lo sfondo SOLO tra foto già allineate (i marker
+ * restano coerenti). Le varianti non ancora calibrate non entrano nella rotazione.
+ */
+export function calibratedVariants(teamId: string): { image?: string; stem: string }[] {
+  const out: { image?: string; stem: string }[] = [];
+  for (const suffix of ['', '2', '3', '4', '5']) {
+    const stem = teamId + suffix;
+    if (CAL_FILES[stem]) {
+      out.push({ stem, image: suffix === '' ? undefined : `stadiums/${teamId}${suffix}.jpg` });
+    }
+  }
+  return out;
+}
