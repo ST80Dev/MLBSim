@@ -74,6 +74,8 @@ import {
   STATS_MODE_TITLE,
 } from './statlines';
 import type { StatItem, StatsMode } from './statlines';
+import { buildCommentary, PHASE_MS, HOLD_MS } from './commentary';
+import type { Commentary } from './commentary';
 
 type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'game';
 
@@ -355,6 +357,8 @@ export function App() {
               editable={editing}
               onMarkerMove={moveMarker}
             />
+
+            {!editing && <PlayBanner result={result} />}
 
             <div className="cronaca-corner left">
               <CronacaTeam result={result} side="away" />
@@ -1362,6 +1366,90 @@ function groupPlays(result: GameResult): CronacaGroup[] {
     cur.events.push(ev);
   }
   return groups;
+}
+
+/**
+ * Banner di cronaca in alto-centro sopra la foto stadio: mostra la telecronaca
+ * dell'ultima giocata in 2-3 fasi (attesa → sviluppo → verdetto), a tema coi
+ * colori della squadra protagonista e con intensita' crescente per gli esiti
+ * piu' straordinari (fuoricampo, doppio gioco…). A fine sequenza svanisce e la
+ * frase sintetica resta nella cronaca laterale (dx/sx).
+ */
+function PlayBanner({ result }: { result: GameResult }) {
+  const plays = result.play;
+  const len = plays.length;
+  // Non ri-animare le giocate gia' presenti al montaggio (partita ripresa).
+  const seenRef = useRef(len);
+  const [state, setState] = useState<{ com: Commentary; phase: number; leaving: boolean } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (len <= seenRef.current) {
+      seenRef.current = len;
+      return;
+    }
+    seenRef.current = len;
+    const ev = plays[len - 1];
+    // La sostituzione (pinch-hit) non e' una giocata: niente banner.
+    if (ev.kind === 'sub') {
+      setState(null);
+      return;
+    }
+    const offenseIsAway = ev.half === 'top';
+    const off = offenseIsAway ? result.away : result.home;
+    const def = offenseIsAway ? result.home : result.away;
+    const com = buildCommentary(ev, {
+      offense: { abbrev: off.abbrev, name: off.name, color: off.primaryColor },
+      defense: { abbrev: def.abbrev, name: def.name, color: def.primaryColor },
+    });
+
+    setState({ com, phase: 0, leaving: false });
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 1; i < com.phases.length; i++) {
+      timers.push(setTimeout(() => setState((s) => (s ? { ...s, phase: i } : s)), i * PHASE_MS));
+    }
+    const end = (com.phases.length - 1) * PHASE_MS + HOLD_MS;
+    timers.push(setTimeout(() => setState((s) => (s ? { ...s, leaving: true } : s)), end));
+    timers.push(setTimeout(() => setState(null), end + 420));
+    return () => timers.forEach(clearTimeout);
+  }, [len]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!state) return null;
+  const { com, phase, leaving } = state;
+  const cur = com.phases[phase];
+
+  return (
+    <div
+      className={`play-banner tier-${com.tier} accent-${com.accent}${leaving ? ' leaving' : ''}${
+        cur.climax ? ' climax' : ''
+      }`}
+      style={{ ['--bc' as string]: com.color }}
+      aria-live="polite"
+    >
+      <div className="pb-strip" />
+      <div className="pb-inner">
+        <div className="pb-head">
+          {cur.climax ? (
+            <div className="pb-verdict">
+              <span className="pb-icon">{com.icon}</span>
+              <span className="pb-label">{com.label}</span>
+              {com.scored > 0 && <span className="pb-runs">+{com.scored}</span>}
+            </div>
+          ) : (
+            <span className="pb-dots">
+              {com.phases.map((_, i) => (
+                <i key={i} className={i <= phase ? 'on' : ''} />
+              ))}
+            </span>
+          )}
+        </div>
+        <div className={`pb-text${cur.climax ? ' big' : ''}`} key={phase}>
+          {cur.text}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Cronaca di UNA squadra (ospite = mezzi alti; casa = mezzi bassi). Sempre

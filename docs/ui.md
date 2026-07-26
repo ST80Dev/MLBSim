@@ -32,8 +32,19 @@ Regioni, dall'alto in basso:
 - **Campo di gioco** (`Diamond` in modalità `background`): il campo/stadio
   **generato** riempie lo sfondo, con i marker della difesa, delle basi
   (occupate evidenziate), del battitore e del lanciatore. Sopra si sovrappongono:
-  - **Cronaca** (`CronacaOverlay`), overlay in alto-centro, **collassabile**, a
-    sezioni per inning/mezzo, poche righe con **scroll** (auto verso l'ultima).
+  - **Banner di cronaca** (`PlayBanner` + `src/ui/commentary.ts`), overlay in
+    **alto-centro** sopra la foto: telecronaca dell'ultima giocata in **2-3 fasi
+    sintetiche** (attesa «al piatto…» → sviluppo → **verdetto**), poi svanisce.
+    A **tema coi colori** della squadra protagonista (attacco per le battute
+    valide, difesa per gli eliminati) e con **intensità crescente** (`tier 0-5`)
+    per gli esiti più straordinari: singolo→doppio→triplo→**fuoricampo** in
+    attacco, eliminato in gioco→strikeout→eliminato in rubata→**doppio gioco**
+    in difesa; un punto segnato alza di un gradino. La categoria arriva dal
+    motore via `PlayEvent.kind` (metadato puramente descrittivo, non tocca la
+    simulazione né l'RNG). Non interattivo (`pointer-events:none`).
+  - **Cronaca laterale** (`CronacaTeam`, angoli **alti** sx/dx per ospite/casa):
+    a fine turno la giocata resta **sintetizzata in una riga** (`PlayEvent.text`)
+    nella timeline della squadra in attacco.
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
     battitore corrente evidenziato, lanciatore in pedana).
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:

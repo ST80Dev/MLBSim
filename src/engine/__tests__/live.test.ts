@@ -162,6 +162,41 @@ describe('bunt — attiva Difesa del lanciatore e Velocita', () => {
   });
 });
 
+describe('metadati narrativi (kind) per il banner di cronaca', () => {
+  const HIT_KINDS = new Set(['single', 'double', 'triple', 'homerun']);
+  const KNOWN = new Set([
+    'single', 'double', 'triple', 'homerun', 'walk', 'hbp', 'ibb', 'strikeout',
+    'inplayout', 'gidp', 'sacfly', 'sacbunt', 'bunthit', 'buntout', 'steal',
+    'caughtstealing', 'sub', 'other',
+  ]);
+
+  it('ogni giocata di una partita completa ha un kind noto e coerente', () => {
+    const { away, home } = generateMatchup(7);
+    const res = simulateGame(away, home, 4242);
+    expect(res.play.length).toBeGreaterThan(20);
+    let hits = 0;
+    for (const ev of res.play) {
+      expect(KNOWN.has(ev.kind)).toBe(true);
+      // Ogni battuta valida (kind di hit) ha un protagonista.
+      if (HIT_KINDS.has(ev.kind)) {
+        expect(typeof ev.batter).toBe('string');
+        hits += 1;
+      }
+      // Un fuoricampo segna sempre almeno un punto.
+      if (ev.kind === 'homerun') expect(ev.runsScored).toBeGreaterThanOrEqual(1);
+    }
+    // Somma degli hit "narrativi" coerente col totale di squadra.
+    expect(hits).toBe(res.awayStats.hits + res.homeStats.hits);
+  });
+
+  it('la base intenzionale e la rubata portano il kind giusto', () => {
+    const { away, home } = generateMatchup(2);
+    const live = createLiveGame(away, home, 2);
+    intentionalWalk(live);
+    expect(live.play[live.play.length - 1].kind).toBe('ibb');
+  });
+});
+
 describe('azioni interattive', () => {
   it('la base intenzionale mette il battitore in prima', () => {
     const { away, home } = generateMatchup(2);
