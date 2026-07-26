@@ -2778,3 +2778,45 @@ table {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* --- Leaderboard di lega -------------------------------------------- */
+.leaderboard-page .subtabs {
+  margin-bottom: 10px;
+}
+.lb-tbl {
+  width: 100%;
+  min-width: 720px;
+}
+.lb-tbl th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.lb-tbl th.sortable:hover {
+  color: var(--text);
+}
+.lb-tbl th.sorted,
+.lb-tbl td.sorted {
+  color: var(--accent);
+  background: rgba(120, 180, 255, 0.07);
+}
+.lb-tbl .rank {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  width: 30px;
+}
+.lb-tbl td.name {
+  font-weight: 600;
+  max-width: 190px;
+}
+.lb-tbl tr.me {
+  background: rgba(120, 180, 255, 0.1);
+}
+.lb-tbl tr.me td.name {
+  color: var(--accent);
+}
+.lb-note {
+  margin-top: 10px;
+  max-width: 78ch;
+  line-height: 1.45;
+}
