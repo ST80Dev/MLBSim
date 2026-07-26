@@ -18,6 +18,7 @@ import {
   salaryFromOverall,
   clampRating,
   projectPotential,
+  RATING_AVG,
 } from '../engine/ratings';
 import type { Rng } from '../engine/rng';
 import { makeRng } from '../engine/rng';
@@ -137,12 +138,18 @@ function batterArchetype(rng: Rng): { contact: number; power: number; eye: numbe
 }
 
 function makeBatterRatings(rng: Rng, position: Position): BatterRatings {
-  const talent = rng.gauss(0, 4.5);
+  // Talento CONDIVISO: la spina dorsale del giocatore, l'unica componente che
+  // SOPRAVVIVE alla media dell'overall (il rumore per-dote si annulla). Con sd
+  // ampio l'overall spazia davvero da 2 a 4 stelle invece di incollarsi a 3.
+  // Coda rara di GEMME (~4%): campioni che sfondano verso le 5 stelle e, con
+  // l'archetipo, dominano una categoria. Il talento resta CENTRATO su 0, quindi
+  // gli aggregati di lega (epoca "alta offesa") non si spostano: cambia solo la
+  // DISPERSIONE, non la media.
+  const gem = rng.next() < 0.04 ? Math.abs(rng.gauss(0, 1)) * 9 + 6 : 0;
+  const talent = rng.gauss(0, 8.5) + gem;
   const shape = POS_SHAPE[position] ?? { field: 0, power: 0, speed: 0, arm: 0 };
   const t = batterArchetype(rng);
-  // Meno talento CONDIVISO (che appiattiva tutti sullo stesso profilo) + archetipi
-  // marcati: la dispersione totale cresce ed e' STRUTTURATA (specialisti veri).
-  const draw = (sd: number, bonus = 0) => clampRating(50 + talent + bonus + rng.gauss(0, sd));
+  const draw = (sd: number, bonus = 0) => clampRating(RATING_AVG + talent + bonus + rng.gauss(0, sd));
   return {
     contact: draw(6.5, t.contact),
     power: draw(7.5, shape.power + t.power),
@@ -154,9 +161,12 @@ function makeBatterRatings(rng: Rng, position: Position): BatterRatings {
 }
 
 function makePitcherRatings(rng: Rng, role: PitcherRole): PitcherRatings {
-  const talent = rng.gauss(0, 6);
-  const draw = (sd: number, bonus = 0) => clampRating(50 + talent + bonus + rng.gauss(0, sd));
-  const staminaBase = role === 'SP' ? 52 : role === 'CL' ? 30 : 38;
+  // Stessa filosofia dei battitori: talento condiviso ampio (assi che dominano vs
+  // riempitivi) + coda rara di gemme (~4%), centrato su 0 per non spostare l'epoca.
+  const gem = rng.next() < 0.04 ? Math.abs(rng.gauss(0, 1)) * 9 + 6 : 0;
+  const talent = rng.gauss(0, 9) + gem;
+  const draw = (sd: number, bonus = 0) => clampRating(RATING_AVG + talent + bonus + rng.gauss(0, sd));
+  const staminaBase = role === 'SP' ? RATING_AVG + 2 : role === 'CL' ? RATING_AVG - 20 : RATING_AVG - 12;
   return {
     stuff: draw(8, role === 'SP' ? 0 : 4),
     control: draw(8),

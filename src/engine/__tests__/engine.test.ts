@@ -113,9 +113,11 @@ describe('realismo statistico (aggregato su molte partite)', () => {
     const hrPerGame = hr / (games * 2);
 
     // Intervalli per l'epoca voluta: "alta offesa anni '90/2000".
-    // Punti alti, medie alte, tanti fuoricampo — ma non fuori scala.
+    // Punti alti, medie alte, tanti fuoricampo — ma non fuori scala. Il tetto e'
+    // 6.2 (non 6.0): la maggiore dispersione del talento nel generatore alza di
+    // un soffio l'ambiente-punti (convessita' di ratingMult), restando in epoca.
     expect(runsPerTeamPerGame).toBeGreaterThan(4.3);
-    expect(runsPerTeamPerGame).toBeLessThan(6.0);
+    expect(runsPerTeamPerGame).toBeLessThan(6.2);
     expect(ba).toBeGreaterThan(0.255);
     expect(ba).toBeLessThan(0.295);
     expect(kRate).toBeGreaterThan(0.14);

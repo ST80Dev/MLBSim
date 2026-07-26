@@ -3,6 +3,7 @@ import type { Rng } from './rng';
 import { makeRng, clamp } from './rng';
 import { resolveAtBat } from './atbat';
 import { TUNING } from './constants';
+import { RATING_AVG } from './ratings';
 import {
   BattingLine,
   PitchingLine,
@@ -422,8 +423,8 @@ export function buntOutcomeProbs(
   batter: Batter,
   pitcher: Pitcher,
 ): { hit: number; fail: number; pop: number; sac: number } {
-  const spd = (batter.ratings.speed - 50) / 10;
-  const pf = (pitcher.ratings.fielding - 50) / 10;
+  const spd = (batter.ratings.speed - RATING_AVG) / 10;
+  const pf = (pitcher.ratings.fielding - RATING_AVG) / 10;
   const T = TUNING.bunt;
   const hit = clamp(T.hitBase + spd * T.hitPerSpeed - pf * T.hitPerField, T.hitMin, T.hitMax);
   const fail = clamp(T.failBase + pf * T.failPerField, T.failMin, T.failMax);
@@ -453,9 +454,9 @@ export function stealSuccessProb(
   fromBase: 1 | 2,
 ): number {
   const T = TUNING.steal;
-  const spd = (runner.ratings.speed - 50) / 10;
-  const arm = ((catcher ? catcher.ratings.arm : 50) - 50) / 10;
-  const hold = (pitcher.ratings.fielding - 50) / 10;
+  const spd = (runner.ratings.speed - RATING_AVG) / 10;
+  const arm = ((catcher ? catcher.ratings.arm : RATING_AVG) - RATING_AVG) / 10;
+  const hold = (pitcher.ratings.fielding - RATING_AVG) / 10;
   let p =
     T.base +
     spd * T.perSpeed -
@@ -565,7 +566,7 @@ export function hitAndRun(l: LiveGame): boolean {
   // Il battitore protegge: parte degli strikeout diventa palla in gioco.
   if (ev === 'SO') {
     const H = TUNING.hitAndRun;
-    const contact = (batter.ratings.contact - 50) / 10;
+    const contact = (batter.ratings.contact - RATING_AVG) / 10;
     const save = clamp(
       H.contactSaveBase + contact * H.contactSavePerContact,
       H.contactSaveMin,
@@ -722,8 +723,8 @@ export function prePitchEvent(l: LiveGame): boolean {
   const pitcher = currentPitcher(def);
   const catcher = def.team.lineup.find((b) => b.position === 'C');
   const T = TUNING.wildPitch;
-  const ctrl = (pitcher.ratings.control - 50) / 10;
-  const catchField = ((catcher ? catcher.ratings.fielding : 50) - 50) / 10;
+  const ctrl = (pitcher.ratings.control - RATING_AVG) / 10;
+  const catchField = ((catcher ? catcher.ratings.fielding : RATING_AVG) - RATING_AVG) / 10;
   const pWp = clamp(T.wpBase - ctrl * T.wpPerControl, T.wpMin, T.wpMax);
   const pPb = clamp(T.pbBase - catchField * T.pbPerCatch, T.pbMin, T.pbMax);
 
@@ -743,7 +744,7 @@ export function prePitchEvent(l: LiveGame): boolean {
   // manda a segno d'ufficio; sul lancio pazzo/palla passata dipende dalla
   // Velocita' del corridore (probabilita' contenuta).
   if (bases[2]) {
-    const spd = (bases[2].batter.ratings.speed - 50) / 10;
+    const spd = (bases[2].batter.ratings.speed - RATING_AVG) / 10;
     const pHome = clamp(T.homeBase + spd * T.homePerSpeed, T.homeMin, T.homeMax);
     if (kind === 'balk' || l.rng.chance(pHome)) {
       scoreRunner(bases[2]);

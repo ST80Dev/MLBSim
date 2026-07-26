@@ -19,7 +19,7 @@ import {
   pinchHit,
   setInfieldIn,
 } from '../engine/game';
-import { batterOverall, pitcherOverall, deriveBatterStats, derivePitcherStats } from '../engine/ratings';
+import { batterOverall, pitcherOverall, deriveBatterStats, derivePitcherStats, RATING_MIN, RATING_AVG } from '../engine/ratings';
 import { disambiguateLastNames } from '../engine/names';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import { teamSynthesis, staffSynthesis } from '../engine/teamRatings';
@@ -1473,7 +1473,7 @@ function TeamBadge({ team, size = 46 }: { team: Team; size?: number }) {
 }
 
 function strengthColor(v: number): string {
-  const t = Math.max(0, Math.min(1, (v - 30) / 45));
+  const t = Math.max(0, Math.min(1, (v - (RATING_AVG - 20)) / 45));
   return `hsl(${Math.round(t * 125)} 60% 46%)`;
 }
 
@@ -1917,7 +1917,7 @@ function SynthBadges({ synth, staff }: { synth: TeamSynth; staff: number }) {
 
 /** Voto in stelle 1..5 dall'overall: piene evidenti, vuote smorzate. */
 function Stars({ overall }: { overall: number }) {
-  const n = Math.max(1, Math.min(5, Math.round((overall - 20) / 15) + 1));
+  const n = Math.max(1, Math.min(5, Math.round((overall - RATING_MIN) / 15) + 1));
   return (
     <span className="stars" title={`${overall} OVR`}>
       {Array.from({ length: 5 }, (_, i) => (
@@ -2019,7 +2019,7 @@ function pitLine(p: Pitcher, mode: RosterStat): PitLine {
   const outs = Math.max(1, load.bf - s.h - s.bb - s.hbp);
   const ip = outs / 3;
   const ovr = pitcherOverall(p.ratings);
-  const wp = clamp01(0.5 + (ovr - 50) / 60, 0.35, 0.68);
+  const wp = clamp01(0.5 + (ovr - RATING_AVG) / 60, 0.35, 0.68);
   const dec = p.role === 'SP' ? 20 : p.role === 'CL' ? 6 : 8;
   const w = round(dec * wp);
   let svo = 0;
@@ -2100,7 +2100,7 @@ function defLine(pos: Position, g: number, fielding: number): DefLine {
   const chances = m.ch * g;
   const a = round(chances * m.aShare);
   const po = round(chances - a);
-  const e = round(chances * m.err * clamp01(1 - (fielding - 50) / 60, 0.4, 1.7));
+  const e = round(chances * m.err * clamp01(1 - (fielding - RATING_AVG) / 60, 0.4, 1.7));
   const tc = po + a + e;
   return { e, a, po, fp: tc ? (po + a) / tc : 0 };
 }

@@ -11,7 +11,8 @@ sessione tocca quell'argomento (vedi la mappa in fondo).
 
 ## Principi non negoziabili
 
-1. **Caratteristiche = fonte di verità.** Le doti (scala 20-80) definiscono il
+1. **Caratteristiche = fonte di verità.** Le doti (scala 40-100, 70 = media di
+   lega) definiscono il
    giocatore; le statistiche (media, HR, ERA…) sono un *output* derivato +
    simulato, mai un dato inserito a mano.
 2. **Caratteristiche → *peripherals*, NON → risultati.** I rating guidano ciò che
@@ -60,7 +61,7 @@ invariata). Dettaglio in `docs/roadmap-and-status.md`.
 | Se la sessione riguarda… | Leggi |
 |---|---|
 | struttura codice, moduli, flusso dati, RNG | `docs/architecture.md` |
-| caratteristiche giocatore, scala 20-80, evoluzione età/potenziale | `docs/players-and-ratings.md` |
+| caratteristiche giocatore, scala 40-100, evoluzione età/potenziale | `docs/players-and-ratings.md` |
 | motore di gioco, Log5, corsa sulle basi, **calibrazione**, ERA/W | `docs/engine-calibration.md` |
 | scambi, draft, stipendi, salary cap (layer gestione) | `docs/franchise.md` |
 | interfaccia, stile, componenti, tema | `docs/ui.md` |

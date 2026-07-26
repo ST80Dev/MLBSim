@@ -3,7 +3,7 @@
 ## Filosofia dei dati (fondamentale)
 
 ```
-Caratteristiche (20-80)  ──derive──►  Statistiche di conteggio  ──sim──►  Risultati
+Caratteristiche (40-100) ──derive──►  Statistiche di conteggio  ──sim──►  Risultati
    (fonte di verità)                    (input del motore)              (box score, ERA, W…)
 ```
 

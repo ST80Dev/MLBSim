@@ -9,16 +9,22 @@ import { LEAGUE } from './constants';
 import { clamp } from './rng';
 import type { Rng } from './rng';
 
-export const RATING_MIN = 20;
-export const RATING_MAX = 80;
-export const RATING_AVG = 50;
+// Scala delle doti 40-100: ogni giocatore MLB e' un atleta d'elite, quindi il
+// PAVIMENTO e' 40 (non 20) e le "gemme" arrivano a 100. La MEDIA di lega resta
+// il centro della calibrazione (a doti tutte = media si ottengono le medie di
+// lega). L'ampiezza (60 punti) e' invariata rispetto alla vecchia 20-80: tutti
+// gli ancoraggi del motore sono espressi RELATIVAMENTE a queste costanti, cosi'
+// spostare la scala non cambia l'output simulato (stat, ERA, stipendi).
+export const RATING_MIN = 40;
+export const RATING_MAX = 100;
+export const RATING_AVG = 70;
 
 export const clampRating = (x: number): number =>
   clamp(Math.round(x), RATING_MIN, RATING_MAX);
 
 /**
- * Moltiplicatore da caratteristica: 1.0 a rating 50, e cambia di `perSigma`
- * ogni 10 punti (una deviazione standard). Sempre positivo.
+ * Moltiplicatore da caratteristica: 1.0 a rating medio (RATING_AVG), e cambia
+ * di `perSigma` ogni 10 punti (una deviazione standard). Sempre positivo.
  */
 export function ratingMult(rating: number, perSigma: number): number {
   return Math.pow(perSigma, (rating - RATING_AVG) / 10);
@@ -28,7 +34,7 @@ const round = Math.round;
 
 /**
  * Deriva le statistiche di conteggio di un battitore dalle sue caratteristiche.
- * A tutte le doti = 50 si ottengono le medie di lega (BA ~.256, OBP ~.325).
+ * A tutte le doti = RATING_AVG si ottengono le medie di lega (BA ~.256, OBP ~.325).
  */
 export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
   const so = round(pa * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
@@ -58,8 +64,9 @@ export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
     h = single + double + triple + hr;
   }
 
-  // I velocisti veri rubano molto (40-55), non un tetto piatto a 30.
-  const sb = Math.max(0, round(((r.speed - 48) / 32) * 50));
+  // I velocisti veri rubano molto (40-55), non un tetto piatto a 30. La soglia e'
+  // 2 punti sotto la media (span 32 = differenza fino alla vetta della scala).
+  const sb = Math.max(0, round(((r.speed - (RATING_AVG - 2)) / 32) * 50));
   const cs = round(sb * 0.28);
 
   return { pa, h, double, triple, hr, bb, so, hbp, sb, cs };
@@ -79,12 +86,12 @@ export function derivePitcherStats(r: PitcherRatings, bf = 1000): PitcherStats {
 
 /** Converte la Resistenza (rating) nel numero di battitori affrontabili. */
 export function deriveStamina(rating: number, role: PitcherRole): number {
-  if (role === 'SP') return clamp(round(24 + ((rating - 50) / 10) * 3), 18, 33);
-  if (role === 'CL') return clamp(round(5 + ((rating - 50) / 10) * 0.8), 3, 7);
-  return clamp(round(7 + ((rating - 50) / 10) * 1.2), 4, 12);
+  if (role === 'SP') return clamp(round(24 + ((rating - RATING_AVG) / 10) * 3), 18, 33);
+  if (role === 'CL') return clamp(round(5 + ((rating - RATING_AVG) / 10) * 0.8), 3, 7);
+  return clamp(round(7 + ((rating - RATING_AVG) / 10) * 1.2), 4, 12);
 }
 
-/** Overall 20-80 di un battitore (media pesata delle doti). */
+/** Overall 40-100 di un battitore (media pesata delle doti). */
 export function batterOverall(r: BatterRatings): number {
   return clampRating(
     0.3 * r.contact +
@@ -96,7 +103,7 @@ export function batterOverall(r: BatterRatings): number {
   );
 }
 
-/** Overall 20-80 di un lanciatore (Resistenza esclusa; Difesa peso minimo). */
+/** Overall 40-100 di un lanciatore (Resistenza esclusa; Difesa peso minimo). */
 export function pitcherOverall(r: PitcherRatings): number {
   return clampRating(
     0.3 * r.stuff +
@@ -108,7 +115,7 @@ export function pitcherOverall(r: PitcherRatings): number {
 }
 
 /**
- * Stima un potenziale (tetto 20-80) da abilita' attuale ed eta': headroom
+ * Stima un potenziale (tetto 40-100) da abilita' attuale ed eta': headroom
  * casuale sopra l'overall, piu' ampio da giovani, quasi nullo dopo il picco.
  * E' una STIMA incerta, NON un dato certo: cosi' un giovane forte *tende* a
  * crescere ma non e' garantito. Non guarda mai l'esito reale futuro (import
@@ -120,8 +127,9 @@ export function projectPotential(rng: Rng, overall: number, age: number): number
   return clampRating(overall + Math.max(0, boost));
 }
 
-/** Stipendio annuale (milioni) da un overall 20-80. */
+/** Stipendio annuale (milioni) da un overall 40-100. */
 export function salaryFromOverall(ovr: number): number {
-  const s = 0.7 * Math.pow(1.13, ovr - 40);
+  // Riferimento "replacement level" = 10 punti sotto la media di lega.
+  const s = 0.7 * Math.pow(1.13, ovr - (RATING_AVG - 10));
   return Math.round(clamp(s, 0.5, 45) * 10) / 10;
 }

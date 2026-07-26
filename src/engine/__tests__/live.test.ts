@@ -245,7 +245,9 @@ describe('micro-eventi pre-lancio (lancio pazzo / palla passata / balk)', () => 
   it('non perde ne sovrappone corridori (2a+3a): il 3a a casa non e sempre facile', () => {
     let fired = 0;
     let thirdScored = 0;
-    for (let s = 0; s < 600; s++) {
+    // Evento raro (micro-evento + 3a che segna con 2a+3a occupate): serve un
+    // campione ampio perche' il conteggio sia stabilmente sopra soglia.
+    for (let s = 0; s < 1500; s++) {
       const { away, home } = generateMatchup(s);
       const live = createLiveGame(away, home, s * 17 + 3);
       putRunner(live, 1, 7); // seconda

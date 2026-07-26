@@ -5,7 +5,7 @@
 - **Fase 0 — Motore + UI base: COMPLETATA e LIVE.**
   - URL: https://st80dev.github.io/MLBSim/
   - Motore completo (Log5, corsa sulle basi, cambi lanciatore, walk-off, extra
-    inning), caratteristiche 20-80 con derivazione ed evoluzione, generazione
+    inning), caratteristiche 40-100 con derivazione ed evoluzione, generazione
     procedurale, 30 franchigie reali, UI con scoreboard/line score/box
     score/cronaca/rose. Test verdi (determinismo + realismo + cime).
   - Calibrazione "alta offesa anni '90/2000" (vedi `docs/engine-calibration.md`).
@@ -46,13 +46,13 @@
 - **Fase 2 — Costruzione squadra & import storico** *(quasi completa)*
   - **Import storico — decisione di design**: le stagioni reali sono *snapshot
     congelati*, quindi le **statistiche** dell'annata sono la verità di quel
-    giocatore storico e i rating 20-80 si **stimano** dalle stat solo per
+    giocatore storico e i rating 40-100 si **stimano** dalle stat solo per
     pilotare le leve del motore. Il principio "caratteristiche = fonte di verità"
     resta pieno per i giocatori **generati** (che evolvono); lo snapshot storico
     non evolve. Import di **stagioni intere** dal Lahman via pipeline di build
     (JSON compatti per annata, non CSV a runtime).
   - **Import storico — FATTO (prova end-to-end):** l'inversione *statistiche →
-    rating 20-80* vive in `engine/statsToRatings.ts`
+    rating 40-100* vive in `engine/statsToRatings.ts`
     (`ratingsFromBatterStats`/`ratingsFromPitcherStats`, inverse di
     `deriveBatterStats`/`derivePitcherStats`; vedi `docs/players-and-ratings.md`).
     Dataset di prova (`data/historical/season1999.ts`, linee reali approssimate di

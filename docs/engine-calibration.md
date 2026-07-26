@@ -112,8 +112,9 @@ Con la distribuzione generata, **~8-10 partenti sotto il 3.00 in tutta la lega**
 1. I moltiplicatori di derivazione stanno in `ratings.ts` (`deriveBatterStats` /
    `derivePitcherStats`); le medie di lega e le costanti di corsa in `constants.ts`.
 2. La causa più comune di offesa "gonfia": la mappatura esponenziale è **convessa**
-   (una popolazione media a 50 rende sopra la media). Per cambiare la *cima* senza
-   spostare la *media*, agisci sui `perSigma`; per spostare la media, sui `LEAGUE`.
+   (una popolazione centrata a 70 con dispersione ampia rende sopra la media —
+   disuguaglianza di Jensen). Per cambiare la *cima* senza spostare la *media*,
+   agisci sui `perSigma`; per spostare la media, sui `LEAGUE`.
 3. **Misura sempre** dopo una modifica. Script diagnostici usati in Fase 0 (da
    ricreare nello scratchpad, non committare): aggregati di lega su ~400 partite;
    righe stagionali di archetipi (medio/contact/slugger/asso); curva ERA per

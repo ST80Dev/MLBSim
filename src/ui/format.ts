@@ -1,4 +1,5 @@
 import { formatAvg } from '../engine/boxscore';
+import { RATING_MIN } from '../engine/ratings';
 
 export { formatAvg };
 
@@ -14,9 +15,9 @@ export function gameSeed(teamSeed: number, gameNo: number): number {
   return (Math.imul(teamSeed ^ 0x9e3779b9, 2654435761) + gameNo * 40503) >>> 0;
 }
 
-/** Voto in stelle (1..5) da un overall 20..90, stile OOTP. */
+/** Voto in stelle (1..5) da un overall (scala 40-100), stile OOTP. */
 export function stars(overall: number): string {
-  const n = Math.max(1, Math.min(5, Math.round((overall - 20) / 15) + 1));
+  const n = Math.max(1, Math.min(5, Math.round((overall - RATING_MIN) / 15) + 1));
   return '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
 }
 
@@ -24,8 +25,8 @@ export function newRandomSeed(): number {
   return Math.floor(Math.random() * 1_000_000_000);
 }
 
-/** Colore di una caratteristica 20-80: rosso (basso) -> verde (alto). */
+/** Colore di una caratteristica 40-100: rosso (basso) -> verde (alto). */
 export function ratingColor(v: number): string {
-  const t = Math.max(0, Math.min(1, (v - 20) / 60));
+  const t = Math.max(0, Math.min(1, (v - RATING_MIN) / 60));
   return `hsl(${Math.round(t * 125)} 58% 42%)`;
 }

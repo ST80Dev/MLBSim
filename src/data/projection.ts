@@ -1,5 +1,5 @@
 import type { Batter, Pitcher } from '../engine/types';
-import { deriveBatterStats, derivePitcherStats, pitcherOverall } from '../engine/ratings';
+import { deriveBatterStats, derivePitcherStats, pitcherOverall, RATING_AVG } from '../engine/ratings';
 import { makeRng, clamp } from '../engine/rng';
 import type { SeasonBat, SeasonPit } from './season';
 
@@ -238,7 +238,7 @@ function pitcherFull(p: Pitcher, prof: PitProfile): SeasonPit {
   const g = Math.max(1, R(load.g * prof.ipMult));
   const gs = R(load.gs * prof.ipMult);
   const ovr = pitcherOverall(p.ratings);
-  const wp = clamp(0.5 + (ovr - 50) / 60, 0.35, 0.68);
+  const wp = clamp(0.5 + (ovr - RATING_AVG) / 60, 0.35, 0.68);
   const dec = R((p.role === 'SP' ? 21 : p.role === 'CL' ? 6 : 8) * prof.ipMult);
   const w = clamp(R(dec * wp * prof.wLuck), 0, dec);
   const l = Math.max(0, dec - w);

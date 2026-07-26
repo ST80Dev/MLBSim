@@ -2,9 +2,24 @@
 
 ## Scala
 
-Tutte le caratteristiche usano la **scala scout 20-80**: **50 = media di lega**,
+Tutte le caratteristiche usano la **scala 40-100**: **70 = media di lega**,
 ~10 punti = una deviazione standard. Confrontabile fra giocatori. Definita in
-`src/engine/ratings.ts` (`RATING_MIN/MAX/AVG`, `clampRating`).
+`src/engine/ratings.ts` (`RATING_MIN=40`, `RATING_MAX=100`, `RATING_AVG=70`,
+`clampRating`).
+
+Scelta di design: ogni giocatore MLB è già un atleta d'élite, quindi il
+**pavimento è 40** (nessun professionista sotto quel livello) e le **gemme
+arrivano a 100**. L'ampiezza (60 punti) è la stessa della vecchia 20-80: tutti
+gli ancoraggi del motore sono espressi *relativamente* a `RATING_AVG`, così la
+scala si sposta senza cambiare l'output simulato (stat, ERA, stipendi). Le
+**stelle** (UI, `format.ts`/`App.tsx`) mappano 40→1★, 70≈3★, 100→5★
+(secchielli da 15 punti).
+
+Il **generatore** (`src/data/generator.ts`) disperde il talento con `sd` ampio
+(≈8.5 battitori, ≈9 lanciatori) più una **coda rara di gemme** (~4%): così
+l'overall spazia davvero da 2 a 4 stelle con qualche 5★, invece di incollarsi a
+3★. Il talento resta **centrato**, quindi cambia la *dispersione*, non gli
+aggregati di lega (epoca "alta offesa").
 
 ## Caratteristiche del battitore (6) — `BatterRatings`
 
@@ -68,19 +83,19 @@ davvero (Fase 4); per ora cambia posizioni mostrate e forza difensiva.
 
 In `src/engine/ratings.ts`:
 - `deriveBatterStats(ratings, pa=650)` e `derivePitcherStats(ratings, bf=1000)`
-  usano `ratingMult(rating, perSigma)` = moltiplicatore 1.0 a 50, ×`perSigma`
-  ogni 10 punti. A tutte le doti a 50 si ottengono le medie di lega.
+  usano `ratingMult(rating, perSigma)` = moltiplicatore 1.0 a `RATING_AVG` (70),
+  ×`perSigma` ogni 10 punti. A tutte le doti = 70 si ottengono le medie di lega.
 - I moltiplicatori sono **tarati** (vedi `docs/engine-calibration.md`): non
   toccarli senza rimisurare gli aggregati.
 - `deriveStamina(rating, role)` converte la Resistenza in soglia di battitori.
-- `batterOverall` / `pitcherOverall` = media pesata delle doti (20-80).
+- `batterOverall` / `pitcherOverall` = media pesata delle doti (40-100).
 - `salaryFromOverall` = stipendio annuale (milioni) dall'overall.
 
 ## Inversione statistiche → caratteristiche (import storico)
 
 In `src/engine/statsToRatings.ts` — l'**inverso** della derivazione, per
 importare una stagione reale: dal tabellino si stimano le doti che, ri-derivate,
-lo riproducono. `ratingFromMult(mult, perSigma) = 50 + 10·ln(mult)/ln(perSigma)`
+lo riproducono. `ratingFromMult(mult, perSigma) = 70 + 10·ln(mult)/ln(perSigma)`
 inverte `ratingMult`; `mult` = rate osservato / rate di lega.
 
 - **Battitore** (`ratingsFromBatterStats`): Occhio ← BB (leva pulita); Potenza ←
@@ -108,7 +123,7 @@ In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
   Dominio, Resistenza, Braccio) e **poi le tecniche** (Contatto, Occhio,
   Controllo, Movimento, Difesa).
 - **Ritiro** automatico quando età alta + overall crollato.
-- Ogni giocatore ha un solo **potenziale** (tetto 20-80). Dopo l'evoluzione le
+- Ogni giocatore ha un solo **potenziale** (tetto 40-100). Dopo l'evoluzione le
   statistiche vengono ri-derivate dalle nuove caratteristiche.
 
 ### Potenziale come STIMA incerta

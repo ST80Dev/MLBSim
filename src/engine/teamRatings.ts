@@ -1,5 +1,5 @@
 import type { Batter, BatterRatings, Pitcher, Position } from './types';
-import { clampRating, pitcherOverall } from './ratings';
+import { clampRating, pitcherOverall, RATING_AVG } from './ratings';
 import { fieldingAtPosition } from './positions';
 
 // Sintesi di squadra: valori a colpo d'occhio che dicono se una mossa (cambio di
@@ -16,7 +16,7 @@ import { fieldingAtPosition } from './positions';
 
 const OFF_W = { contact: 0.34, power: 0.3, eye: 0.26, speed: 0.1 };
 
-/** Sintesi offensiva di un battitore (20-80), difesa esclusa. */
+/** Sintesi offensiva di un battitore (40-100), difesa esclusa. */
 export function offenseRating(r: BatterRatings): number {
   return clampRating(
     OFF_W.contact * r.contact + OFF_W.power * r.power + OFF_W.eye * r.eye + OFF_W.speed * r.speed,
@@ -34,21 +34,21 @@ function defenseAt(b: Batter, pos: Position): number {
 }
 
 export interface TeamSynth {
-  /** Attacco: media offensiva dei titolari (20-80). */
+  /** Attacco: media offensiva dei titolari (40-100). */
   off: number;
-  /** Difesa: fielding+braccio pesati per ruolo (20-80). */
+  /** Difesa: fielding+braccio pesati per ruolo (40-100). */
   def: number;
-  /** Generale dei giocatori di movimento (20-80). */
+  /** Generale dei giocatori di movimento (40-100). */
   ovr: number;
 }
 
 /**
  * Sintesi dei 9 titolari nello schieramento dato (id battitore + casella).
- * Robusto: ignora le voci senza battitore. Se non c'e' nessuno, ritorna 50.
+ * Robusto: ignora le voci senza battitore. Se non c'e' nessuno, ritorna la media.
  */
 export function teamSynthesis(entries: Array<{ b: Batter; pos: Position }>): TeamSynth {
   const players = entries.filter((e) => e.b);
-  if (players.length === 0) return { off: 50, def: 50, ovr: 50 };
+  if (players.length === 0) return { off: RATING_AVG, def: RATING_AVG, ovr: RATING_AVG };
 
   const off = players.reduce((s, e) => s + offenseRating(e.b.ratings), 0) / players.length;
 
@@ -59,7 +59,7 @@ export function teamSynthesis(entries: Array<{ b: Batter; pos: Position }>): Tea
     defNum += w * defenseAt(b, pos);
     defDen += w;
   }
-  const def = defDen ? defNum / defDen : 50;
+  const def = defDen ? defNum / defDen : RATING_AVG;
 
   return {
     off: clampRating(off),
@@ -69,7 +69,7 @@ export function teamSynthesis(entries: Array<{ b: Batter; pos: Position }>): Tea
 }
 
 /**
- * Sintesi dello STAFF lanciatori (20-80), NON del match: qualita' complessiva di
+ * Sintesi dello STAFF lanciatori (40-100), NON del match: qualita' complessiva di
  * rotazione + bullpen, pesata sugli inning attesi (i partenti pesano di piu').
  * Robusta agli array vuoti.
  */
@@ -78,7 +78,7 @@ export function staffSynthesis(rotation: Pitcher[], bullpen: Pitcher[]): number 
     ps.length ? ps.reduce((s, p) => s + pitcherOverall(p.ratings), 0) / ps.length : 0;
   const r = avg(rotation);
   const b = avg(bullpen);
-  if (!rotation.length && !bullpen.length) return 50;
+  if (!rotation.length && !bullpen.length) return RATING_AVG;
   if (!rotation.length) return clampRating(b);
   if (!bullpen.length) return clampRating(r);
   return clampRating(0.65 * r + 0.35 * b); // ~ quota di inning rotazione vs bullpen
