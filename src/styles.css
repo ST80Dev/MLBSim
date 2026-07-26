@@ -3032,45 +3032,67 @@ table {
 .view-seg { margin-left: 10px; }
 
 /* Campo difensivo semplificato: caselle FISSE, giocatori spostabili. */
+/* Difesa: elenco+riserve a sinistra, campo a destra. */
+.def-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.95fr);
+  gap: 12px;
+  align-items: start;
+}
+.def-col-list { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.def-col-field { position: sticky; top: 8px; }
+@media (max-width: 900px) {
+  .def-layout { grid-template-columns: 1fr; }
+  .def-col-field { position: static; }
+}
+
 .def-field {
   position: relative;
   width: 100%;
-  max-width: 640px;
-  margin: 4px auto 2px;
   aspect-ratio: 4 / 3;
   border-radius: 10px;
-  background:
-    radial-gradient(125% 95% at 50% 102%, rgba(60, 115, 72, 0.4), rgba(22, 42, 32, 0.12) 62%, transparent 72%),
-    var(--card2, #0d1730);
-  border: 1px solid var(--line);
   overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0b1226;
 }
-.def-field::before {
-  content: '';
-  position: absolute; left: 50%; top: 63%;
-  width: 40%; height: 40%;
-  transform: translate(-50%, -50%) rotate(45deg);
-  border: 1px solid rgba(150, 180, 220, 0.18);
-  border-radius: 4px;
-}
+.def-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.ff-grass { fill: #1f5a34; }
+.ff-ingrass { fill: #24683c; }
+.ff-dirt { fill: #7a4a2b; }
+.ff-fence { fill: none; stroke: #d7e2f2; stroke-width: 2.5; opacity: 0.8; }
+.ff-foul { stroke: #eef3fb; stroke-width: 1.6; opacity: 0.65; }
+.ff-base { fill: #f4f7fc; }
+.ff-mound { fill: #8a5733; }
+
 .fpos {
   position: absolute;
   transform: translate(-50%, -50%);
-  min-width: 68px;
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 4px 6px;
+  min-width: 62px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 3px 6px 4px;
   border-radius: 8px;
-  background: rgba(12, 22, 44, 0.92);
-  border: 1px solid var(--line);
+  background: rgba(9, 16, 34, 0.9);
+  border: 1px solid rgba(160, 185, 225, 0.35);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
   cursor: grab;
+  z-index: 1;
   transition: box-shadow 0.1s ease, background 0.1s ease;
 }
-.fpos.dh { top: 90%; left: 13%; flex-direction: row; gap: 6px; background: rgba(46, 34, 58, 0.92); }
+.fpos.dh {
+  top: 90%; left: 14%; flex-direction: row; gap: 6px; align-items: center;
+  background: rgba(46, 34, 58, 0.92);
+}
 .fpos-lbl { font-family: var(--mono); font-weight: 800; font-size: 11px; color: var(--accent); }
-.fpos-name { font-size: 12.5px; font-weight: 700; color: var(--text); }
-.fpos-ovr .stars { font-size: 11px; }
+.fpos-name { font-size: 12.5px; font-weight: 700; color: var(--text); line-height: 1; }
+.fpos-dif {
+  font-family: var(--mono); font-weight: 800; font-size: 11px; color: #0e1526;
+  padding: 0 5px; border-radius: 4px; line-height: 1.5;
+  display: inline-flex; align-items: baseline; gap: 3px;
+}
+.fpos-dif.off { box-shadow: 0 0 0 1.5px #f0b053; }
+.fpos-dif .difdelta { font-size: 9px; font-style: normal; opacity: 0.85; }
 .fpos.warn { border-color: #f0b053; }
-.fpos.over { box-shadow: 0 0 0 2px var(--accent); background: rgba(120, 180, 255, 0.24); }
+.fpos.over { box-shadow: 0 0 0 2px var(--accent); background: rgba(120, 180, 255, 0.3); }
 .fpos.dragging { opacity: 0.92; outline: 2px dashed var(--accent); }
 
 /* Closer: slot dedicato, ogni rilievo puo' esserlo. */
