@@ -78,7 +78,7 @@ import type { StatItem, StatsMode } from './statlines';
 import { buildCommentary, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
 
-type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'game';
+type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'calibrate' | 'game';
 
 /** Slot di salvataggio unico della Fase 2 (single-player, una carriera). */
 const SAVE_SLOT = 'principale';
@@ -277,6 +277,7 @@ export function App() {
               ['leaderboard', 'Leaderboard'],
               ['standings', 'Classifiche'],
               ['franchise', 'Franchigia'],
+              ['calibrate', '🎯 Stadi'],
             ] as Array<[View, string]>
           ).map(([v, label]) => (
             <button
@@ -354,6 +355,8 @@ export function App() {
               away={result.away}
               background
               bases={sit.bases}
+              runners={sit.baseRunners}
+              batterName={sit.batter.name}
               cal={cal}
               editable={editing}
               onMarkerMove={moveMarker}
@@ -446,6 +449,9 @@ export function App() {
       )}
       {view === 'standings' && <StandingsPage league={league} season={season} managedId={myId} />}
       {view === 'franchise' && <FranchisePage team={managedTeam} />}
+      {view === 'calibrate' && (
+        <CalibrationScreen league={league} onClose={() => setView('home')} />
+      )}
 
       {recapOpen && (
         <RecapModal
@@ -660,6 +666,129 @@ function calEntry(id: string, cal: FieldCalibration): string {
   )}, depthY: ${r2(cal.depthY)}, ofDist: ${r2(cal.ofDist)}, rotation: ${r2(cal.rotation)}, fan: ${r2(
     cal.fan,
   )}, bgZoom: ${r2(cal.bgZoom)}, bgX: ${r0(cal.bgX)}, bgY: ${r0(cal.bgY)}${img} },`;
+}
+
+// ---------------------------------------------------------------------------
+// Schermata dedicata "🎯 Stadi": calibra i marker di QUALSIASI stadio senza
+// dover giocare una partita lì. Sceglie la squadra, mostra il campo con la foto
+// e il pannello di calibrazione, con etichette-nome campione su basi e battitore
+// così da poterle posizionare. Persistenza = stessa (Esporta file → JSON).
+// ---------------------------------------------------------------------------
+
+function CalibrationScreen({ league, onClose }: { league: Team[]; onClose: () => void }) {
+  // Rileva quali stadi hanno davvero la foto principale nel repo (per il badge
+  // 📷 e il filtro "solo con foto"): prova a caricarle tutte una volta.
+  const [photos, setPhotos] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let alive = true;
+    const ok: Record<string, boolean> = {};
+    Promise.all(
+      league.map(
+        (t) =>
+          new Promise<void>((res) => {
+            const url = stadiumImage(t.id);
+            if (!url) {
+              ok[t.id] = false;
+              return res();
+            }
+            const img = new Image();
+            img.onload = () => {
+              ok[t.id] = true;
+              res();
+            };
+            img.onerror = () => {
+              ok[t.id] = false;
+              res();
+            };
+            img.src = url;
+          }),
+      ),
+    ).then(() => {
+      if (alive) setPhotos(new Set(Object.keys(ok).filter((id) => ok[id])));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [league]);
+
+  const [teamId, setTeamId] = useState(league[0].id);
+  const team = teamById(league, teamId) ?? league[0];
+  // Avversario fittizio: serve solo per colore del battitore e nomi campione.
+  const away = league.find((t) => t.id !== teamId) ?? league[0];
+  const [cal, setCal] = useState<FieldCalibration>(() => getCalibration(teamId));
+  useEffect(() => setCal(getCalibration(teamId)), [teamId]);
+
+  // Drag dei marker attivo solo in piazzamento manuale (come in partita).
+  const manual = !!cal.markers;
+  const editing = manual;
+  const moveMarker = (id: string, pos: { x: number; y: number }) => {
+    setCal({ ...cal, markers: { ...(cal.markers ?? {}), [id]: pos } });
+  };
+
+  // Nomi campione per popolare le etichette (corridori sulle basi + battitore).
+  const sampleRunners = team.lineup.slice(0, 3).map((b) => b.name);
+  const sampleBatter = away.lineup[0]?.name ?? 'Battitore';
+
+  const [onlyPhotos, setOnlyPhotos] = useState(true);
+  const shown = league.filter(
+    (t) => !onlyPhotos || photos.size === 0 || photos.has(t.id),
+  );
+
+  return (
+    <div className="cal-screen">
+      <div className="cal-screen-bar">
+        <div className="cal-screen-title">
+          🎯 Calibrazione stadi — scegli uno stadio e sistema i marker sulla foto
+        </div>
+        <label className="cal-only">
+          <input
+            type="checkbox"
+            checked={onlyPhotos}
+            onChange={(e) => setOnlyPhotos(e.target.checked)}
+          />
+          Solo con foto
+        </label>
+      </div>
+
+      <div className="cal-teamgrid">
+        {shown.map((t) => (
+          <button
+            key={t.id}
+            className={`cal-team${t.id === teamId ? ' active' : ''}`}
+            onClick={() => setTeamId(t.id)}
+            title={t.ballpark}
+            style={{ ['--tc' as string]: t.primaryColor }}
+          >
+            <TeamBadge team={t} size={20} />
+            <span className="cal-team-ab">{t.abbrev}</span>
+            {photos.has(t.id) && <span className="cal-team-cam" title="Foto disponibile">📷</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className={editing ? 'cal-stage editing' : 'cal-stage'}>
+        <Diamond
+          home={team}
+          away={away}
+          background
+          bases={[true, true, true]}
+          runners={sampleRunners}
+          batterName={sampleBatter}
+          cal={cal}
+          editable={editing}
+          onMarkerMove={moveMarker}
+        />
+      </div>
+
+      <CalibrationPanel
+        team={team}
+        hasPhoto={!!stadiumImage(teamId)}
+        cal={cal}
+        setCal={setCal}
+        onClose={onClose}
+      />
+    </div>
+  );
 }
 
 function CalibrationPanel({

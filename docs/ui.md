@@ -102,12 +102,32 @@ cambio di quei parametri, e forza il re-render dopo ogni azione.
   responsabilità sono dell'utente. Il progetto non fornisce né committa immagini
   reali. Vedi `public/stadiums/README.md`.
 
+### Schermata dedicata «🎯 Stadi» (calibrazione fuori partita)
+
+Con il calendario (niente più partite casuali "al volo") non si può più contare
+sul giocare una gara in ogni stadio per calibrarlo. Il tab **🎯 Stadi** apre una
+**schermata dedicata** (`CalibrationScreen`) che permette di calibrare
+**qualsiasi stadio** senza scendere in campo:
+
+- **Griglia squadre** in alto: tutte le franchigie, con badge **📷** su quelle
+  che hanno davvero la foto principale nel repo (rilevate provando a caricare
+  l'immagine). Filtro **«Solo con foto»** (default attivo).
+- Selezionando una squadra si carica la sua foto-stadio e lo **stesso pannello**
+  di calibrazione (`CalibrationPanel`) usato in partita, con la stessa
+  persistenza (**Esporta file → `<STEM>.json`**).
+- Il campo mostra **nomi campione** (dai roster) su corridori e battitore, così
+  le loro etichette sono visibili e posizionabili anche fuori da una partita.
+
+Il tab è **bloccato durante una partita live** come le altre sezioni. Il vecchio
+pulsante **🎯 Calibra campo** dell'header resta disponibile *in Partita*.
+
 ### Calibrazione del campo sulla foto (🎯 Calibra campo)
 
 Le foto reali sono scattate da angolazioni diverse, non perfettamente in asse
-con casa base. Il pulsante **🎯 Calibra campo** (header, in Partita) apre un
-**pannello live** (`CalibrationPanel`) che ri-proietta i marker tenendo **casa
-base come perno**. Parametri (`src/data/stadiumCalibration.ts`):
+con casa base. Il pulsante **🎯 Calibra campo** (header, in Partita) e la
+schermata **🎯 Stadi** aprono un **pannello live** (`CalibrationPanel`) che
+ri-proietta i marker tenendo **casa base come perno**. Parametri
+(`src/data/stadiumCalibration.ts`):
 
 - `homeX`/`homeY`: posizione di casa base (perno).
 - `spreadX`/`depthY`: larghezza e profondità dei marker.
@@ -139,6 +159,17 @@ nel file `<STEM>.json` via **Esporta file**; se presenti, hanno la **precedenza*
 sulla proiezione parametrica. «↩︎ Torna ai parametri» le rimuove. Convenzione
 anti-sovrapposizione: etichette difensori **sopra**, basi/runner **sotto**.
 Durante il drag i pannelli laterali sono non-interattivi (`.gamefield.editing`).
+
+**Etichette-nome su basi e battitore.** Oltre ai 9 difensori (che hanno già
+l'etichetta col ruolo+cognome), anche i **3 marker delle basi** e il **marker
+del battitore** (casa base) portano un'**etichetta col nome**, agganciata al
+marker: si sposta **insieme** ad esso nel drag (come i difensori). Sotto la
+base compare il cognome del corridore, sotto il battitore quello di chi è alla
+battuta. In partita l'etichetta del corridore appare **solo se la base è
+occupata** (il motore espone `LiveSituation.baseRunners`); in calibrazione (e
+nella schermata **🎯 Stadi**) sono sempre visibili — con nomi campione — per
+poterle posizionare. Il `Diamond` riceve i nomi via le prop `runners` (basi) e
+`batterName`.
 
 **Default dedicato alle foto**: gli stadi con foto partono da
 `PHOTO_DEFAULT_CALIBRATION` (casa base più in alto e esterni un po' compressi),
