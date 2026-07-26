@@ -17,6 +17,7 @@ import {
   pitcherOverall,
   salaryFromOverall,
   clampRating,
+  projectPotential,
 } from '../engine/ratings';
 import type { Rng } from '../engine/rng';
 import { makeRng } from '../engine/rng';
@@ -117,11 +118,6 @@ function throwHand(rng: Rng): ThrowHand {
   return rng.next() < 0.7 ? 'R' : 'L';
 }
 
-function potentialFrom(rng: Rng, overall: number, age: number): number {
-  const boost = age < 24 ? rng.gauss(8, 4) : age < 28 ? rng.gauss(3, 3) : rng.gauss(0, 2);
-  return clampRating(overall + Math.max(0, boost));
-}
-
 function makeBatterRatings(rng: Rng, position: Position): BatterRatings {
   const talent = rng.gauss(0, 6);
   const shape = POS_SHAPE[position] ?? { field: 0, power: 0, speed: 0, arm: 0 };
@@ -177,7 +173,7 @@ function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position
     ratings,
     stats,
     age,
-    potential: potentialFrom(rng, ovr, age),
+    potential: projectPotential(rng, ovr, age),
     salary: salaryFromOverall(ovr),
     retired: false,
   };
@@ -200,7 +196,7 @@ function makePitcher(rng: Rng, names: NameFactory, id: string, role: PitcherRole
     stats,
     stamina: deriveStamina(ratings.stamina, role),
     age,
-    potential: potentialFrom(rng, ovr, age),
+    potential: projectPotential(rng, ovr, age),
     salary: salaryFromOverall(ovr),
     retired: false,
   };

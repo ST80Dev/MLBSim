@@ -31,10 +31,32 @@ function seasonDelta(
   return -((age - 30) * factor) + rng.gauss(0, 0.8);
 }
 
+/**
+ * Coda rara di sviluppo, a livello di STAGIONE (non di singola dote): fa
+ * DIVERGERE la carriera dalla media e dalla realta' storica, cosi' non sai in
+ * anticipo chi sara' campione.
+ *  - giovani (< 28): ~6% BREAKOUT (salto inatteso), ~7% BUST/stallo (il
+ *    prospetto che non sboccia) -> il talento *tende* a emergere, ma non e' certo.
+ *  - veterani (>= 31): ~8% CROLLO extra (infortunio/caduta improvvisa).
+ * Ritorna uno spostamento UNIFORME applicato a tutte le doti dell'anno (0 = anno
+ * ordinario, governato solo dalla curva d'eta').
+ */
+function developmentTail(age: number, rng: Rng): number {
+  const roll = rng.next();
+  if (age < 28) {
+    if (roll < 0.06) return rng.gauss(5, 1.5); // breakout
+    if (roll < 0.13) return -rng.gauss(4, 1.5); // bust / mancato sviluppo
+  } else if (age >= 31) {
+    if (roll < 0.08) return -rng.gauss(5, 2); // crollo/infortunio
+  }
+  return 0;
+}
+
 /** Fa avanzare un battitore di una stagione (muta le doti, ri-deriva le stat). */
 export function advanceSeasonBatter(b: Batter, rng: Rng): Batter {
   const gap = b.potential - batterOverall(b.ratings);
-  const d = (physical: boolean) => seasonDelta(b.age + 1, gap, physical, rng);
+  const tail = developmentTail(b.age + 1, rng);
+  const d = (physical: boolean) => seasonDelta(b.age + 1, gap, physical, rng) + tail;
   b.ratings = {
     contact: clampRating(b.ratings.contact + d(false)),
     power: clampRating(b.ratings.power + d(true)),
@@ -54,7 +76,8 @@ export function advanceSeasonBatter(b: Batter, rng: Rng): Batter {
 /** Fa avanzare un lanciatore di una stagione. */
 export function advanceSeasonPitcher(p: Pitcher, rng: Rng): Pitcher {
   const gap = p.potential - pitcherOverall(p.ratings);
-  const d = (physical: boolean) => seasonDelta(p.age + 1, gap, physical, rng);
+  const tail = developmentTail(p.age + 1, rng);
+  const d = (physical: boolean) => seasonDelta(p.age + 1, gap, physical, rng) + tail;
   p.ratings = {
     stuff: clampRating(p.ratings.stuff + d(true)),
     control: clampRating(p.ratings.control + d(false)),

@@ -73,6 +73,21 @@ rispettano il cap) arriva col resto del layer gestionale.
   draft annuale a più giri con scouting profondo.
 - Budget squadra basilare.
 
+### Draft storico — prospetti con tetto *possibile*, non *certo*
+
+Se si importa una **classe di draft reale**, il principio è lo stesso dell'import
+di stagione: importi il **passato** (chi c'era in quella classe), **simuli il
+futuro** (chi sboccia). I prospetti entrano con un **potenziale stimato**
+(`projectPotential`: headroom ampio perché giovani), **mai** pari al loro picco
+reale di carriera. Quindi:
+
+- ✅ *Potenzialmente* i talenti reali possono emergere (il tetto lo consente).
+- ❌ **Non** sai in anticipo *chi* diventerà campione: la realizzazione è
+  stocastica (`developmentTail` in `aging.ts` → breakout/bust).
+- Le **gemme di bassa scelta** che sorprendono sono una **feature**: la classe
+  *contiene* il talento, il sim decide chi lo realizza. Niente draft "col senno
+  di poi" a colpo sicuro.
+
 ## Nota di scope
 
 Se una sessione tende ad aggiungere complessità gestionale (contratti multi-anno,

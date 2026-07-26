@@ -110,3 +110,24 @@ In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
 - **Ritiro** automatico quando età alta + overall crollato.
 - Ogni giocatore ha un solo **potenziale** (tetto 20-80). Dopo l'evoluzione le
   statistiche vengono ri-derivate dalle nuove caratteristiche.
+
+### Potenziale come STIMA incerta
+
+`projectPotential(rng, overall, age)` (`ratings.ts`) assegna il tetto come
+**headroom casuale** sopra l'overall attuale: ampio da giovani (`gauss(8,4)` sotto
+i 24), quasi nullo dopo il picco. È una **stima**, non un dato certo — usata sia
+dai giocatori **generati** sia dall'**import storico** (che NON guarda il picco
+reale futuro: dal seed di una stagione il futuro **non è un replay noto**, così
+non sai in anticipo quale giovane diventerà campione).
+
+### Code di sviluppo (bust / breakout)
+
+`developmentTail` aggiunge, a livello di **stagione**, rare deviazioni forti che
+fanno **divergere la carriera** dalla media (e dalla realtà storica):
+- giovani (< 28): ~6% **breakout** (salto inatteso), ~7% **bust/stallo** (il
+  prospetto che non sboccia) → il talento *tende* a emergere, ma non è garantito;
+- veterani (≥ 31): ~8% **crollo** extra (infortunio/caduta improvvisa).
+
+Misurato: 400 carriere con **partenza identica** (giovane, potenziale 78) su 5
+stagioni finiscono tra ~64 e 80 di overall (sd ~2.6) — imprevedibilità reale nei
+singoli, pur mantenendo il **trend medio** corretto (il talento cresce comunque).

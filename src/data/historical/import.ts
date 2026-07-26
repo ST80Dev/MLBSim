@@ -10,10 +10,22 @@ import {
   batterOverall,
   pitcherOverall,
   salaryFromOverall,
+  projectPotential,
 } from '../../engine/ratings';
 import { splitName } from '../../engine/names';
+import { makeRng, type Rng } from '../../engine/rng';
 import { FRANCHISES } from '../franchises';
 import type { HistBatLine, HistPitLine, HistTeam } from './season1999';
+
+/** Seed deterministico da una stringa (per rendere l'import riproducibile). */
+function hashSeed(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
 
 // ---------------------------------------------------------------------------
 // Importatore di una rosa storica.
@@ -32,7 +44,7 @@ function pitcherBf(l: HistPitLine): number {
   return l.outs + l.h + l.bb + l.hbp;
 }
 
-function batterFrom(l: HistBatLine, id: string): Batter {
+function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
   const ratings = ratingsFromBatterStats({
     pa: l.pa,
     h: l.h,
@@ -59,13 +71,15 @@ function batterFrom(l: HistBatLine, id: string): Batter {
     ratings,
     stats,
     age: l.age,
-    potential: ovr, // stagione reale importata: attuale, non prospetto
+    // Potenziale = STIMA incerta eta'-scalata (headroom di crescita), NON il
+    // picco reale futuro: dallo snapshot il futuro non e' un replay noto.
+    potential: projectPotential(rng, ovr, l.age),
     salary: salaryFromOverall(ovr),
     retired: false,
   };
 }
 
-function pitcherFrom(l: HistPitLine, id: string): Pitcher {
+function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
   const bf = pitcherBf(l);
   const ratings = ratingsFromPitcherStats({
     bf,
@@ -91,7 +105,7 @@ function pitcherFrom(l: HistPitLine, id: string): Pitcher {
     stats,
     stamina: deriveStamina(ratings.stamina, l.role),
     age: l.age,
-    potential: ovr,
+    potential: projectPotential(rng, ovr, l.age),
     salary: salaryFromOverall(ovr),
     retired: false,
   };
@@ -104,18 +118,24 @@ export interface ImportedTeam {
   realPit: Map<string, HistPitLine>;
 }
 
-/** Costruisce una squadra pronta al motore da una rosa storica. */
-export function importHistoricalTeam(h: HistTeam): ImportedTeam {
+/**
+ * Costruisce una squadra pronta al motore da una rosa storica. Il `seed`
+ * (default deterministico da franchigia+annata) pilota SOLO la stima del
+ * potenziale: stesso import -> stessi potenziali (riproducibile), ma variato
+ * per giocatore. Non tocca i rating (che vengono dal tabellino reale).
+ */
+export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
   const f = FRANCHISES.find((x) => x.id === h.franchiseId);
   if (!f) throw new Error(`Franchigia sconosciuta: ${h.franchiseId}`);
 
+  const rng = makeRng(seed ?? hashSeed(`${h.franchiseId}-${h.season}`));
   const realBat = new Map<string, HistBatLine>();
   const realPit = new Map<string, HistPitLine>();
 
   const lineup: Batter[] = h.batters.map((l, i) => {
     const id = `${f.abbrev}${h.season}-B${i}`;
     realBat.set(id, l);
-    return batterFrom(l, id);
+    return batterFrom(l, id, rng);
   });
 
   const starters = h.pitchers.filter((p) => p.role === 'SP');
@@ -124,12 +144,12 @@ export function importHistoricalTeam(h: HistTeam): ImportedTeam {
   const rotation: Pitcher[] = starters.map((l, i) => {
     const id = `${f.abbrev}${h.season}-SP${i}`;
     realPit.set(id, l);
-    return pitcherFrom(l, id);
+    return pitcherFrom(l, id, rng);
   });
   const bullpen: Pitcher[] = relievers.map((l, i) => {
     const id = `${f.abbrev}${h.season}-RP${i}`;
     realPit.set(id, l);
-    return pitcherFrom(l, id);
+    return pitcherFrom(l, id, rng);
   });
 
   const team: Team = {
