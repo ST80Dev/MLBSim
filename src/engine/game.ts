@@ -697,9 +697,18 @@ export function changePitcher(l: LiveGame, s: SideState, pitcherId: string): boo
 
 /**
  * Micro-evento pre-lancio coi corridori in base (SOLO turni interattivi): puo'
- * scattare un lancio pazzo, una palla passata o un balk, che fa avanzare tutti
- * i corridori di una base — chi e' in terza segna. NON consuma il turno: il
- * battitore resta al piatto. Ritorna true se e' scattato qualcosa.
+ * scattare un lancio pazzo, una palla passata o un balk. NON consuma il turno:
+ * il battitore resta al piatto. Ritorna true solo se qualche corridore ha
+ * davvero avanzato (altrimenti il lancio "scappa" ma non cambia nulla).
+ *
+ * Avanzamento (senza sovrapposizioni: si processa dal corridore di testa):
+ *  - **Balk**: avanzamento forzato d'ufficio di una base (regola), il corridore
+ *    in terza segna sempre.
+ *  - **Lancio pazzo / palla passata**: i corridori indietro avanzano facilmente
+ *    di una base *se la base davanti si libera*, ma il corridore in **terza va a
+ *    casa solo con una certa probabilita'** (guidata dalla sua Velocita'): e'
+ *    l'avanzamento piu' rischioso. Se il corridore in terza tiene, quelli dietro
+ *    restano bloccati (niente sovrapposizioni, nessun corridore perso).
  *
  * Non e' mai chiamato dal quick-sim/`autoStep`, quindi l'ordine dell'RNG del
  * turno automatico (Fase 0, calibrazione) resta invariato.
@@ -728,19 +737,36 @@ export function prePitchEvent(l: LiveGame): boolean {
   const scoreRunner = makeScoreRunner(l, off, def);
   const runsBefore = off.runs;
   const bases = l.bases;
-  // Avanzamento d'ufficio di una base; chi e' in terza segna.
+  let moved = false;
+
+  // Corridore in terza: verso casa e' l'avanzamento piu' difficile. Il balk lo
+  // manda a segno d'ufficio; sul lancio pazzo/palla passata dipende dalla
+  // Velocita' del corridore (probabilita' contenuta).
   if (bases[2]) {
-    scoreRunner(bases[2]);
-    bases[2] = null;
+    const spd = (bases[2].batter.ratings.speed - 50) / 10;
+    const pHome = clamp(T.homeBase + spd * T.homePerSpeed, T.homeMin, T.homeMax);
+    if (kind === 'balk' || l.rng.chance(pHome)) {
+      scoreRunner(bases[2]);
+      bases[2] = null;
+      moved = true;
+    }
   }
-  if (bases[1]) {
+  // I corridori dietro avanzano di una base solo se quella davanti e' libera
+  // (niente sovrapposizioni ne' corridori sovrascritti).
+  if (bases[1] && !bases[2]) {
     bases[2] = bases[1];
     bases[1] = null;
+    moved = true;
   }
-  if (bases[0]) {
+  if (bases[0] && !bases[1]) {
     bases[1] = bases[0];
     bases[0] = null;
+    moved = true;
   }
+  // Il lancio e' scappato ma nessuno ha potuto avanzare: nessun evento, il
+  // turno prosegue normalmente col lancio successivo.
+  if (!moved) return false;
+
   const runsScored = off.runs - runsBefore;
 
   const who =

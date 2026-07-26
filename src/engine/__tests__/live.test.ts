@@ -220,26 +220,57 @@ describe('micro-eventi pre-lancio (lancio pazzo / palla passata / balk)', () => 
     }
   });
 
-  it('coi corridori scatta a volte, fa avanzare e non consuma out', () => {
+  it('con corridore in prima, quando scatta lo fa avanzare in seconda (no out, no punto)', () => {
     let fired = 0;
     for (let s = 0; s < 400; s++) {
       const { away, home } = generateMatchup(s);
       const live = createLiveGame(away, home, s * 13 + 5);
-      putRunner(live, 2, 8); // corridore in terza: se scatta, segna
+      putRunner(live, 0, 8); // corridore in prima: avanza sempre in seconda
       const runsBefore = offenseSide(live).runs;
       const fireResult = prePitchEvent(live);
       if (fireResult) {
         fired += 1;
         const ev = live.play[live.play.length - 1];
         expect(PP_KINDS.has(ev.kind)).toBe(true);
-        // Il corridore in terza segna: niente out aggiunto.
         expect(live.outs).toBe(0);
-        expect(offenseSide(live).runs).toBe(runsBefore + 1);
-        expect(situation(live).bases[2]).toBe(false);
+        expect(offenseSide(live).runs).toBe(runsBefore); // niente punto dalla prima
+        expect(situation(live).bases[0]).toBe(false);
+        expect(situation(live).bases[1]).toBe(true);
       }
     }
     // Non-così-raro: su 400 turni con corridori deve capitare piu' volte.
     expect(fired).toBeGreaterThan(5);
+  });
+
+  it('non perde ne sovrappone corridori (2a+3a): il 3a a casa non e sempre facile', () => {
+    let fired = 0;
+    let thirdScored = 0;
+    for (let s = 0; s < 600; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 17 + 3);
+      putRunner(live, 1, 7); // seconda
+      putRunner(live, 2, 8); // terza
+      const before = live.bases.filter(Boolean).length; // 2
+      const runsBefore = offenseSide(live).runs;
+      const ok = prePitchEvent(live);
+      if (!ok) {
+        // Se non e' successo nulla di visibile, le basi restano intatte.
+        expect(live.bases.filter(Boolean).length).toBe(before);
+        continue;
+      }
+      fired += 1;
+      const runs = offenseSide(live).runs - runsBefore;
+      const after = live.bases.filter(Boolean).length;
+      // Conservazione: corridori rimasti + segnati = corridori iniziali.
+      // (Il bug da evitare: 3a tiene ma 2a gli sale sopra e lo cancella.)
+      expect(after + runs).toBe(before);
+      expect(live.outs).toBe(0);
+      if (runs > 0) thirdScored += 1;
+    }
+    expect(fired).toBeGreaterThan(5);
+    // Con 2a+3a occupate, l'evento e' visibile solo se il 3a segna (altrimenti
+    // il 2a e' bloccato dietro di lui): tutte le occorrenze qui hanno il 3a a casa.
+    expect(thirdScored).toBe(fired);
   });
 
   it('il quick-sim non produce mai micro-eventi (Fase 0 invariata)', () => {
@@ -247,6 +278,25 @@ describe('micro-eventi pre-lancio (lancio pazzo / palla passata / balk)', () => 
       const { away, home } = generateMatchup(s);
       const res = simulateGame(away, home, s * 97 + 11);
       for (const ev of res.play) expect(PP_KINDS.has(ev.kind)).toBe(false);
+    }
+  });
+
+  it('gioco interattivo con micro-eventi ON: stato sempre valido, niente corridori duplicati', () => {
+    for (let s = 0; s < 40; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 29 + 7);
+      let guard = 0;
+      while (live.status !== 'final' && guard < 3000) {
+        playOffense(live, 'swing');
+        guard += 1;
+        expect(live.outs).toBeGreaterThanOrEqual(0);
+        expect(live.outs).toBeLessThanOrEqual(3);
+        expect(live.bases.length).toBe(3);
+        // Nessun corridore su due basi contemporaneamente (bug di sovrapposizione).
+        const ids = live.bases.filter(Boolean).map((r) => (r as { batter: Batter }).batter.id);
+        expect(new Set(ids).size).toBe(ids.length);
+      }
+      expect(live.status).toBe('final');
     }
   });
 });
