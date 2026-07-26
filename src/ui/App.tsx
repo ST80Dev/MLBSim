@@ -61,7 +61,6 @@ import type { BatTier } from '../data/projection';
 import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
 import type { StadiumImageCandidate } from '../data/stadiumImages';
 import {
-  getCalibration,
   getCalibrationFor,
   calibratedVariants,
   calibrationStem,
@@ -96,6 +95,24 @@ function applyArrangement(team: Team, arr?: MatchArrangement): Team {
   return arr ? buildManagedTeam(team, arr) : team;
 }
 type Side = 'away' | 'home';
+
+/**
+ * Calibrazione dello stadio di casa per una gara: sceglie (deterministico per
+ * seme-partita) una delle foto CALIBRATE dello stadio — principale o doppione —
+ * e ne carica foto + marker insieme con `getCalibrationFor`, così non si
+ * mischiano mai i marker di una foto con l'immagine di un'altra. Senza foto
+ * calibrate, resta la calibrazione della principale (o il default-foto).
+ */
+function pickMatchCalibration(
+  homeId: string,
+  leagueSeed: number,
+  gnum: number,
+): FieldCalibration {
+  const variants = calibratedVariants(homeId);
+  if (variants.length === 0) return getCalibrationFor(homeId, undefined);
+  const pick = variants[Math.abs(gameSeed(leagueSeed, gnum)) % variants.length];
+  return getCalibrationFor(homeId, pick.image);
+}
 
 export function App() {
   const [leagueSeed, setLeagueSeed] = useState<number>(() => newRandomSeed());
@@ -178,20 +195,15 @@ export function App() {
   // Calibrazione dei marker sulla foto-stadio (perno = casa base). E' per stadio
   // di casa: si reimposta ai valori salvati quando cambia la squadra di casa.
   const homeId = teams.home.id;
-  // Calibrazione dal repository (STADIUM_CALIBRATION, committato) o default.
-  const [cal, setCal] = useState<FieldCalibration>(() => getCalibration(homeId));
   // Ad ogni gara, lo sfondo dello stadio di casa varia (in modo deterministico
   // per-partita) tra le foto CALIBRATE disponibili: principale + eventuali
-  // doppioni `<ID>2.jpg`… così i marker restano allineati. Se ce n'è una sola,
-  // resta quella; se nessuna è calibrata, si usa la calibrazione di default.
+  // doppioni `<ID>2.jpg`… La calibrazione (foto + marker) è caricata SEMPRE per
+  // la foto scelta con `getCalibrationFor`, così marker e foto non si mischiano.
+  const [cal, setCal] = useState<FieldCalibration>(() =>
+    pickMatchCalibration(homeId, leagueSeed, gnum),
+  );
   useEffect(() => {
-    const variants = calibratedVariants(homeId);
-    if (variants.length === 0) {
-      setCal(getCalibration(homeId));
-      return;
-    }
-    const pick = variants[Math.abs(gameSeed(leagueSeed, gnum)) % variants.length];
-    setCal(getCalibrationFor(homeId, pick.image));
+    setCal(pickMatchCalibration(homeId, leagueSeed, gnum));
   }, [homeId, gnum, leagueSeed]);
   const result = toGameResult(live);
   const sit = situation(live);
@@ -1027,7 +1039,9 @@ function CalibrationPanel({
     if (onPickImage) {
       onPickImage(path);
     } else {
-      setCal({ ...cal, image: path });
+      // Cambiare foto CARICA la calibrazione salvata di QUELLA foto (marker
+      // inclusi): mai la foto di una variante con i marker di un'altra.
+      setCal(getCalibrationFor(team.id, path));
     }
     setCopied(false);
   };

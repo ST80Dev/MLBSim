@@ -191,7 +191,10 @@ export function getCalibration(teamId: string): FieldCalibration {
  */
 export function getCalibrationFor(teamId: string, image?: string): FieldCalibration {
   const stem = calibrationStem(teamId, image);
-  const override = CAL_FILES[stem] ?? STADIUM_CALIBRATION[teamId] ?? {};
+  // Il file per-foto ha la precedenza; l'override inline STADIUM_CALIBRATION vale
+  // SOLO per la principale (una variante non deve ereditare la calibrazione della
+  // principale, altrimenti mostra marker sbagliati sulla sua foto).
+  const override = CAL_FILES[stem] ?? (image ? {} : STADIUM_CALIBRATION[teamId]) ?? {};
   const base: FieldCalibration = { ...PHOTO_DEFAULT_CALIBRATION, ...override };
   return image ? { ...base, image } : base;
 }
