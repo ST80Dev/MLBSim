@@ -178,8 +178,32 @@ const R = Math.round;
 // ---------------------------------------------------------------------------
 // Target annata (linea piena) — livello 1 applicato ai rating.
 // ---------------------------------------------------------------------------
-function batterFull(b: Batter, tier: BatTier, prof: BatProfile): SeasonBat {
-  const pa = Math.max(1, R(TIER_PA[tier] * prof.paMult));
+// ---------------------------------------------------------------------------
+// Minutaggio stagionale (PA/gare): NON tutti giocano 150 gare uniformi.
+//  - ETA': giovanissimi (call-up, part-time) e veterani (logorio) giocano meno.
+//  - FASCIA di rosa: i titolari variano poco (giocano molto, ma non tutti 162);
+//    la panchina e soprattutto le RISERVE hanno spread ampio, dal "primo backup"
+//    quasi-titolare al ragazzo sceso in campo pochissimo. Coda rara nelle riserve:
+//    chi e' arrivato da un'altra squadra e ha accumulato molte gare.
+// La componente d'annata (forma/infortunio) resta in `prof.paMult`.
+function ageplayFactor(age: number): number {
+  if (age <= 23) return 0.70 + (age - 21) * 0.1; // 21->.70 22->.80 23->.90
+  if (age >= 35) return clamp(1 - (age - 34) * 0.13, 0.5, 1); // 35->.87 ... 37->.61
+  return 1;
+}
+function seasonalPA(seed: number, id: string, year: number, tier: BatTier, age: number, paMult: number): number {
+  const rng = makeRng(keyNum(seed, id, year, 'pa-time'));
+  let roleF = 1;
+  if (tier === 'bench') {
+    roleF = clamp(rng.gauss(1, 0.32), 0.4, 1.75);
+  } else if (tier === 'reserve') {
+    roleF = clamp(rng.gauss(0.85, 0.5), 0.1, 1.9);
+    if (rng.next() < 0.12) roleF = clamp(rng.gauss(2.5, 0.6), 1.6, 3.6); // ex-titolare altrove
+  }
+  return Math.max(1, R(TIER_PA[tier] * paMult * ageplayFactor(age) * roleF));
+}
+
+function batterFull(b: Batter, pa: number, prof: BatProfile): SeasonBat {
   const base = deriveBatterStats(b.ratings, pa);
   const singles0 = Math.max(0, base.h - base.double - base.triple - base.hr);
 
@@ -224,7 +248,9 @@ function batterFull(b: Batter, tier: BatTier, prof: BatProfile): SeasonBat {
 
 function pitcherFull(p: Pitcher, prof: PitProfile): SeasonPit {
   const load = PITCH_LOAD[p.role] ?? PITCH_LOAD.RP;
-  const bf = Math.max(1, R(load.bf * prof.ipMult));
+  // Carico ridotto per i giovanissimi (limiti d'inning, call-up) e i veterani.
+  const ageF = ageplayFactor(p.age);
+  const bf = Math.max(1, R(load.bf * prof.ipMult * ageF));
   const base = derivePitcherStats(p.ratings, bf);
   const bb = R(base.bb * prof.bbMult);
   const hr = R(base.hr * prof.hrMult);
@@ -235,18 +261,20 @@ function pitcherFull(p: Pitcher, prof: PitProfile): SeasonPit {
   const so = Math.min(R(base.so * prof.kMult), outs);
   const er = R(estimateER(h, hr, bb) * prof.eraLuck);
   const r = R(er * 1.08);
-  const g = Math.max(1, R(load.g * prof.ipMult));
-  const gs = R(load.gs * prof.ipMult);
+  const load2 = prof.ipMult * ageF;
+  const g = Math.max(1, R(load.g * load2));
+  const gs = R(load.gs * load2);
   const ovr = pitcherOverall(p.ratings);
   const wp = clamp(0.5 + (ovr - RATING_AVG) / 60, 0.35, 0.68);
-  const dec = R((p.role === 'SP' ? 21 : p.role === 'CL' ? 6 : 8) * prof.ipMult);
+  const dec = R((p.role === 'SP' ? 21 : p.role === 'CL' ? 6 : 8) * load2);
   const w = clamp(R(dec * wp * prof.wLuck), 0, dec);
   const l = Math.max(0, dec - w);
   let svo = 0;
   let sv = 0;
   if (p.role === 'CL') {
-    svo = Math.max(0, R((38 + (ovr - 55) * 0.4) * prof.ipMult));
-    sv = R(svo * clamp(0.8 + (ovr - 55) / 120, 0.7, 0.93) * prof.svLuck);
+    // Occasioni di salvezza in funzione della qualita' del closer (media a RATING_AVG).
+    svo = Math.max(0, R((38 + (ovr - RATING_AVG) * 0.4) * load2));
+    sv = R(svo * clamp(0.8 + (ovr - RATING_AVG) / 120, 0.7, 0.93) * prof.svLuck);
   } else if (p.role === 'RP') {
     svo = R(6 * prof.svLuck);
     sv = R(svo * 0.5);
@@ -270,7 +298,9 @@ export interface ProjectOpts {
 export function projectBatterSeason(b: Batter, tier: BatTier, opts: ProjectOpts): SeasonBat {
   const total = opts.total ?? SEASON_GAMES;
   const gp = clamp(opts.day, 0, total);
-  const full = batterFull(b, tier, batterProfile(opts.seed, b.id, opts.year));
+  const prof = batterProfile(opts.seed, b.id, opts.year);
+  const pa = seasonalPA(opts.seed, b.id, opts.year, tier, b.age, prof.paMult);
+  const full = batterFull(b, pa, prof);
   if (gp <= 0) return { g: 0, ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, double: 0, triple: 0, hr: 0, sb: 0, cs: 0 };
   const k = (salt: string) => keyNum(opts.seed, b.id, opts.year, salt);
   const fPlay = formFrac(k('play'), gp, total);

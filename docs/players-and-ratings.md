@@ -101,6 +101,23 @@ In `src/engine/ratings.ts`:
 - `batterOverall` / `pitcherOverall` = media pesata delle doti (40-100).
 - `salaryFromOverall` = stipendio annuale (milioni) dall'overall.
 
+## Minutaggio: PA/gare non uniformi
+
+Le linee di **stagione proiettata** (backstory "scorsa"/"storico" nel roster e le
+29 squadre CPU nella leaderboard) non danno 650 PA a tutti. `data/projection.ts`
+(`seasonalPA`) modella il minutaggio per:
+- **Fascia di rosa** — `starter` (~150 gare, ma con varianza: dai 46 ai 162),
+  `bench` (primo backup, ~63 gare mediane), `reserve` (poche gare, mediana ~27,
+  da chi è sceso in campo pochissimo a chi è arrivato da un'altra squadra e ha
+  giocato molto — coda ~12%).
+- **Età** (`ageplayFactor`) — giovanissimi (call-up/part-time) e veterani
+  (logorio) giocano meno del picco 24-34.
+- **Annata** — forma/infortunio (`prof.paMult`), che fa galleggiare le gare.
+
+La squadra dell'utente, appena gioca, usa comunque le stat **reali** dai box score
+(`data/season.ts`): la proiezione è solo la backstory finché non esistono stagioni
+davvero giocate.
+
 ## Inversione statistiche → caratteristiche (import storico)
 
 In `src/engine/statsToRatings.ts` — l'**inverso** della derivazione, per
