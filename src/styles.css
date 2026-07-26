@@ -3139,3 +3139,13 @@ table {
 .ingame-synth { display: inline-flex; align-items: center; gap: 9px; }
 .ingame-synth .ts-item i { font-size: 14px; }
 .ingame-synth .ts-item.ovrbig i { font-size: 15px; }
+
+/* Toggle CL: etichetta AGGIUNTIVA di closer su un RP (spento = tenue, acceso = oro). */
+.cl-toggle {
+  margin-left: 6px; font-family: var(--mono); font-size: 10px; font-weight: 800;
+  padding: 0 5px; border-radius: 4px; cursor: pointer; line-height: 1.5;
+  background: transparent; color: var(--muted); border: 1px solid var(--line);
+  transition: all 0.1s ease;
+}
+.cl-toggle:hover { color: var(--text); border-color: var(--accent); }
+.cl-toggle.on { background: #ffcf40; color: #1a1a1a; border-color: #ffcf40; }

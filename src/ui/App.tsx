@@ -1948,14 +1948,11 @@ function RosterPage({
     update({ rotation, bullpen, closerId });
     setDrag(null);
   };
-  // Nomina closer: qualsiasi rilievo puo' esserlo. Lo si porta nel bullpen (fuori
-  // dalla rotazione) e lo si segna come closer; a video diventa CL, in gara chiude.
-  const setCloser = (id: string) => {
-    if (!drag && !pById.has(id)) return;
-    const rotation = arr.rotation.filter((x) => x !== id);
-    const bullpen = arr.bullpen.includes(id) ? arr.bullpen : [...arr.bullpen, id];
-    update({ rotation, bullpen, closerId: id });
-    setDrag(null);
+  // CL e' solo un'etichetta AGGIUNTIVA su un rilievo (tutti RP di base): il toggle
+  // assegna/toglie il ruolo di closer a un singolo RP del bullpen. Uno solo alla
+  // volta. In gara chiude le gare (buildManagedTeam lo mette per ultimo).
+  const toggleCloser = (id: string) => {
+    update({ closerId: arr.closerId === id ? undefined : id });
   };
 
   const save = async () => {
@@ -2052,9 +2049,21 @@ function RosterPage({
         {tag && <span className="tag">{tag}</span>}
       </td>
       <td className="roles">
-        <span className={p.id === arr.closerId ? 'rolebadge cl' : 'rolebadge'}>
-          {p.id === arr.closerId ? 'CL' : p.role}
-        </span>
+        <span className="rolebadge">{p.role === 'CL' ? 'RP' : p.role}</span>
+        {from === 'bullpen' && (
+          <button
+            type="button"
+            className={`cl-toggle${p.id === arr.closerId ? ' on' : ''}`}
+            onClick={() => toggleCloser(p.id)}
+            title={
+              p.id === arr.closerId
+                ? 'Closer (chiude le gare) — clic per togliere l’etichetta'
+                : 'Dai a questo rilievo anche il ruolo di closer'
+            }
+          >
+            CL
+          </button>
+        )}
       </td>
       <td className="ovr"><Stars overall={pitcherOverall(p.ratings)} /></td>
       <td>{p.age}</td>
@@ -2476,50 +2485,11 @@ function RosterPage({
             'rotation',
             arr.rotation.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
           )}
-
-          <div
-            className={`card closer-card${over === 'closer' && drag ? ' over' : ''}`}
-            onDragOver={(e) => { e.preventDefault(); setOver('closer'); }}
-            onDrop={() => { if (drag) setCloser(drag.id); setOver(null); }}
-          >
-            <div className="card-title">
-              Closer{' '}
-              <span className="card-sub">
-                trascina qui un rilievo: chiude le gare (ruolo CL per la stagione, non è rigido)
-              </span>
-            </div>
-            {(() => {
-              const c = arr.closerId ? pById.get(arr.closerId) : undefined;
-              if (!c) {
-                return <div className="closer-empty">Nessun closer designato — trascina qui un rilievo.</div>;
-              }
-              return (
-                <div
-                  className={`closer-slot${drag?.id === c.id ? ' dragging' : ''}`}
-                  draggable
-                  onDragStart={() => setDrag({ id: c.id, from: 'bullpen' })}
-                  onDragEnd={() => { setDrag(null); setOver(null); }}
-                >
-                  <span className="rolebadge cl">CL</span>
-                  <span className="closer-name">⠿ {c.name}</span>
-                  <Stars overall={pitcherOverall(c.ratings)} />
-                  <span className="closer-meta">
-                    {c.age} anni · DOM {c.ratings.stuff} · CTR {c.ratings.control} · MOV{' '}
-                    {c.ratings.movement}
-                  </span>
-                </div>
-              );
-            })()}
-          </div>
-
           {pitTable(
             'Bullpen',
-            "ordine d'ingresso dei rilievi · l'ultimo chiude",
+            "ordine d'ingresso · tocca CL per dare a un rilievo il ruolo di closer",
             'bullpen',
-            arr.bullpen
-              .filter((id) => id !== arr.closerId)
-              .map((id) => pById.get(id))
-              .filter(Boolean) as Pitcher[],
+            arr.bullpen.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
           )}
           {pitTable('Disponibili', 'trascina in rotazione o bullpen', 'avail', availP)}
         </>
