@@ -82,7 +82,11 @@ export interface CareerProfile {
 
 export interface Batter extends CareerProfile {
   id: string;
-  name: string;
+  name: string; // nome completo (per comodita' di visualizzazione)
+  /** Nome/cognome separati (come Lahman nameFirst/nameLast). Opzionali: se assenti
+   *  si ricavano dal `name` completo (vedi `engine/names.ts`). */
+  firstName?: string;
+  lastName?: string;
   bats: Hand;
   position: Position; // ruolo naturale (principale)
   /**
@@ -97,7 +101,11 @@ export interface Batter extends CareerProfile {
 
 export interface Pitcher extends CareerProfile {
   id: string;
-  name: string;
+  name: string; // nome completo (per comodita' di visualizzazione)
+  /** Nome/cognome separati (come Lahman nameFirst/nameLast). Opzionali: se assenti
+   *  si ricavano dal `name` completo (vedi `engine/names.ts`). */
+  firstName?: string;
+  lastName?: string;
   throws: ThrowHand;
   role: PitcherRole;
   ratings: PitcherRatings;

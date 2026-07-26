@@ -30,6 +30,32 @@ si prepara la squadra, si conferma, si gioca la partita, poi di nuovo gestione.
 - **Niente** luxury tax, multe per sforamento, o gestione finanziaria della
   franchigia. Solo un tetto da non superare.
 
+## Modalità di lega e squilibrio (generata vs import storico)
+
+**Decisione di design.** La lega **generata** ha talento ~gaussiano centrato su
+50: le squadre partono di **forza simile**, quindi il **cap rigido** ha senso
+(parità della sandbox gestionale). L'**import storico** è diverso: le rose reali
+**non sono bilanciate** — le squadre vincenti hanno giocatori con stat/rating
+migliori, le perdenti peggiori. È la **verità dello snapshot** e va **abbracciata,
+non ri-bilanciata** (ri-livellare falserebbe la stagione reale).
+
+Esempio misurato (import 1999): **CLE** ha lineup ovr ~55.6 ma **rotazione ~47**
+(sotto media, com'era davvero), **BOS** rotazione ~55.5 (Pedro); negli scontri
+diretti **CLE vince solo ~35%**. Una squadra realmente scarsa dell'annata starebbe
+molto più in basso.
+
+Conseguenza sul cap: `salaryFromOverall` scala col talento, quindi una corazzata
+storica implica un **monte-ingaggi alto** che sfonderebbe un cap rigido. Perciò:
+
+- **Lega generata** → cap **rigido** (`hard`).
+- **Import storico** → cap **morbido** (`soft`, sforabile) o **off**: non impedire
+  di rivivere l'annata reale.
+
+Fondazione in `src/data/leagueMode.ts`: `LeagueMode` (`source` + `SalaryCapPolicy`
+con `mode: 'hard' | 'soft' | 'off'`), costanti `GENERATED_MODE`/`HISTORICAL_MODE`,
+e utilità `teamPayroll`/`capReport`. L'**enforce** vero (scambi/rinnovi che
+rispettano il cap) arriva col resto del layer gestionale.
+
 ## Scambi
 
 - Valutati da un **"valore giocatore"** = mix di:

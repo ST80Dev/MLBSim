@@ -11,6 +11,7 @@ import {
   pitcherOverall,
   salaryFromOverall,
 } from '../../engine/ratings';
+import { splitName } from '../../engine/names';
 import { FRANCHISES } from '../franchises';
 import type { HistBatLine, HistPitLine, HistTeam } from './season1999';
 
@@ -47,9 +48,12 @@ function batterFrom(l: HistBatLine, id: string): Batter {
   });
   const stats = deriveBatterStats(ratings, l.pa);
   const ovr = batterOverall(ratings);
+  const nm = splitName(l.name);
   return {
     id,
     name: l.name,
+    firstName: nm.first,
+    lastName: nm.last,
     bats: l.bats,
     position: l.pos,
     ratings,
@@ -75,9 +79,12 @@ function pitcherFrom(l: HistPitLine, id: string): Pitcher {
   });
   const stats = derivePitcherStats(ratings, bf);
   const ovr = pitcherOverall(ratings);
+  const nm = splitName(l.name);
   return {
     id,
     name: l.name,
+    firstName: nm.first,
+    lastName: nm.last,
     throws: l.throws,
     role: l.role,
     ratings,

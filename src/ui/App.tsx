@@ -19,6 +19,7 @@ import {
   setInfieldIn,
 } from '../engine/game';
 import { batterOverall, pitcherOverall, deriveBatterStats, derivePitcherStats } from '../engine/ratings';
+import { disambiguateLastNames } from '../engine/names';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import { autoLineup } from '../engine/lineup';
 import {
@@ -1126,11 +1127,6 @@ function strengthColor(v: number): string {
   return `hsl(${Math.round(t * 125)} 60% 46%)`;
 }
 
-function lastName(name: string): string {
-  const i = name.indexOf(' ');
-  return i < 0 ? name : name.slice(i + 1);
-}
-
 function LineupSide({
   team,
   stats,
@@ -1154,8 +1150,11 @@ function LineupSide({
     items: batterStatLine(mode, l, batById.get(l.id)),
   }));
   const head = rows[0]?.items.map((i) => i.k) ?? [];
+  // Cognomi disambiguati per i battitori mostrati (es. R. Alomar / S. Alomar).
+  const batLabels = disambiguateLastNames(rows.map((r) => r.line.name));
   // Lanciatore attualmente in pedana per questa squadra (ultima riga usata).
   const curP = stats.pitching[stats.pitching.length - 1];
+  const pitLabels = disambiguateLastNames(stats.pitching.map((p) => p.name));
   return (
     <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>
       <div className="ls-head">
@@ -1178,7 +1177,7 @@ function LineupSide({
             <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
               <td className="l num">{i + 1}</td>
               <td className="l bname">
-                <span className="pos">{r.line.position}</span> {lastName(r.line.name)}
+                <span className="pos">{r.line.position}</span> {batLabels[i]}
                 {r.line.id === currentId && <span className="atbat-dot">●</span>}
               </td>
               {r.items.map((it) => (
@@ -1191,7 +1190,7 @@ function LineupSide({
       {curP && (
         <div className="ls-pit">
           <span className="ls-pit-tag">LANC.</span>
-          <span className="ls-pit-name">{lastName(curP.name)}</span>
+          <span className="ls-pit-name">{pitLabels[pitLabels.length - 1]}</span>
           <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
           <span className="ls-pit-stat">{curP.so} SO</span>
           <span className="ls-pit-stat">{curP.er} ER</span>
