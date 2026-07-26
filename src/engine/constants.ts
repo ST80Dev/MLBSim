@@ -112,4 +112,34 @@ export const TUNING = {
   infieldIn: {
     hitThrough: 0.18,
   },
+
+  /**
+   * Micro-eventi pre-lancio coi corridori in base (SOLO turni interattivi, mai
+   * nel quick-sim: la Fase 0 resta invariata). Fanno avanzare i corridori senza
+   * consumare il turno. Probabilita' di *accadere* per lancio, guidate dalle doti
+   * (peripherals): il Controllo del lanciatore riduce i lanci pazzi, la Difesa
+   * del ricevitore le palle passate.
+   *   pWp = clamp(wpBase - ctrl_sigma*wpPerControl, wpMin, wpMax)
+   *   pPb = clamp(pbBase - catch_sigma*pbPerCatch, pbMin, pbMax)
+   *   pBalk = balk (fisso)
+   * L'avanzamento dei corridori indietro (1a->2a, 2a->3a) e' facile; il
+   * corridore in **terza va a casa** solo con probabilita' contenuta, guidata
+   * dalla sua Velocita' (il balk lo manda a segno d'ufficio, per regola):
+   *   pHome = clamp(homeBase + speed_sigma*homePerSpeed, homeMin, homeMax)
+   */
+  wildPitch: {
+    wpBase: 0.032,
+    wpPerControl: 0.009,
+    wpMin: 0.008,
+    wpMax: 0.085,
+    pbBase: 0.014,
+    pbPerCatch: 0.006,
+    pbMin: 0.003,
+    pbMax: 0.04,
+    balk: 0.004,
+    homeBase: 0.5,
+    homePerSpeed: 0.09,
+    homeMin: 0.25,
+    homeMax: 0.8,
+  },
 };

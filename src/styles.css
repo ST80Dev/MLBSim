@@ -1675,6 +1675,193 @@ table {
   color: var(--win);
 }
 
+/* --- Banner di cronaca (alto-centro, sopra la foto stadio) ---------------- */
+/* Mostra la telecronaca dell'ultima giocata in 2-3 fasi con intensita'
+   crescente per gli esiti straordinari; a tema coi colori (--bc) della squadra
+   protagonista. Non interattivo (pointer-events:none). */
+.play-banner {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 46%);
+  z-index: 6;
+  pointer-events: none;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(8, 14, 26, 0.94), rgba(8, 14, 26, 0.82));
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  animation: pb-in 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.play-banner.leaving {
+  animation: pb-out 0.4s ease forwards;
+}
+.pb-strip {
+  height: 4px;
+  background: linear-gradient(90deg, transparent, var(--bc), transparent);
+}
+.pb-inner {
+  padding: 8px 16px 12px;
+  text-align: center;
+}
+.pb-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  margin-bottom: 3px;
+}
+.pb-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+.pb-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  transition: background 0.2s, transform 0.2s;
+}
+.pb-dots i.on {
+  background: var(--bc);
+  transform: scale(1.2);
+}
+.pb-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.pb-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.pb-label {
+  font-weight: 900;
+  letter-spacing: 1px;
+  font-size: 13px;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: var(--bc);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.pb-runs {
+  font-weight: 900;
+  font-size: 13px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--win);
+  color: #06231a;
+}
+.pb-text {
+  font-size: 15px;
+  line-height: 1.28;
+  color: #e7eefc;
+  font-weight: 600;
+  animation: pb-text-in 0.3s ease both;
+}
+.pb-text.big {
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+}
+
+/* Intensita' crescente: piu' e' straordinaria la giocata, piu' il verdetto
+   e' grande e luminoso (fuoricampo / doppio gioco al massimo). */
+.play-banner.tier-3.climax .pb-text.big {
+  font-size: 21px;
+}
+.play-banner.tier-4.climax {
+  border-color: var(--bc);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55), 0 0 22px -4px var(--bc);
+}
+.play-banner.tier-4.climax .pb-text.big {
+  font-size: 23px;
+}
+.play-banner.tier-4.climax .pb-label {
+  animation: pb-pop 0.5s ease;
+}
+.play-banner.tier-5.climax {
+  border-color: var(--bc);
+  box-shadow: 0 12px 42px rgba(0, 0, 0, 0.6), 0 0 36px -2px var(--bc);
+}
+.play-banner.tier-5.climax .pb-strip {
+  height: 6px;
+}
+.play-banner.tier-5.climax .pb-text.big {
+  font-size: 27px;
+  letter-spacing: 0.5px;
+}
+.play-banner.tier-5.climax .pb-label {
+  font-size: 15px;
+  animation: pb-pop 0.55s ease;
+}
+.play-banner.tier-5.climax::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  pointer-events: none;
+  animation: pb-ring 1.15s ease-out infinite;
+}
+
+@keyframes pb-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+@keyframes pb-out {
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px) scale(0.98);
+  }
+}
+@keyframes pb-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pb-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes pb-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--bc);
+  }
+  100% {
+    box-shadow: 0 0 0 13px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .play-banner,
+  .play-banner.leaving,
+  .pb-text,
+  .pb-label,
+  .play-banner.tier-5.climax::after {
+    animation: none;
+  }
+}
+
 /* Lineup negli angoli in basso (cronaca ora occupa gli angoli in alto) */
 .lineup-corner {
   bottom: 8px;

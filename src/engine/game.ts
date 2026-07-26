@@ -18,6 +18,34 @@ interface Runner {
   pitcherId: string;
 }
 
+/**
+ * Categoria "narrabile" di una giocata: la UI la usa per il banner di cronaca
+ * (fasi + intensita' crescente + colori a tema). NON influenza la simulazione:
+ * e' solo metadato descrittivo dell'esito gia' calcolato.
+ */
+export type PlayKind =
+  | 'single'
+  | 'double'
+  | 'triple'
+  | 'homerun'
+  | 'walk'
+  | 'hbp'
+  | 'ibb'
+  | 'strikeout'
+  | 'inplayout'
+  | 'gidp'
+  | 'sacfly'
+  | 'sacbunt'
+  | 'bunthit'
+  | 'buntout'
+  | 'steal'
+  | 'caughtstealing'
+  | 'wildpitch'
+  | 'passedball'
+  | 'balk'
+  | 'sub'
+  | 'other';
+
 /** Evento di play-by-play. */
 export interface PlayEvent {
   inning: number;
@@ -26,6 +54,10 @@ export interface PlayEvent {
   away: number; // punteggio away dopo l'azione
   home: number; // punteggio home dopo l'azione
   runsScored: number;
+  /** Categoria dell'esito (per il banner di cronaca). */
+  kind: PlayKind;
+  /** Nome breve del protagonista dell'azione (battitore o corridore). */
+  batter?: string;
 }
 
 export interface TeamGameStats {
@@ -119,6 +151,12 @@ export interface LiveGame {
   controlled: 'away' | 'home';
   /** Difesa avanzata "interni dentro" per il turno corrente (tattica difensiva). */
   infieldIn: boolean;
+  /**
+   * Abilita i micro-eventi pre-lancio (lancio pazzo / palla passata / balk) nei
+   * turni interattivi. Il quick-sim non li usa comunque; questo flag serve a
+   * spegnerli in misurazioni controllate (test). Default true.
+   */
+  microEvents: boolean;
   maxInnings: number;
   // Tracciamento decisioni W/L/SV.
   leader: 'away' | 'home' | null;
@@ -151,6 +189,7 @@ export function createLiveGame(
     finalInning: 1,
     controlled,
     infieldIn: false,
+    microEvents: true,
     maxInnings: MAX_INNINGS,
     leader: null,
     pendingWpSide: null,
@@ -189,7 +228,13 @@ function makeScoreRunner(
   };
 }
 
-function pushPlay(l: LiveGame, text: string, runsScored: number): void {
+function pushPlay(
+  l: LiveGame,
+  text: string,
+  runsScored: number,
+  kind: PlayKind = 'other',
+  batter?: string,
+): void {
   const off = offense(l);
   const def = defense(l);
   l.play.push({
@@ -199,6 +244,8 @@ function pushPlay(l: LiveGame, text: string, runsScored: number): void {
     away: l.half === 'top' ? off.runs : def.runs,
     home: l.half === 'top' ? def.runs : off.runs,
     runsScored,
+    kind,
+    batter,
   });
 }
 
@@ -256,7 +303,7 @@ function swingAtBat(l: LiveGame): void {
   if (res.hit) off.hits += 1;
   const runsScored = off.runs - runsBefore;
 
-  pushPlay(l, describe(event, batter, runsScored), runsScored);
+  pushPlay(l, describe(event, batter, runsScored), runsScored, classifyEvent(event, res), shortName(batter.name));
   afterPlay(l, runsScored);
 }
 
@@ -282,6 +329,7 @@ function buntAtBat(l: LiveGame): void {
 
   const bases = l.bases;
   const leadIdx = bases[2] ? 2 : bases[1] ? 1 : bases[0] ? 0 : -1;
+  let kind: PlayKind;
 
   if (roll < probs.hit) {
     // Bunt valido: il battitore arriva in prima, i corridori avanzano di una.
@@ -306,6 +354,7 @@ function buntAtBat(l: LiveGame): void {
     bases[0] = { batter, pitcherId: pitcher.id };
     bLine.rbi += rbi;
     text = `${name} bunt valido`;
+    kind = 'bunthit';
   } else if (leadIdx >= 0 && roll < probs.hit + probs.fail) {
     // Sacrificio fallito: il corridore di testa viene eliminato, il battitore
     // arriva salvo in prima, gli altri corridori avanzano di una base.
@@ -321,12 +370,14 @@ function buntAtBat(l: LiveGame): void {
     bases[0] = { batter, pitcherId: pitcher.id };
     l.outs += 1;
     text = `${name} bunt, eliminato il corridore di testa`;
+    kind = 'buntout';
   } else if (roll < probs.hit + probs.fail + probs.pop) {
     // Pop-out sul bunt: battitore eliminato, corridori fermi.
     bLine.ab += 1;
     pLine.outs += 1;
     l.outs += 1;
     text = `${name} bunt sbagliato, eliminato`;
+    kind = 'buntout';
   } else {
     // Sacrificio riuscito: battitore eliminato, corridori +1 base. Nessun AB
     // se c'era davvero un corridore da far avanzare (altrimenti e' un out come
@@ -353,11 +404,12 @@ function buntAtBat(l: LiveGame): void {
       rbi > 0
         ? `${name} sacrificio, il corridore segna`
         : `${name} sacrificio riuscito`;
+    kind = 'sacbunt';
   }
 
   const runsScored = off.runs - runsBefore;
   const rr = runsScored > 0 ? ` (${runsScored} ${runsScored === 1 ? 'punto' : 'punti'})` : '';
-  pushPlay(l, text + rr, runsScored);
+  pushPlay(l, text + rr, runsScored, kind, name);
   afterPlay(l, runsScored);
 }
 
@@ -434,14 +486,14 @@ export function attemptSteal(l: LiveGame, fromBase: 1 | 2): boolean {
     l.bases[toIdx] = runner;
     l.bases[idx] = null;
     bLine.sb += 1;
-    pushPlay(l, `${name} ruba la ${baseName} base`, 0);
+    pushPlay(l, `${name} ruba la ${baseName} base`, 0, 'steal', name);
   } else {
     l.bases[idx] = null;
     bLine.cs += 1;
     l.outs += 1;
     const pLine = def.pitchingLines.get(pitcher.id);
     if (pLine) pLine.outs += 1;
-    pushPlay(l, `${name} eliminato in rubata`, 0);
+    pushPlay(l, `${name} eliminato in rubata`, 0, 'caughtstealing', name);
   }
   afterPlay(l, 0);
   return true;
@@ -475,7 +527,7 @@ export function intentionalWalk(l: LiveGame): void {
   );
   const runsScored = off.runs - runsBefore;
   const rr = runsScored > 0 ? ` (${runsScored} ${runsScored === 1 ? 'punto' : 'punti'})` : '';
-  pushPlay(l, `${shortName(batter.name)} — base intenzionale${rr}`, runsScored);
+  pushPlay(l, `${shortName(batter.name)} — base intenzionale${rr}`, runsScored, 'ibb', shortName(batter.name));
   afterPlay(l, runsScored);
 }
 
@@ -523,6 +575,7 @@ export function hitAndRun(l: LiveGame): boolean {
   }
 
   let text: string;
+  let kind: PlayKind;
   if (ev === 'SO') {
     bLine.ab += 1;
     bLine.so += 1;
@@ -536,6 +589,7 @@ export function hitAndRun(l: LiveGame): boolean {
       const rl = off.battingLines.get(runner1.batter.id);
       if (rl) rl.sb += 1;
       text = `${name} strikeout, ma il corridore ruba la seconda`;
+      kind = 'strikeout';
     } else {
       bases[0] = null;
       l.outs += 1;
@@ -543,6 +597,7 @@ export function hitAndRun(l: LiveGame): boolean {
       const rl = off.battingLines.get(runner1.batter.id);
       if (rl) rl.cs += 1;
       text = `${name} strikeout e corridore eliminato: doppio gioco`;
+      kind = 'gidp';
     }
   } else if (ev === 'IPO') {
     // Groundout col corridore in movimento: niente doppio gioco, avanzamento.
@@ -558,6 +613,7 @@ export function hitAndRun(l: LiveGame): boolean {
     else bases[1] = runner1;
     bases[0] = null;
     text = `${name} eliminato, il corridore avanza in movimento`;
+    kind = 'inplayout';
   } else if (ev === '1B') {
     // Singolo con corridore lanciato: dalla prima vola in terza.
     bLine.ab += 1;
@@ -572,17 +628,19 @@ export function hitAndRun(l: LiveGame): boolean {
     bases[2] = runner1;
     bases[0] = { batter, pitcherId: pitcher.id };
     text = `${name} singolo, il corridore vola in terza`;
+    kind = 'single';
   } else {
     // BB/HBP/HR/2B/3B: corsa sulle basi normale.
     const res = applyEvent(ev, batter, pitcher.id, l.bases, l.outs, l.rng, scoreRunner, bLine, pLine);
     l.outs += res.outsAdded;
     if (res.hit) off.hits += 1;
     text = describe(ev, batter, off.runs - runsBefore);
+    kind = classifyEvent(ev, res);
   }
 
   const runsScored = off.runs - runsBefore;
   const rr = runsScored > 0 ? ` (${runsScored} ${runsScored === 1 ? 'punto' : 'punti'})` : '';
-  pushPlay(l, text + rr, runsScored);
+  pushPlay(l, text + rr, runsScored, kind, name);
   afterPlay(l, runsScored);
   return true;
 }
@@ -611,7 +669,7 @@ export function pinchHit(l: LiveGame, benchId: string): boolean {
     off.battingLines.set(sub.id, newBattingLine(sub));
     off.battingOrder.push(sub.id);
   }
-  pushPlay(l, `${shortName(sub.name)} entra come pinch-hitter per ${shortName(current.name)}`, 0);
+  pushPlay(l, `${shortName(sub.name)} entra come pinch-hitter per ${shortName(current.name)}`, 0, 'sub', shortName(sub.name));
   return true;
 }
 
@@ -637,9 +695,100 @@ export function changePitcher(l: LiveGame, s: SideState, pitcherId: string): boo
   return true;
 }
 
+/**
+ * Micro-evento pre-lancio coi corridori in base (SOLO turni interattivi): puo'
+ * scattare un lancio pazzo, una palla passata o un balk. NON consuma il turno:
+ * il battitore resta al piatto. Ritorna true solo se qualche corridore ha
+ * davvero avanzato (altrimenti il lancio "scappa" ma non cambia nulla).
+ *
+ * Avanzamento (senza sovrapposizioni: si processa dal corridore di testa):
+ *  - **Balk**: avanzamento forzato d'ufficio di una base (regola), il corridore
+ *    in terza segna sempre.
+ *  - **Lancio pazzo / palla passata**: i corridori indietro avanzano facilmente
+ *    di una base *se la base davanti si libera*, ma il corridore in **terza va a
+ *    casa solo con una certa probabilita'** (guidata dalla sua Velocita'): e'
+ *    l'avanzamento piu' rischioso. Se il corridore in terza tiene, quelli dietro
+ *    restano bloccati (niente sovrapposizioni, nessun corridore perso).
+ *
+ * Non e' mai chiamato dal quick-sim/`autoStep`, quindi l'ordine dell'RNG del
+ * turno automatico (Fase 0, calibrazione) resta invariato.
+ */
+export function prePitchEvent(l: LiveGame): boolean {
+  if (l.status !== 'live' || !l.microEvents) return false;
+  if (!l.bases.some(Boolean)) return false; // niente corridori: nessun effetto
+
+  const off = offense(l);
+  const def = defense(l);
+  const pitcher = currentPitcher(def);
+  const catcher = def.team.lineup.find((b) => b.position === 'C');
+  const T = TUNING.wildPitch;
+  const ctrl = (pitcher.ratings.control - 50) / 10;
+  const catchField = ((catcher ? catcher.ratings.fielding : 50) - 50) / 10;
+  const pWp = clamp(T.wpBase - ctrl * T.wpPerControl, T.wpMin, T.wpMax);
+  const pPb = clamp(T.pbBase - catchField * T.pbPerCatch, T.pbMin, T.pbMax);
+
+  const roll = l.rng.next();
+  let kind: PlayKind | null = null;
+  if (roll < pWp) kind = 'wildpitch';
+  else if (roll < pWp + pPb) kind = 'passedball';
+  else if (roll < pWp + pPb + T.balk) kind = 'balk';
+  if (!kind) return false;
+
+  const scoreRunner = makeScoreRunner(l, off, def);
+  const runsBefore = off.runs;
+  const bases = l.bases;
+  let moved = false;
+
+  // Corridore in terza: verso casa e' l'avanzamento piu' difficile. Il balk lo
+  // manda a segno d'ufficio; sul lancio pazzo/palla passata dipende dalla
+  // Velocita' del corridore (probabilita' contenuta).
+  if (bases[2]) {
+    const spd = (bases[2].batter.ratings.speed - 50) / 10;
+    const pHome = clamp(T.homeBase + spd * T.homePerSpeed, T.homeMin, T.homeMax);
+    if (kind === 'balk' || l.rng.chance(pHome)) {
+      scoreRunner(bases[2]);
+      bases[2] = null;
+      moved = true;
+    }
+  }
+  // I corridori dietro avanzano di una base solo se quella davanti e' libera
+  // (niente sovrapposizioni ne' corridori sovrascritti).
+  if (bases[1] && !bases[2]) {
+    bases[2] = bases[1];
+    bases[1] = null;
+    moved = true;
+  }
+  if (bases[0] && !bases[1]) {
+    bases[1] = bases[0];
+    bases[0] = null;
+    moved = true;
+  }
+  // Il lancio e' scappato ma nessuno ha potuto avanzare: nessun evento, il
+  // turno prosegue normalmente col lancio successivo.
+  if (!moved) return false;
+
+  const runsScored = off.runs - runsBefore;
+
+  const who =
+    kind === 'passedball'
+      ? catcher
+        ? shortName(catcher.name)
+        : def.team.abbrev
+      : shortName(pitcher.name);
+  const label =
+    kind === 'wildpitch' ? 'lancio pazzo' : kind === 'passedball' ? 'palla passata' : 'balk';
+  const rr = runsScored > 0 ? ` (${runsScored} ${runsScored === 1 ? 'punto' : 'punti'})` : '';
+  pushPlay(l, `${who}: ${label}, i corridori avanzano${rr}`, runsScored, kind, who);
+  afterPlay(l, runsScored);
+  return true;
+}
+
 /** Esegue una tattica offensiva scelta (per la squadra in attacco). */
 export function playOffense(l: LiveGame, tactic: OffenseTactic): void {
   if (l.status !== 'live') return;
+  // Prima del lancio, coi corridori in base, puo' scattare un micro-evento
+  // (lancio pazzo/palla passata/balk): se scatta, il turno non e' consumato.
+  if (prePitchEvent(l)) return;
   if (tactic === 'bunt') buntAtBat(l);
   else swingAtBat(l);
 }
@@ -848,9 +997,41 @@ export function simulateGame(away: Team, home: Team, seed: number): GameResult {
 // Applicazione di un esito grezzo allo stato (basi/eliminati) — invariato.
 // ---------------------------------------------------------------------------
 
+/** Dettaglio dell'esito in gioco (per la classificazione narrativa). */
+type OutDetail = 'gidp' | 'sacfly' | 'infieldhit';
+
 interface EventResult {
   outsAdded: number;
   hit: boolean;
+  detail?: OutDetail;
+}
+
+/**
+ * Traduce l'esito grezzo + il dettaglio dell'azione in una categoria narrabile
+ * per il banner di cronaca. Puro, non tocca lo stato.
+ */
+function classifyEvent(event: RawEvent, res: EventResult): PlayKind {
+  switch (event) {
+    case 'SO':
+      return 'strikeout';
+    case 'BB':
+      return 'walk';
+    case 'HBP':
+      return 'hbp';
+    case 'HR':
+      return 'homerun';
+    case '3B':
+      return 'triple';
+    case '2B':
+      return 'double';
+    case '1B':
+      return 'single';
+    case 'IPO':
+      if (res.hit) return 'single'; // singolo che passa gli interni
+      if (res.detail === 'gidp') return 'gidp';
+      if (res.detail === 'sacfly') return 'sacfly';
+      return 'inplayout';
+  }
 }
 
 function applyEvent(
@@ -1001,7 +1182,7 @@ function applyEvent(
             bases[0] = null;
           }
           bases[0] = runner;
-          return { outsAdded: 0, hit: true };
+          return { outsAdded: 0, hit: true, detail: 'infieldhit' };
         }
         // Rimbalzo all'interno tirato dentro: battitore eliminato, corridore
         // tenuto in terza, nessun punto.
@@ -1012,7 +1193,7 @@ function applyEvent(
       if (bases[0] && outsBefore < 2 && rng.chance(TUNING.gidpProb)) {
         bases[0] = null;
         pLine.outs += 2;
-        return { outsAdded: 2, hit: false };
+        return { outsAdded: 2, hit: false, detail: 'gidp' };
       }
       pLine.outs += 1;
       // Volata di sacrificio / groundout RBI dalla terza.
@@ -1020,6 +1201,7 @@ function applyEvent(
         scoreRunner(bases[2]);
         bases[2] = null;
         bLine.rbi += 1;
+        return { outsAdded: 1, hit: false, detail: 'sacfly' };
       }
       return { outsAdded: 1, hit: false };
     }
