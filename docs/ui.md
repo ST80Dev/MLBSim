@@ -39,7 +39,8 @@ Regioni, dall'alto in basso:
     valide, difesa per gli eliminati) e con **intensità crescente** (`tier 0-5`)
     per gli esiti più straordinari: singolo→doppio→triplo→**fuoricampo** in
     attacco, eliminato in gioco→strikeout→eliminato in rubata→**doppio gioco**
-    in difesa; un punto segnato alza di un gradino. La categoria arriva dal
+    in difesa; più i micro-eventi coi corridori (**lancio pazzo / palla passata /
+    balk**) che li fanno avanzare. Un punto segnato alza di un gradino. La categoria arriva dal
     motore via `PlayEvent.kind` (metadato puramente descrittivo, non tocca la
     simulazione né l'RNG). Non interattivo (`pointer-events:none`).
   - **Cronaca laterale** (`CronacaTeam`, angoli **alti** sx/dx per ospite/casa):

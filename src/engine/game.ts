@@ -40,6 +40,9 @@ export type PlayKind =
   | 'buntout'
   | 'steal'
   | 'caughtstealing'
+  | 'wildpitch'
+  | 'passedball'
+  | 'balk'
   | 'sub'
   | 'other';
 
@@ -148,6 +151,12 @@ export interface LiveGame {
   controlled: 'away' | 'home';
   /** Difesa avanzata "interni dentro" per il turno corrente (tattica difensiva). */
   infieldIn: boolean;
+  /**
+   * Abilita i micro-eventi pre-lancio (lancio pazzo / palla passata / balk) nei
+   * turni interattivi. Il quick-sim non li usa comunque; questo flag serve a
+   * spegnerli in misurazioni controllate (test). Default true.
+   */
+  microEvents: boolean;
   maxInnings: number;
   // Tracciamento decisioni W/L/SV.
   leader: 'away' | 'home' | null;
@@ -180,6 +189,7 @@ export function createLiveGame(
     finalInning: 1,
     controlled,
     infieldIn: false,
+    microEvents: true,
     maxInnings: MAX_INNINGS,
     leader: null,
     pendingWpSide: null,
@@ -685,9 +695,74 @@ export function changePitcher(l: LiveGame, s: SideState, pitcherId: string): boo
   return true;
 }
 
+/**
+ * Micro-evento pre-lancio coi corridori in base (SOLO turni interattivi): puo'
+ * scattare un lancio pazzo, una palla passata o un balk, che fa avanzare tutti
+ * i corridori di una base — chi e' in terza segna. NON consuma il turno: il
+ * battitore resta al piatto. Ritorna true se e' scattato qualcosa.
+ *
+ * Non e' mai chiamato dal quick-sim/`autoStep`, quindi l'ordine dell'RNG del
+ * turno automatico (Fase 0, calibrazione) resta invariato.
+ */
+export function prePitchEvent(l: LiveGame): boolean {
+  if (l.status !== 'live' || !l.microEvents) return false;
+  if (!l.bases.some(Boolean)) return false; // niente corridori: nessun effetto
+
+  const off = offense(l);
+  const def = defense(l);
+  const pitcher = currentPitcher(def);
+  const catcher = def.team.lineup.find((b) => b.position === 'C');
+  const T = TUNING.wildPitch;
+  const ctrl = (pitcher.ratings.control - 50) / 10;
+  const catchField = ((catcher ? catcher.ratings.fielding : 50) - 50) / 10;
+  const pWp = clamp(T.wpBase - ctrl * T.wpPerControl, T.wpMin, T.wpMax);
+  const pPb = clamp(T.pbBase - catchField * T.pbPerCatch, T.pbMin, T.pbMax);
+
+  const roll = l.rng.next();
+  let kind: PlayKind | null = null;
+  if (roll < pWp) kind = 'wildpitch';
+  else if (roll < pWp + pPb) kind = 'passedball';
+  else if (roll < pWp + pPb + T.balk) kind = 'balk';
+  if (!kind) return false;
+
+  const scoreRunner = makeScoreRunner(l, off, def);
+  const runsBefore = off.runs;
+  const bases = l.bases;
+  // Avanzamento d'ufficio di una base; chi e' in terza segna.
+  if (bases[2]) {
+    scoreRunner(bases[2]);
+    bases[2] = null;
+  }
+  if (bases[1]) {
+    bases[2] = bases[1];
+    bases[1] = null;
+  }
+  if (bases[0]) {
+    bases[1] = bases[0];
+    bases[0] = null;
+  }
+  const runsScored = off.runs - runsBefore;
+
+  const who =
+    kind === 'passedball'
+      ? catcher
+        ? shortName(catcher.name)
+        : def.team.abbrev
+      : shortName(pitcher.name);
+  const label =
+    kind === 'wildpitch' ? 'lancio pazzo' : kind === 'passedball' ? 'palla passata' : 'balk';
+  const rr = runsScored > 0 ? ` (${runsScored} ${runsScored === 1 ? 'punto' : 'punti'})` : '';
+  pushPlay(l, `${who}: ${label}, i corridori avanzano${rr}`, runsScored, kind, who);
+  afterPlay(l, runsScored);
+  return true;
+}
+
 /** Esegue una tattica offensiva scelta (per la squadra in attacco). */
 export function playOffense(l: LiveGame, tactic: OffenseTactic): void {
   if (l.status !== 'live') return;
+  // Prima del lancio, coi corridori in base, puo' scattare un micro-evento
+  // (lancio pazzo/palla passata/balk): se scatta, il turno non e' consumato.
+  if (prePitchEvent(l)) return;
   if (tactic === 'bunt') buntAtBat(l);
   else swingAtBat(l);
 }

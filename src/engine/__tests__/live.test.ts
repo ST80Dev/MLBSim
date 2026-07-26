@@ -19,6 +19,7 @@ import {
   benchFor,
   setInfieldIn,
   playOffense,
+  prePitchEvent,
   offenseSide,
 } from '../game';
 import type { LiveGame } from '../game';
@@ -197,6 +198,59 @@ describe('metadati narrativi (kind) per il banner di cronaca', () => {
   });
 });
 
+describe('micro-eventi pre-lancio (lancio pazzo / palla passata / balk)', () => {
+  const PP_KINDS = new Set(['wildpitch', 'passedball', 'balk']);
+
+  it('senza corridori non scatta mai', () => {
+    for (let s = 0; s < 60; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 7 + 1);
+      expect(prePitchEvent(live)).toBe(false);
+      expect(live.play.length).toBe(0);
+    }
+  });
+
+  it('col flag spento non scatta mai (misura controllata)', () => {
+    for (let s = 0; s < 60; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 7 + 1);
+      live.microEvents = false;
+      putRunner(live, 0, 8);
+      expect(prePitchEvent(live)).toBe(false);
+    }
+  });
+
+  it('coi corridori scatta a volte, fa avanzare e non consuma out', () => {
+    let fired = 0;
+    for (let s = 0; s < 400; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 13 + 5);
+      putRunner(live, 2, 8); // corridore in terza: se scatta, segna
+      const runsBefore = offenseSide(live).runs;
+      const fireResult = prePitchEvent(live);
+      if (fireResult) {
+        fired += 1;
+        const ev = live.play[live.play.length - 1];
+        expect(PP_KINDS.has(ev.kind)).toBe(true);
+        // Il corridore in terza segna: niente out aggiunto.
+        expect(live.outs).toBe(0);
+        expect(offenseSide(live).runs).toBe(runsBefore + 1);
+        expect(situation(live).bases[2]).toBe(false);
+      }
+    }
+    // Non-così-raro: su 400 turni con corridori deve capitare piu' volte.
+    expect(fired).toBeGreaterThan(5);
+  });
+
+  it('il quick-sim non produce mai micro-eventi (Fase 0 invariata)', () => {
+    for (let s = 0; s < 20; s++) {
+      const { away, home } = generateMatchup(s);
+      const res = simulateGame(away, home, s * 97 + 11);
+      for (const ev of res.play) expect(PP_KINDS.has(ev.kind)).toBe(false);
+    }
+  });
+});
+
 describe('azioni interattive', () => {
   it('la base intenzionale mette il battitore in prima', () => {
     const { away, home } = generateMatchup(2);
@@ -295,6 +349,7 @@ describe('difesa avanzata — interni dentro', () => {
       // Normale.
       const m1 = generateMatchup(s);
       const gN = createLiveGame(m1.away, m1.home, seed);
+      gN.microEvents = false; // misura il solo esito grezzo del turno
       gN.outs = 0;
       putRunner(gN, 2, 8);
       const rN0 = offenseSide(gN).runs;
@@ -305,6 +360,7 @@ describe('difesa avanzata — interni dentro', () => {
       // Interni dentro (stesso seme, stesso evento grezzo).
       const m2 = generateMatchup(s);
       const gI = createLiveGame(m2.away, m2.home, seed);
+      gI.microEvents = false; // misura il solo esito grezzo del turno
       gI.outs = 0;
       putRunner(gI, 2, 8);
       setInfieldIn(gI, true);

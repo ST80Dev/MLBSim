@@ -81,6 +81,9 @@ const META: Record<
   strikeout: { tier: 2, icon: '✖', label: 'STRIKEOUT', accent: 'defense' },
   sacfly: { tier: 2, icon: '🕊️', label: 'VOLATA', accent: 'offense' },
   bunthit: { tier: 2, icon: '🎯', label: 'BUNT VALIDO', accent: 'offense' },
+  wildpitch: { tier: 2, icon: '💨', label: 'LANCIO PAZZO', accent: 'offense' },
+  passedball: { tier: 2, icon: '🧤', label: 'PALLA PASSATA', accent: 'offense' },
+  balk: { tier: 2, icon: '🚫', label: 'BALK', accent: 'offense' },
   walk: { tier: 1, icon: '🅱️', label: 'BASE BALL', accent: 'offense' },
   hbp: { tier: 1, icon: '🤕', label: 'COLPITO', accent: 'offense' },
   ibb: { tier: 1, icon: '🅱️', label: 'BASE INTENZ.', accent: 'offense' },
@@ -202,6 +205,26 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
       return [
         pick(ev, [`${b} studia il lanciatore…`, `${b} allunga il piede…`]),
         `Parte… e ruba la base! ${b} sicuro.`,
+      ];
+    case 'wildpitch':
+      return [
+        pick(ev, ['Il lanciatore carica…', 'Sul monte si prepara il lancio…']),
+        pick(ev, [
+          'La palla scappa via, rimbalza lontano dal ricevitore…',
+          'Lancio che finisce nella terra e schizza via…',
+        ]),
+        `LANCIO PAZZO! I corridori avanzano.${t}`,
+      ];
+    case 'passedball':
+      return [
+        'Arriva il lancio al ricevitore…',
+        'La palla gli sfugge dal guantone…',
+        `PALLA PASSATA! Corridori in movimento.${t}`,
+      ];
+    case 'balk':
+      return [
+        'Il lanciatore imposta la posizione…',
+        `Movimento irregolare: BALK! Corridori avanzati d’ufficio.${t}`,
       ];
     case 'buntout':
       return [open, 'Prova la smorzata…', `Difesa pronta: ${b} eliminato.`];

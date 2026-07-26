@@ -38,6 +38,15 @@ spostano gli aggregati di lega.
   **non addebita l'AB** (non intacca la media); il bunt valido sì (è una hit).
 - **Base intenzionale** (`intentionalWalk`) — avanzamento forzato deterministico
   (nessun RNG); conta come BB.
+- **Micro-eventi pre-lancio** (`prePitchEvent`) — coi **corridori in base**, prima
+  che il turno si risolva, può scattare un **lancio pazzo / palla passata / balk**:
+  tutti i corridori avanzano di una base (chi è in terza **segna**) e il turno
+  **non è consumato** (il battitore resta al piatto). Probabilità guidate dalle
+  doti: il **Controllo** del lanciatore riduce i lanci pazzi, la **Difesa** del
+  ricevitore le palle passate; costanti in `TUNING.wildPitch`. Girano **solo nel
+  gioco interattivo** (`playOffense`): `autoStep`/`quickSim` non li chiamano mai,
+  quindi l'aggregato di lega e la calibrazione restano invariati. Spegnibili con
+  `LiveGame.microEvents = false` (usato nelle misurazioni controllate dei test).
 - **Cambio lanciatore** (`changePitcher` manuale / `autoManagePitcher` per la CPU)
   — porta in pedana un rilievo e ne registra `enteredDiff` (per i save).
 
