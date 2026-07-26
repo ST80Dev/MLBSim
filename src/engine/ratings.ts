@@ -31,17 +31,29 @@ const round = Math.round;
  */
 export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
   const so = round(pa * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
-  const bb = round(pa * LEAGUE.bb * ratingMult(r.eye, 1.3));
+  const bb = round(pa * LEAGUE.bb * ratingMult(r.eye, 1.24));
   const hbp = round(pa * LEAGUE.hbp);
-  const hr = round(pa * LEAGUE.hr * ratingMult(r.power, 1.36));
+  const hr = round(pa * LEAGUE.hr * ratingMult(r.power, 1.34));
   const triple = round(pa * LEAGUE.triple * ratingMult(r.speed, 1.6) * ratingMult(r.power, 0.9));
-  const double = round(pa * LEAGUE.double * ratingMult(r.power, 1.14));
+  const double = round(pa * LEAGUE.double * ratingMult(r.power, 1.11));
   let single = round(pa * LEAGUE.single * ratingMult(r.contact, 1.1));
 
   const ab = Math.max(1, pa - bb - hbp);
   let h = single + double + triple + hr;
   if (h > ab) {
     single = Math.max(0, single - (h - ab));
+    h = single + double + triple + hr;
+  }
+
+  // Soft-cap realistico sulla media: oltre ~.330 i rendimenti sono decrescenti
+  // (battere .400 e' rarissimo). Non tocca i contatti-puri sotto soglia; comprime
+  // i fenomeni multi-tool. Vale ovunque (sim, backstory, base della proiezione),
+  // cosi' la varianza d'annata puo' sfondare .400 solo di rado, non a comando.
+  const BA_CAP = 0.33;
+  const BA_SLOPE = 0.33;
+  if (h / ab > BA_CAP) {
+    const targetH = round((BA_CAP + (h / ab - BA_CAP) * BA_SLOPE) * ab);
+    single = Math.max(0, single - (h - targetH));
     h = single + double + triple + hr;
   }
 
@@ -53,7 +65,7 @@ export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
 
 /** Deriva le statistiche concesse da un lanciatore dalle sue caratteristiche. */
 export function derivePitcherStats(r: PitcherRatings, bf = 1000): PitcherStats {
-  const so = round(bf * LEAGUE.so * ratingMult(r.stuff, 1.25));
+  const so = round(bf * LEAGUE.so * ratingMult(r.stuff, 1.21));
   const bb = round(bf * LEAGUE.bb * ratingMult(r.control, 0.78));
   const hbp = round(bf * LEAGUE.hbp);
   const hr = round(bf * LEAGUE.hr * ratingMult(r.groundball, 0.72));

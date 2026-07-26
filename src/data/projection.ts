@@ -69,23 +69,45 @@ interface BatProfile {
   rbiLuck: number;
 }
 
+// Estrazione a coda pesante: valore assoluto di una gaussiana, ma solo con
+// probabilita' `p` (altrimenti 0). Serve per gli eventi RARI d'annata (career
+// year / crollo): quasi sempre 0, ogni tanto un picco che sfonda le soglie.
+function rareTail(rng: ReturnType<typeof makeRng>, p: number): number {
+  return rng.next() < p ? Math.abs(rng.gauss(0, 1)) : 0;
+}
+
+// Modello d'annata a piu' fattori:
+//  - form: livello GENERALE della stagione (molte stat su/giu' INSIEME: una vera
+//    career-year alza H/HR/BB, una stagione-no li abbassa tutti);
+//  - power: asse potenza<->contatto (potenza su -> media un filo giu', e vice);
+//  - powerSpike/contactSpike: code RARE che producono le gemme (60+ HR, .400+),
+//    non legate al rating tutti gli anni e poco diffuse;
+//  - collapse: coda RARA di annata storta diffusa (molte stat giu' + meno impiego).
 function batterProfile(seed: number, id: string, year: number): BatProfile {
   const rng = makeRng(keyNum(seed, id, year, 'bat-profile'));
-  // Asse latente potenza<->contatto: potenza giu' tende a media su, e viceversa.
-  const powerLuck = clamp(rng.gauss(0, 1), -1.7, 1.7);
-  let paMult = clamp(1 + rng.gauss(0, 0.07), 0.84, 1.1);
-  if (rng.next() < 0.1) paMult *= clamp(rng.next() * 0.5 + 0.4, 0.35, 0.9); // annata da infortunio
+  const form = clamp(rng.gauss(0, 1), -2.2, 2.2);
+  const power = clamp(rng.gauss(0, 1), -2, 2);
+  const powerSpike = rareTail(rng, 0.05); // ~5%: annata da bombe fuori scala
+  const contactSpike = rareTail(rng, 0.05); // ~5%: annata da media fuori scala
+  const collapse = rareTail(rng, 0.07); // ~7%: annata storta diffusa
+
+  // Livello diffuso GENTILE (il max-su-600 amplifica gia' la coda ~3sigma, quindi
+  // gli SD di routine restano piccoli). Le gemme sono ADDITIVE e limitate.
+  const level = 1 + 0.05 * form - 0.14 * collapse;
+  let paMult = clamp(1 + 0.03 * form + rng.gauss(0, 0.04) - 0.12 * collapse, 0.62, 1.06);
+  if (rng.next() < 0.08) paMult *= clamp(rng.next() * 0.5 + 0.4, 0.35, 0.9); // infortunio
+
   return {
-    hrMult: clamp(1 + 0.24 * powerLuck + rng.gauss(0, 0.09), 0.58, 1.42),
-    xbhMult: clamp(1 + 0.16 * powerLuck + rng.gauss(0, 0.09), 0.62, 1.4),
-    // Anti-correlata alla potenza ma MODESTA (l'anno di magra da bombe alza un po' la media).
-    avgMult: clamp(1 - 0.07 * powerLuck + rng.gauss(0, 0.06), 0.88, 1.14),
-    bbMult: clamp(1 + rng.gauss(0, 0.13), 0.7, 1.4),
-    kMult: clamp(1 + 0.05 * powerLuck + rng.gauss(0, 0.12), 0.7, 1.4),
+    hrMult: clamp(level + 0.13 * power + 0.2 * powerSpike + rng.gauss(0, 0.05), 0.5, 1.66),
+    xbhMult: clamp(level + 0.1 * power + 0.11 * powerSpike + rng.gauss(0, 0.05), 0.55, 1.5),
+    // Singoli: anti-correlata alla potenza (modesta) + rara gemma di contatto.
+    avgMult: clamp(level - 0.04 * power + 0.16 * contactSpike + rng.gauss(0, 0.03), 0.86, 1.32),
+    bbMult: clamp(level + rng.gauss(0, 0.1), 0.7, 1.4),
+    kMult: clamp((1 + 0.05 * power - 0.1 * contactSpike) * (1 + rng.gauss(0, 0.09)), 0.7, 1.4),
     speedMult: clamp(1 + rng.gauss(0, 0.15), 0.6, 1.5),
     sbMult: clamp(1 + rng.gauss(0, 0.18), 0.5, 1.6),
     paMult,
-    rbiLuck: clamp(1 + rng.gauss(0, 0.08), 0.82, 1.2),
+    rbiLuck: clamp(level + rng.gauss(0, 0.05), 0.82, 1.25),
   };
 }
 
@@ -102,17 +124,25 @@ interface PitProfile {
 
 function pitcherProfile(seed: number, id: string, year: number): PitProfile {
   const rng = makeRng(keyNum(seed, id, year, 'pit-profile'));
-  const eraLuck = clamp(1 + rng.gauss(0, 0.14), 0.68, 1.45); // sequenze/BABIP/LOB: il risultato galleggia
-  let ipMult = clamp(1 + rng.gauss(0, 0.08), 0.82, 1.12);
-  if (rng.next() < 0.12) ipMult *= clamp(rng.next() * 0.5 + 0.4, 0.35, 0.9);
+  const form = clamp(rng.gauss(0, 1), -2.2, 2.2); // livello generale d'annata
+  const kSpike = rareTail(rng, 0.05); // ~5%: annata da K fuori scala
+  const domSpike = rareTail(rng, 0.05); // ~5%: annata dominante (ERA giu')
+  const collapse = rareTail(rng, 0.07); // ~7%: annata storta diffusa
+
+  // levelBad > 1 = piu' punti concessi; il dominio raro (additivo) lo abbatte.
+  const levelBad = clamp(1 - 0.04 * form + 0.13 * collapse - 0.1 * domSpike, 0.72, 1.5);
+  const eraLuck = clamp(levelBad + rng.gauss(0, 0.08), 0.72, 1.55); // sequenze/BABIP/LOB: galleggia
+  let ipMult = clamp(1 + 0.03 * form + rng.gauss(0, 0.05) - 0.13 * collapse, 0.6, 1.08);
+  if (rng.next() < 0.1) ipMult *= clamp(rng.next() * 0.5 + 0.4, 0.35, 0.9);
+
   return {
-    kMult: clamp(1 + rng.gauss(0, 0.12), 0.72, 1.35),
-    bbMult: clamp(1 + rng.gauss(0, 0.14), 0.7, 1.45),
-    hrMult: clamp(1 + rng.gauss(0, 0.16), 0.6, 1.6),
-    hMult: clamp(1 + rng.gauss(0, 0.09), 0.82, 1.22),
+    kMult: clamp(1 + 0.07 * form + 0.16 * kSpike + rng.gauss(0, 0.07), 0.72, 1.5),
+    bbMult: clamp((1 - 0.05 * form) * (1 + rng.gauss(0, 0.12)), 0.68, 1.5),
+    hrMult: clamp(levelBad + rng.gauss(0, 0.11), 0.6, 1.6),
+    hMult: clamp(levelBad + rng.gauss(0, 0.06), 0.8, 1.28),
     eraLuck,
     ipMult,
-    wLuck: clamp((1 / eraLuck) * (1 + rng.gauss(0, 0.1)), 0.6, 1.5), // buona ERA -> piu' W, + rumore
+    wLuck: clamp((1 / eraLuck) * (1 + rng.gauss(0, 0.1)), 0.6, 1.6), // buona ERA -> piu' W, + rumore
     svLuck: clamp(1 + rng.gauss(0, 0.12), 0.7, 1.3),
   };
 }

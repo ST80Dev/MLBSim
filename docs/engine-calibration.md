@@ -66,12 +66,13 @@ partite generate):
 
 ## Cime di eccellenza (indicazioni, non cifre rigide)
 
-Il campione che vince le classifiche, come indicazione (ci scappa anche la
-stagione fuori scala tipo 60 HR o .360):
+Il campione che vince le classifiche, come indicazione (con le **gemme** rare che
+sfondano — vedi la tabella in "Proiezione di lega"):
 
-- **Battitore top**: ~.340 / 45-50 HR / ~130 RBI. Il contact hitter puro sfiora
-  .340 con pochi HR; lo slugger puro fa 45-53 HR.
-- **Lanciatore top**: ~20 W / ~200-270 K / ERA sotto 2 (asso vero, rating ~72+).
+- **Battitore top**: ~.370 / ~53 HR / ~145 RBI tipico; la gemma d'annata tocca
+  .400+ o 60-72 HR *ogni tanto* (~8-10% delle annate), non a comando.
+- **Lanciatore top**: ~18-20 W / ~260 K / ERA ~2.4 tipico; la gemma scende sotto
+  2.10 o supera 300 K *di rado* (asso vero, rating ~72+).
 
 ## ERA e Vittorie NON sono cardini rigidi
 
@@ -104,3 +105,40 @@ Con la distribuzione generata, **~8-10 partenti sotto il 3.00 in tutta la lega**
    livello via simulazione reale di gare complete.
 4. I test `src/engine/__tests__/` codificano gli intervalli dell'epoca e le cime:
    se cambi la taratura, aggiornali di conseguenza.
+
+## Soft-cap sulla media (BA)
+
+`deriveBatterStats` applica un **tetto a rendimenti decrescenti** sulla media:
+oltre `BA_CAP` (~.330) l'eccesso conta solo per `BA_SLOPE` (~0.33). Serve perché
+la mappatura convessa faceva sfondare i multi-tool oltre .420 di *base* (battere
+.400 dev'essere rarissimo, non a comando). Il cap agisce **sopra** la soglia,
+quindi **non tocca** il contatto-puro (contact 82 ≈ .324) né la media di lega; vale
+ovunque (sim reale, backstory, base della proiezione), così la varianza d'annata
+può portare a .400+ solo *di rado*.
+
+## Proiezione di lega e varianza d'annata (`data/projection.ts`)
+
+La leaderboard mostra le stat REALI della squadra gestita e una **proiezione** per
+le altre 29 (senza simulare ogni loro partita). Due livelli di varianza:
+
+- **stagione su stagione** — un *profilo d'annata* seedato con `form` (livello
+  generale: molte stat su/giù INSIEME), asse `power`↔contatto, e **code rare**
+  (`powerSpike`/`contactSpike`/`kSpike`/`domSpike` ~5%, `collapse` ~7%) che
+  producono le **gemme** (non legate al rating tutti gli anni);
+- **intra-stagione** — curve di forma monotone che si **riallineano** al target
+  d'annata entro la giornata 162 (tanta varianza a inizio anno, poi converge).
+
+Distribuzione del **campione di lega** (leader per annata, misurata su ~48
+lega-annate; p50 / p90 / max — gemma = coda rara "ogni tanto"):
+
+| | p50 | p90 | max | %gemma |
+|---|---|---|---|---|
+| HR | 53 | 60 | 72 | 60+ ≈ 10% |
+| BA | .374 | .398 | .424 | .400+ ≈ 8% |
+| K | 261 | 297 | 359 | 300+ ≈ 8% |
+| ERA | 2.38 | 2.07 | 1.77 | ≤2.10 ≈ 15% |
+
+Giocatore tipico (mediana titolari): **BA ~.263, ~20 HR**; ERA SP mediana ~4.78.
+Ri-tarare: gli SD di routine restano piccoli (il **max su ~600** amplifica già la
+coda ~3σ), le gemme sono termini **additivi e limitati**; misura con uno script
+Monte-Carlo nello scratchpad (distribuzione del leader + % gemme), non a occhio.
