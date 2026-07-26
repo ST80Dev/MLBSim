@@ -80,3 +80,55 @@ describe('projectPitcherSeason', () => {
     expect(Math.max(...eras) - Math.min(...eras)).toBeGreaterThan(0.2);
   });
 });
+
+// I legami tra le stat sono ALGEBRICI, non casuali: il modello alloca il budget
+// PA/BF in esiti mutuamente esclusivi, quindi le identita' valgono per costruzione
+// su TUTTE le annate proiettate (non solo in media).
+describe('identita statistiche (nessun legame violato)', () => {
+  const league = generateLeague(2024);
+  it('battuta: H<=AB, H+SO<=AB (out in gioco>=0), H>=extrabase, AB>0', () => {
+    for (const t of league) {
+      const groups = [
+        [t.lineup, 'starter'] as const,
+        [t.bench, 'bench'] as const,
+        [t.reserveBatters, 'reserve'] as const,
+      ];
+      for (const [list, tier] of groups)
+        for (const b of list)
+          for (const year of [1, 3, 7]) {
+            const s = projectBatterSeason(b, tier, { seed: 2024, year, day: SEASON_GAMES });
+            expect(s.h).toBeLessThanOrEqual(s.ab);
+            expect(s.h + s.so).toBeLessThanOrEqual(s.ab); // gli out in gioco non sono negativi
+            expect(s.h).toBeGreaterThanOrEqual(s.hr + s.double + s.triple); // singoli >= 0
+            expect(s.hr).toBeGreaterThanOrEqual(0);
+          }
+    }
+  });
+
+  it('lancio: SO<=Outs, H>=HR, Outs>0', () => {
+    for (const t of league)
+      for (const p of [...t.rotation, ...t.bullpen])
+        for (const year of [1, 3, 7]) {
+          const s = projectPitcherSeason(p, { seed: 2024, year, day: SEASON_GAMES });
+          expect(s.so).toBeLessThanOrEqual(s.outs); // non si strike-outa piu' degli out
+          expect(s.h).toBeGreaterThanOrEqual(s.hr);
+          expect(s.outs).toBeGreaterThan(0);
+          expect(s.sv).toBeLessThanOrEqual(s.svo);
+        }
+  });
+
+  it("a PA fissa, piu' media con meno HR implica piu' hit (legame inevitabile)", () => {
+    // Stesso giocatore, stessa fascia: confronto due annate e verifico che quando
+    // la media sale e gli HR calano, le hit NON possono diminuire.
+    const b = league[0].lineup[2];
+    const lines = [1, 2, 3, 4, 5, 6, 7, 8].map((y) => {
+      const s = projectBatterSeason(b, 'starter', { seed: 2024, year: y, day: SEASON_GAMES });
+      return { ba: s.h / s.ab, hr: s.hr, h: s.h, ab: s.ab };
+    });
+    for (const a of lines)
+      for (const c of lines) {
+        // a parita' ragionevole di AB (impiego simile), media piu' alta => piu' hit
+        if (Math.abs(a.ab - c.ab) <= 3 && a.ba > c.ba) expect(a.h).toBeGreaterThanOrEqual(c.h);
+      }
+  });
+});

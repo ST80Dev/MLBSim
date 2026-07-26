@@ -181,17 +181,40 @@ const R = Math.round;
 function batterFull(b: Batter, tier: BatTier, prof: BatProfile): SeasonBat {
   const pa = Math.max(1, R(TIER_PA[tier] * prof.paMult));
   const base = deriveBatterStats(b.ratings, pa);
-  const hr = R(base.hr * prof.hrMult);
-  const double = R(base.double * prof.xbhMult);
-  const triple = R(base.triple * prof.speedMult);
   const singles0 = Math.max(0, base.h - base.double - base.triple - base.hr);
-  const singles = R(singles0 * prof.avgMult);
-  const bb = R(base.bb * prof.bbMult);
-  const so = R(base.so * prof.kMult);
+
+  // ALLOCAZIONE SUL BUDGET PA (rispetta le identita' per costruzione): ogni PA e'
+  // UN esito. La varianza agisce sui RATE, poi il resto sono out su palla in gioco.
+  // Cosi' e' impossibile far salire la media senza che salgano le hit, o avere piu'
+  // SO degli out: i legami tra stat sono strutturali, non casuali.
+  let rHR = (base.hr / pa) * prof.hrMult;
+  let r2B = (base.double / pa) * prof.xbhMult;
+  let r3B = (base.triple / pa) * prof.speedMult;
+  let r1B = (singles0 / pa) * prof.avgMult;
+  let rBB = (base.bb / pa) * prof.bbMult;
+  let rSO = (base.so / pa) * prof.kMult;
+  const rHBP = base.hbp / pa;
+  // Vincolo: gli esiti (esclusi gli out su palla in gioco) sommano <= MAX_EVENT; il
+  // resto sono out in gioco. Se sfora, si scala in proporzione: non si puo' far
+  // salire TUTTO senza intaccare gli out (lo dice la matematica del gioco).
+  const MAX_EVENT = 0.93;
+  const sum = rHR + r2B + r3B + r1B + rBB + rSO + rHBP;
+  if (sum > MAX_EVENT) {
+    const k = MAX_EVENT / sum;
+    rHR *= k; r2B *= k; r3B *= k; r1B *= k; rBB *= k; rSO *= k;
+  }
+
+  const bb = R(rBB * pa);
+  const hbp = R(rHBP * pa);
+  const hr = R(rHR * pa);
+  const double = R(r2B * pa);
+  const triple = R(r3B * pa);
+  const single = R(r1B * pa);
+  const so = R(rSO * pa);
+  const h = single + double + triple + hr;
+  const ab = Math.max(h + so, pa - bb - hbp); // identita': AB = PA - BB - HBP (>= H + SO)
   const sb = R(base.sb * prof.sbMult);
   const cs = R(base.cs * prof.sbMult);
-  const h = singles + double + triple + hr;
-  const ab = Math.max(h, pa - bb - base.hbp);
   // Risultati (galleggiano): punti e RBI stimati dalla linea, con fortuna annata.
   const r = R(((h + bb) * 0.33 + hr * 0.5) * prof.rbiLuck);
   const rbi = R((hr * 1.65 + (h - hr) * 0.3) * prof.rbiLuck);
@@ -203,11 +226,13 @@ function pitcherFull(p: Pitcher, prof: PitProfile): SeasonPit {
   const load = PITCH_LOAD[p.role] ?? PITCH_LOAD.RP;
   const bf = Math.max(1, R(load.bf * prof.ipMult));
   const base = derivePitcherStats(p.ratings, bf);
-  const so = R(base.so * prof.kMult);
   const bb = R(base.bb * prof.bbMult);
   const hr = R(base.hr * prof.hrMult);
-  const h = Math.max(hr, R(base.h * prof.hMult));
+  const h = Math.max(hr, R(base.h * prof.hMult)); // le hit includono gli HR
+  // BF conservato: Outs = BF - H - BB - HBP. E gli SO sono un SOTTOINSIEME degli
+  // out (non puoi eliminare per strike piu' degli out che registri).
   const outs = Math.max(1, bf - h - bb - base.hbp);
+  const so = Math.min(R(base.so * prof.kMult), outs);
   const er = R(estimateER(h, hr, bb) * prof.eraLuck);
   const r = R(er * 1.08);
   const g = Math.max(1, R(load.g * prof.ipMult));
