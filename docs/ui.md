@@ -112,6 +112,13 @@ la foto manca, resta lo sfondo scuro.
 **Etichette dei marker**: sopra il marker per tutti tranne **lanciatore,
 ricevitore e battitore** (in basso nella foto), che le hanno sotto.
 
+**Cognomi in MAIUSCOLO**: ovunque compaia un nome di giocatore (lineup, campo,
+cronaca, roster, schede, sostituzioni…) il **cognome** è reso in maiuscolo per
+riconoscerlo a colpo d'occhio (es. "Aaron VISSER", "O. LEWIS"). Helper di
+presentazione `upperLast` (`format.ts`) applicato ai punti di render (in primis
+`PlayerLink` e le etichette del `Diamond`); la cronaca lo eredita da `shortName`
+nel motore. Solo visuale: i nomi nei dati/motore restano invariati.
+
 **Toggle stat** (`StatsToggle`, tre stati): **Partita** (dato reale) ·
 **Stagione** (proiezione dalle doti, `player.stats`, ~650 PA / 1000 BF) ·
 **Scorsa** (disabilitato: nessuno storico finché non arriva la Fase 4). Governa

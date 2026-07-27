@@ -81,9 +81,10 @@ function proj(p: Pt, cal: FieldCalibration): Pt {
   return { x, y };
 }
 
+// Cognome in MAIUSCOLO per le etichette sul campo (riconoscibilità a colpo d'occhio).
 function lastNameOf(name: string): string {
   const i = name.indexOf(' ');
-  return i < 0 ? name : name.slice(i + 1);
+  return (i < 0 ? name : name.slice(i + 1)).toUpperCase();
 }
 
 /** Etichetta col solo nome (senza ruolo), per corridori in base e battitore.
