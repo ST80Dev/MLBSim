@@ -3029,6 +3029,22 @@ table {
   padding-right: 5px;
 }
 
+/* Card caratteristiche (rating) COMPATTE e quasi quadrate: larghezza fissa e
+   padding orizzontale minimo, così non si allungano su desktop largo. Lo spazio
+   orizzontale in eccesso lo assorbe la colonna "Giocatore" (width:100%), che
+   lascia libero il resto della riga per aggiunte future. */
+.roster-tbl .rat {
+  width: 34px;
+  min-width: 34px;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+.roster-tbl th.l,
+.roster-tbl td.l {
+  width: 100%;
+  max-width: none;
+}
+
 /* --- Home: leader + mini-classifica + calendario a stati ------------ */
 .home-cards {
   display: grid;
