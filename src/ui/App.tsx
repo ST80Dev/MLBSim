@@ -57,6 +57,7 @@ import { generateSchedule } from '../data/schedule';
 import type { ScheduleGame, Schedule } from '../data/schedule';
 import {
   createSeason,
+  ensureSeason,
   advanceWithResult,
   recordOf,
   winPct,
@@ -281,7 +282,7 @@ export function App() {
           const managedTeamId = rec?.payload.managedTeamId;
           if (!rec || !managedTeamId) return null;
           const pl = rec.payload;
-          const seas = pl.season ?? createSeason();
+          const seas = ensureSeason(pl.season);
           const team =
             typeof pl.seed === 'number'
               ? teamById(generateLeague(pl.seed), managedTeamId)
@@ -432,7 +433,7 @@ export function App() {
       if (typeof pl.seed === 'number') setLeagueSeed(pl.seed);
       setSource(pl.source ?? 'generated');
       setArrangements(pl.lineups ?? {});
-      setSeason(pl.season ?? createSeason());
+      setSeason(ensureSeason(pl.season));
       setManagedId(pl.managedTeamId ?? '');
       setCurrentSlot(game.slot);
       setActiveGame(null);
