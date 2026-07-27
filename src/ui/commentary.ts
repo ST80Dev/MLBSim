@@ -60,13 +60,16 @@ function variant(ev: PlayEvent, n: number): number {
 
 const pick = (ev: PlayEvent, opts: string[]): string => opts[variant(ev, opts.length)];
 
-/** Tipo di eliminazione su palla in gioco (`inplayout`), SINTETIZZATO in modo
- *  deterministico dall'evento. Il motore non simula la traiettoria: questa e'
- *  l'UNICA fonte di verita' della categoria, condivisa tra la telecronaca del
- *  banner e il codice da segnapunti (`scorecode.ts`), così non si contraddicono
- *  (niente più "out in prima" con un codice di volata `F8`). */
+/** Tipo di eliminazione su palla in gioco (`inplayout`). La FONTE DI VERITÀ è il
+ *  motore: `ev.outInfo.ball` (ground/fly/popup) decide, così telecronaca e codice
+ *  da segnapunti (`scorecode.ts`) raccontano lo stesso esito e concordano anche
+ *  con gli avanzamenti reali dei corridori. Se manca (eventi vecchi) si ripiega
+ *  su un hash deterministico. */
 export type InPlayOutShape = 'air' | 'ground' | 'fly';
 export function inPlayOutShape(ev: PlayEvent): InPlayOutShape {
+  if (ev.outInfo) {
+    return ev.outInfo.ball === 'ground' ? 'ground' : ev.outInfo.ball === 'fly' ? 'fly' : 'air';
+  }
   const v = variant(ev, 3);
   return v === 0 ? 'air' : v === 1 ? 'ground' : 'fly';
 }
@@ -240,14 +243,28 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
     case 'buntout':
       return [open, 'Prova la smorzata…', `Difesa pronta: ${b} eliminato.`];
     case 'inplayout': {
-      // Il verdetto deve concordare col codice da segnapunti: entrambi derivano
-      // dalla stessa `inPlayOutShape(ev)`.
+      const info = ev.outInfo;
+      // Scelta difensiva: out su un corridore, battitore salvo in prima.
+      if (info?.fc) {
+        return [
+          open,
+          'Rimbalzo all’interno, la difesa ha una scelta…',
+          `Scelta difensiva: eliminato il corridore, ${b} salvo in prima.${t}`,
+        ];
+      }
+      // Il verdetto concorda col codice da segnapunti (stessa `inPlayOutShape`)
+      // e con gli avanzamenti reali dei corridori decisi dal motore.
       const shape = inPlayOutShape(ev);
+      const adv = info?.advanced;
       const verdict =
         shape === 'ground'
-          ? `Rimbalzo raccolto, out in prima.${t}`
+          ? adv
+            ? `Rimbalzo, out in prima… e i corridori avanzano.${t}`
+            : `Rimbalzo raccolto, out in prima.${t}`
           : shape === 'fly'
-            ? `Volata catturata: eliminato.${t}`
+            ? adv
+              ? `Volata profonda catturata… il corridore guadagna una base.${t}`
+              : `Volata catturata: eliminato.${t}`
             : `Presa comoda: ${b} eliminato.${t}`;
       return [open, pick(ev, ['Palla messa in gioco…', 'Contatto, palla in campo…']), verdict];
     }

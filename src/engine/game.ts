@@ -47,6 +47,20 @@ export type PlayKind =
   | 'sub'
   | 'other';
 
+/** Tipo di battuta su un out in gioco (fonte di verità per cronaca + codice). */
+export type BallType = 'ground' | 'fly' | 'popup';
+
+/** Dettaglio dell'out su palla in gioco, così la UI racconta il VERO (non
+ *  un'ipotesi): tipo di battuta, se i corridori sono avanzati, se è una scelta
+ *  difensiva. Il motore decide; cronaca e codice segnapunti lo leggono. */
+export interface OutInfo {
+  ball: BallType;
+  /** Almeno un corridore è avanzato/segnato sull'out. */
+  advanced: boolean;
+  /** Scelta difensiva: out su un corridore, battitore salvo in prima. */
+  fc?: boolean;
+}
+
 /** Evento di play-by-play. */
 export interface PlayEvent {
   inning: number;
@@ -59,6 +73,8 @@ export interface PlayEvent {
   kind: PlayKind;
   /** Nome breve del protagonista dell'azione (battitore o corridore). */
   batter?: string;
+  /** Solo per gli out su palla in gioco: dettaglio di campo (vedi OutInfo). */
+  outInfo?: OutInfo;
 }
 
 export interface TeamGameStats {
@@ -235,6 +251,7 @@ function pushPlay(
   runsScored: number,
   kind: PlayKind = 'other',
   batter?: string,
+  outInfo?: OutInfo,
 ): void {
   const off = offense(l);
   const def = defense(l);
@@ -247,7 +264,18 @@ function pushPlay(
     runsScored,
     kind,
     batter,
+    outInfo,
   });
+}
+
+/** Costruisce l'OutInfo per la UI dall'esito grezzo (solo per gli out in gioco). */
+function outInfoFrom(res: EventResult): OutInfo | undefined {
+  if (res.hit || !res.ball) return undefined;
+  return {
+    ball: res.ball,
+    advanced: !!res.advanced,
+    fc: res.detail === 'fc' ? true : undefined,
+  };
 }
 
 /** Cambio automatico del lanciatore per affaticamento (CPU / quick-sim). */
@@ -304,7 +332,14 @@ function swingAtBat(l: LiveGame): void {
   if (res.hit) off.hits += 1;
   const runsScored = off.runs - runsBefore;
 
-  pushPlay(l, describe(event, batter, runsScored), runsScored, classifyEvent(event, res), shortName(batter.name));
+  pushPlay(
+    l,
+    describe(event, batter, runsScored, res),
+    runsScored,
+    classifyEvent(event, res),
+    shortName(batter.name),
+    outInfoFrom(res),
+  );
   afterPlay(l, runsScored);
 }
 
@@ -577,6 +612,7 @@ export function hitAndRun(l: LiveGame): boolean {
 
   let text: string;
   let kind: PlayKind;
+  let outInfo: OutInfo | undefined;
   if (ev === 'SO') {
     bLine.ab += 1;
     bLine.so += 1;
@@ -615,6 +651,7 @@ export function hitAndRun(l: LiveGame): boolean {
     bases[0] = null;
     text = `${name} eliminato, il corridore avanza in movimento`;
     kind = 'inplayout';
+    outInfo = { ball: 'ground', advanced: true };
   } else if (ev === '1B') {
     // Singolo con corridore lanciato: dalla prima vola in terza.
     bLine.ab += 1;
@@ -635,13 +672,14 @@ export function hitAndRun(l: LiveGame): boolean {
     const res = applyEvent(ev, batter, pitcher.id, l.bases, l.outs, l.rng, scoreRunner, bLine, pLine);
     l.outs += res.outsAdded;
     if (res.hit) off.hits += 1;
-    text = describe(ev, batter, off.runs - runsBefore);
+    text = describe(ev, batter, off.runs - runsBefore, res);
     kind = classifyEvent(ev, res);
+    outInfo = outInfoFrom(res);
   }
 
   const runsScored = off.runs - runsBefore;
   const rr = runsScored > 0 ? ` (${runsScored} ${runsScored === 1 ? 'punto' : 'punti'})` : '';
-  pushPlay(l, text + rr, runsScored, kind, name);
+  pushPlay(l, text + rr, runsScored, kind, name, outInfo);
   afterPlay(l, runsScored);
   return true;
 }
@@ -1007,12 +1045,15 @@ export function simulateGame(away: Team, home: Team, seed: number): GameResult {
 // ---------------------------------------------------------------------------
 
 /** Dettaglio dell'esito in gioco (per la classificazione narrativa). */
-type OutDetail = 'gidp' | 'sacfly' | 'infieldhit';
+type OutDetail = 'gidp' | 'sacfly' | 'infieldhit' | 'fc';
 
 interface EventResult {
   outsAdded: number;
   hit: boolean;
   detail?: OutDetail;
+  /** Tipo di battuta e avanzamenti (per gli out su palla in gioco). */
+  ball?: BallType;
+  advanced?: boolean;
 }
 
 /**
@@ -1171,53 +1212,126 @@ function applyEvent(
       bLine.rbi += rbi;
       return { outsAdded: 0, hit: true };
     }
-    case 'IPO': {
-      bLine.ab += 1;
-      // Interni dentro (corridore in terza, <2 out): piu' buchi ma taglia il punto.
-      if (infieldIn && bases[2] && outsBefore < 2) {
-        if (rng.chance(TUNING.infieldIn.hitThrough)) {
-          // Il rimbalzo passa per un singolo: il punto dalla terza segna.
-          bLine.h += 1;
-          pLine.h += 1;
-          scoreRunner(bases[2]);
-          bLine.rbi += 1;
-          bases[2] = null;
-          if (bases[1]) {
-            bases[2] = bases[1];
-            bases[1] = null;
-          }
-          if (bases[0]) {
-            bases[1] = bases[0];
-            bases[0] = null;
-          }
-          bases[0] = runner;
-          return { outsAdded: 0, hit: true, detail: 'infieldhit' };
-        }
-        // Rimbalzo all'interno tirato dentro: battitore eliminato, corridore
-        // tenuto in terza, nessun punto.
-        pLine.outs += 1;
-        return { outsAdded: 1, hit: false };
-      }
-      // Doppio gioco: corridore in 1B, meno di 2 out.
-      if (bases[0] && outsBefore < 2 && rng.chance(TUNING.gidpProb)) {
-        bases[0] = null;
-        pLine.outs += 2;
-        return { outsAdded: 2, hit: false, detail: 'gidp' };
-      }
-      pLine.outs += 1;
-      // Volata di sacrificio / groundout RBI dalla terza.
-      if (bases[2] && outsBefore < 2 && rng.chance(TUNING.runnerScoresFromThirdOnOut)) {
-        scoreRunner(bases[2]);
-        bases[2] = null;
-        bLine.rbi += 1;
-        return { outsAdded: 1, hit: false, detail: 'sacfly' };
-      }
-      return { outsAdded: 1, hit: false };
-    }
+    case 'IPO':
+      return resolveInPlayOut(runner, bases, outsBefore, rng, scoreRunner, bLine, pLine, infieldIn);
   }
 }
 
-function describe(event: RawEvent, batter: Batter, runs: number): string {
+/**
+ * Out su palla in gioco: decide tipo di battuta (rimbalzo / volata / presa) e i
+ * relativi effetti REALI sui corridori, oltre il semplice "battitore eliminato".
+ * Copre: doppio gioco, scelta difensiva (out sul corridore, battitore salvo),
+ * out produttivo (avanzamento 1ª→2ª / 2ª→3ª sui rimbalzi), volata di sacrificio
+ * e groundout RBI dalla 3ª, tag-up 2ª→3ª sulle volate profonde. Le probabilità
+ * stanno in TUNING.outField e sono tarate sui test di realismo.
+ */
+function resolveInPlayOut(
+  runner: Runner,
+  bases: (Runner | null)[],
+  outsBefore: number,
+  rng: Rng,
+  scoreRunner: (r: Runner | null) => void,
+  bLine: BattingLine,
+  pLine: PitchingLine,
+  infieldIn: boolean,
+): EventResult {
+  bLine.ab += 1;
+  const canAct = outsBefore < 2; // avanzamenti/DP/SF solo con meno di 2 out
+  const O = TUNING.outField;
+
+  // Interni dentro (corridore in terza, <2 out): più buchi ma taglia il punto.
+  if (infieldIn && bases[2] && canAct) {
+    if (rng.chance(TUNING.infieldIn.hitThrough)) {
+      // Il rimbalzo passa per un singolo: il punto dalla terza segna.
+      bLine.h += 1;
+      pLine.h += 1;
+      scoreRunner(bases[2]);
+      bLine.rbi += 1;
+      bases[2] = null;
+      if (bases[1]) {
+        bases[2] = bases[1];
+        bases[1] = null;
+      }
+      if (bases[0]) {
+        bases[1] = bases[0];
+        bases[0] = null;
+      }
+      bases[0] = runner;
+      return { outsAdded: 0, hit: true, detail: 'infieldhit', ball: 'ground', advanced: true };
+    }
+    // Rimbalzo tirato dentro: battitore eliminato, corridore tenuto in terza.
+    pLine.outs += 1;
+    return { outsAdded: 1, hit: false, ball: 'ground', advanced: false };
+  }
+
+  // Tipo di battuta: rimbalzo, oppure palla in aria (presa comoda o volata).
+  const ground = rng.chance(O.groundShare);
+  const ball: BallType = ground ? 'ground' : rng.chance(O.popupShareOfAir) ? 'popup' : 'fly';
+
+  if (ball === 'ground') {
+    // Doppio gioco: corridore in 1ª, <2 out.
+    if (bases[0] && canAct && rng.chance(TUNING.gidpProb)) {
+      bases[0] = null;
+      pLine.outs += 2;
+      return { outsAdded: 2, hit: false, detail: 'gidp', ball: 'ground', advanced: false };
+    }
+    pLine.outs += 1;
+    // Scelta difensiva: corridore in 2ª, 1ª e 3ª libere → eliminato verso la 3ª,
+    // battitore salvo in prima.
+    if (bases[1] && !bases[0] && !bases[2] && canAct && rng.chance(O.fielderChoiceLeadRunner)) {
+      bases[1] = null;
+      bases[0] = runner;
+      return { outsAdded: 1, hit: false, detail: 'fc', ball: 'ground', advanced: false };
+    }
+    // Groundout RBI: punto dalla 3ª (contatto), poi eventuali avanzamenti.
+    let advanced = false;
+    if (bases[2] && canAct && rng.chance(TUNING.runnerScoresFromThirdOnOut)) {
+      scoreRunner(bases[2]);
+      bases[2] = null;
+      bLine.rbi += 1;
+      advanced = true;
+    }
+    // Out produttivo: i corridori avanzano di una base se quella davanti è libera.
+    if (canAct && rng.chance(O.productiveAdvanceOnGrounder)) {
+      if (bases[1] && !bases[2]) {
+        bases[2] = bases[1];
+        bases[1] = null;
+        advanced = true;
+      }
+      if (bases[0] && !bases[1]) {
+        bases[1] = bases[0];
+        bases[0] = null;
+        advanced = true;
+      }
+    }
+    return { outsAdded: 1, hit: false, ball: 'ground', advanced };
+  }
+
+  // Palla in aria.
+  pLine.outs += 1;
+  if (ball === 'popup') {
+    // Presa comoda d'interno: i corridori restano fermi.
+    return { outsAdded: 1, hit: false, ball: 'popup', advanced: false };
+  }
+  // Volata profonda: possibili punto dalla 3ª (SF) e tag-up dalla 2ª.
+  let advanced = false;
+  let detail: OutDetail | undefined;
+  if (bases[2] && canAct && rng.chance(TUNING.runnerScoresFromThirdOnOut)) {
+    scoreRunner(bases[2]);
+    bases[2] = null;
+    bLine.rbi += 1;
+    advanced = true;
+    detail = 'sacfly';
+  }
+  if (bases[1] && !bases[2] && canAct && rng.chance(O.tagUpSecondToThirdOnFly)) {
+    bases[2] = bases[1];
+    bases[1] = null;
+    advanced = true;
+  }
+  return { outsAdded: 1, hit: false, ball: 'fly', advanced, detail };
+}
+
+function describe(event: RawEvent, batter: Batter, runs: number, res?: EventResult): string {
   const name = shortName(batter.name);
   const rr = runs > 0 ? ` (${runs} ${runs === 1 ? 'punto' : 'punti'})` : '';
   switch (event) {
@@ -1235,10 +1349,14 @@ function describe(event: RawEvent, batter: Batter, runs: number): string {
       return `${name} doppio${rr}`;
     case '1B':
       return `${name} singolo${rr}`;
-    case 'IPO':
-      return runs > 0
-        ? `${name} eliminato, il corridore segna${rr}`
-        : `${name} eliminato in gioco`;
+    case 'IPO': {
+      if (res?.detail === 'gidp') return `${name} in doppio gioco`;
+      if (res?.detail === 'fc') return `${name} in prima su scelta difensiva, corridore eliminato`;
+      if (res?.detail === 'sacfly') return `${name} volata di sacrificio${rr}`;
+      if (runs > 0) return `${name} eliminato, il corridore segna${rr}`;
+      if (res?.advanced) return `${name} eliminato, i corridori avanzano`;
+      return `${name} eliminato in gioco`;
+    }
   }
 }
 

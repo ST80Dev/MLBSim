@@ -437,3 +437,46 @@ describe('difesa avanzata — interni dentro', () => {
     expect(live.infieldIn).toBe(false);
   });
 });
+
+describe('logica di campo sugli out (avanzamenti reali oltre il motore lineare)', () => {
+  it('ogni out in gioco porta un outInfo col tipo di battuta', () => {
+    let inplay = 0;
+    let advanced = 0;
+    let fc = 0;
+    for (let s = 0; s < 120; s++) {
+      const { away, home } = generateMatchup(s);
+      const g = simulateGame(away, home, s * 17 + 5);
+      for (const p of g.play) {
+        if (p.kind !== 'inplayout') continue;
+        inplay += 1;
+        expect(p.outInfo, JSON.stringify(p)).toBeTruthy();
+        expect(['ground', 'fly', 'popup']).toContain(p.outInfo!.ball);
+        if (p.outInfo!.advanced) advanced += 1;
+        if (p.outInfo!.fc) fc += 1;
+      }
+    }
+    expect(inplay).toBeGreaterThan(0);
+    // Su un campione così ampio devono comparire sia avanzamenti sia scelte
+    // difensive (comportamenti nuovi del motore).
+    expect(advanced).toBeGreaterThan(0);
+    expect(fc).toBeGreaterThan(0);
+  });
+
+  it('scelta difensiva: con corridore in 2ª (1ª e 3ª libere) a volte il battitore resta salvo in prima', () => {
+    let batterSafe = 0;
+    for (let s = 0; s < 400; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 7 + 2);
+      live.microEvents = false;
+      live.outs = 0;
+      live.bases = [null, null, null];
+      putRunner(live, 1, 8); // solo la 2ª occupata
+      const before = offenseSide(live).team.lineup[offenseSide(live).battingIndex];
+      playOffense(live, 'swing');
+      // FC: il battitore è finito in prima pur non essendo una valida/BB.
+      const last = live.play[live.play.length - 1];
+      if (last?.outInfo?.fc && live.bases[0]?.batter.id === before.id) batterSafe += 1;
+    }
+    expect(batterSafe).toBeGreaterThan(0);
+  });
+});

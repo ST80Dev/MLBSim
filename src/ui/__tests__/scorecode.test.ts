@@ -67,6 +67,21 @@ describe('scoreCode', () => {
     }
   });
 
+  it('inplayout: la categoria segue ev.outInfo dal motore (fonte di verità)', () => {
+    const ground = scoreCode(ev('inplayout', { outInfo: { ball: 'ground', advanced: false } }))!;
+    expect(ground.code).toMatch(/^(\d-3|3U)$/);
+    const fly = scoreCode(ev('inplayout', { outInfo: { ball: 'fly', advanced: false } }))!;
+    expect(fly.code).toMatch(/^F[789]$/);
+    const pop = scoreCode(ev('inplayout', { outInfo: { ball: 'popup', advanced: false } }))!;
+    expect(pop.code).toMatch(/^(P[23456]|F[789])$/);
+  });
+
+  it('inplayout: scelta difensiva (fc) → codice FC verso la terza (5)', () => {
+    const sc = scoreCode(ev('inplayout', { outInfo: { ball: 'ground', advanced: false, fc: true } }))!;
+    expect(sc.code).toMatch(/^FC (\d-5|5U)$/);
+    expect(sc.title).toMatch(/scelta difensiva/i);
+  });
+
   it('inplayout: il codice CONCORDA con la telecronaca (shape condivisa)', () => {
     // Nessun "out in prima" con un codice di volata, e viceversa.
     for (let i = 0; i < 120; i++) {

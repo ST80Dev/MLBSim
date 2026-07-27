@@ -117,6 +117,14 @@ const OUTFIELD: Array<[number, number]> = [
   [8, 40],
   [9, 26],
 ];
+// Scelta difensiva: corridore dalla 2ª eliminato in 3ª (tiro alla terza = 5).
+const FIELDER_CHOICE: Array<[number[], number]> = [
+  [[6, 5], 34], // SS → 3B
+  [[4, 5], 20], // 2B → 3B
+  [[1, 5], 14], // P → 3B
+  [[5], 18], // 3B non assistito
+  [[3, 5], 14], // 1B → 3B
+];
 
 /**
  * Codice segnapunti di un evento, o `null` se non pertinente (cambi, note).
@@ -178,8 +186,14 @@ export function scoreCode(ev: PlayEvent): ScoreCode | null {
       return { code: s.code, title: `eliminato su smorzata: ${s.parts}` };
     }
     case 'inplayout': {
+      // Scelta difensiva: out sul corridore (in 3ª), battitore salvo in prima.
+      if (ev.outInfo?.fc) {
+        const s = seq(wpick(mix(h, 11), FIELDER_CHOICE));
+        return { code: `FC ${s.code}`, title: `scelta difensiva, corridore eliminato in terza: ${s.parts}` };
+      }
       // La categoria (rimbalzo / volata / presa) viene dalla STESSA fonte della
-      // telecronaca, così codice e testo del banner non si contraddicono mai.
+      // telecronaca (motore → ev.outInfo), così codice e banner non si
+      // contraddicono mai, nemmeno con gli avanzamenti reali dei corridori.
       const shape = inPlayOutShape(ev);
       if (shape === 'ground') {
         const s = seq(wpick(mix(h, 7), GROUND_TO_FIRST));
