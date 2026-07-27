@@ -7,7 +7,7 @@ import type {
   Position,
 } from './types';
 import { LEAGUE } from './constants';
-import { clampRating, RATING_AVG } from './ratings';
+import { clampRating, RATING_AVG, AB_SCALE } from './ratings';
 
 // ---------------------------------------------------------------------------
 // Inversione statistiche -> caratteristiche.
@@ -68,23 +68,28 @@ export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
   const pa = Math.max(1, s.pa);
   const single = Math.max(0, s.h - s.double - s.triple - s.hr);
 
+  // Occhio dai BB (per PA). Gli esiti da AB (SO, battute valide) vanno divisi per
+  // la base-AB, coerente con la forward (deriveBatterStats scala sugli AB): base =
+  // ab·AB_SCALE, con ab = pa − BB − HBP osservati.
   const eye = ratingFromMult(s.bb / pa / LEAGUE.bb, 1.24);
+  const ab = Math.max(1, pa - s.bb - (s.hbp ?? 0));
+  const abBase = ab * AB_SCALE;
 
-  const powerHr = ratingFromMult(s.hr / pa / LEAGUE.hr, 1.34);
-  const powerDbl = ratingFromMult(s.double / pa / LEAGUE.double, 1.11);
+  const powerHr = ratingFromMult(s.hr / abBase / LEAGUE.hr, 1.34);
+  const powerDbl = ratingFromMult(s.double / abBase / LEAGUE.double, 1.11);
   const power = 0.8 * powerHr + 0.2 * powerDbl;
 
-  const contactSingle = ratingFromMult(single / pa / LEAGUE.single, 1.1);
-  // SO forward: pa*so*mult(contact,0.88)*mult(eye,0.97). Isola la parte contact.
+  const contactSingle = ratingFromMult(single / abBase / LEAGUE.single, 1.1);
+  // SO forward: abBase*so*mult(contact,0.88)*mult(eye,0.97). Isola la parte contact.
   const eyeSoMult = Math.pow(0.97, (eye - RATING_AVG) / 10);
-  const contactSo = ratingFromMult(s.so / pa / LEAGUE.so / eyeSoMult, 0.88);
+  const contactSo = ratingFromMult(s.so / abBase / LEAGUE.so / eyeSoMult, 0.88);
   const contact = 0.5 * contactSingle + 0.5 * contactSo;
 
   // Velocita: SB e' la leva diretta (invertendo la formula lineare di sb);
   // i tripli confermano (data la Potenza gia' stimata).
   const speedSb = (RATING_AVG - 5) + (s.sb / 30) * 35;
   const powerTriMult = Math.pow(0.9, (power - RATING_AVG) / 10);
-  const speedTri = ratingFromMult(s.triple / pa / LEAGUE.triple / powerTriMult, 1.6);
+  const speedTri = ratingFromMult(s.triple / abBase / LEAGUE.triple / powerTriMult, 1.6);
   const speed = 0.6 * speedSb + 0.4 * speedTri;
 
   const def = POS_DEFENSE[s.position ?? 'LF'] ?? { field: 0, arm: 0 };

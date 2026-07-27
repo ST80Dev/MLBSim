@@ -73,7 +73,7 @@ import {
 import type { SeasonState, SeasonBat, SeasonPit, WLRecord } from '../data/season';
 import { suggestedStarter, withStarterId, setSize, starterOptions } from '../data/rotation';
 import type { RotationSize } from '../data/rotation';
-import { withRotationStarter } from '../data/generator';
+import { withRotationStarter, potentialRole } from '../data/generator';
 import { projectBatterSeason, projectPitcherSeason, SEASON_GAMES } from '../data/projection';
 import type { BatTier } from '../data/projection';
 import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
@@ -2617,7 +2617,7 @@ function PlayerModal({
   } else {
     const p = pitcher!;
     overall = pitcherOverall(p.ratings);
-    rolesLabel = p.role === 'CL' ? 'RP (closer)' : p.role;
+    rolesLabel = potentialRole(p.ratings) + (p.role === 'CL' ? ' · closer' : '');
     ratingChips = [
       ['DOM', p.ratings.stuff],
       ['CTR', p.ratings.control],
@@ -3424,7 +3424,12 @@ function RosterPage({
       </td>
       <td>{p.age}</td>
       <td className="roles">
-        <span className="rolebadge">{p.role === 'CL' ? 'RP' : p.role}</span>
+        <span
+          className={`rolebadge${potentialRole(p.ratings) === 'SP/RP' ? ' swing' : ''}`}
+          title="Ruoli potenziali (dalla resistenza): dove è schierato si vede dalla sezione"
+        >
+          {potentialRole(p.ratings)}
+        </span>
         {from === 'bullpen' && (
           <button
             type="button"

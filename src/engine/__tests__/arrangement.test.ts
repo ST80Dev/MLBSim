@@ -26,6 +26,43 @@ describe('defaultArrangement', () => {
   });
 });
 
+describe('ruolo e resistenza seguono lo slot (long reliever -> SP)', () => {
+  it('un rilievo spostato in rotazione diventa SP con resistenza da SP (dal rating)', () => {
+    const arr = defaultArrangement(team);
+    // Prende il rilievo con la RESISTENZA (rating) piu' alta: il candidato starter.
+    const longMan = [...team.bullpen].sort(
+      (a, b) => b.ratings.stamina - a.ratings.stamina,
+    )[0];
+    const rpStamina = longMan.stamina; // soglia battitori da rilievo (generazione)
+    // Lo mette in testa alla rotazione, lo toglie dal bullpen.
+    const moved = {
+      ...arr,
+      rotation: [longMan.id, ...arr.rotation],
+      bullpen: arr.bullpen.filter((id) => id !== longMan.id),
+    };
+    const built = buildManagedTeam(team, moved);
+    const asStarter = built.rotation.find((p) => p.id === longMan.id)!;
+    expect(asStarter.role).toBe('SP');
+    // Da SP regge molti piu' battitori che da rilievo (endurance dal rating).
+    expect(asStarter.stamina).toBeGreaterThan(rpStamina);
+    expect(asStarter.stamina).toBeGreaterThanOrEqual(18); // soglia minima di una partenza
+  });
+
+  it('un partente spostato in bullpen diventa RP e accorcia', () => {
+    const arr = defaultArrangement(team);
+    const sp = team.rotation[0];
+    const moved = {
+      ...arr,
+      rotation: arr.rotation.filter((id) => id !== sp.id),
+      bullpen: [...arr.bullpen, sp.id],
+    };
+    const built = buildManagedTeam(team, moved);
+    const asRelief = built.bullpen.find((p) => p.id === sp.id)!;
+    expect(asRelief.role).toBe('RP');
+    expect(asRelief.stamina).toBeLessThan(sp.stamina); // regge meno che da partente
+  });
+});
+
 describe('validateArrangement', () => {
   it('segnala lineup incompleto', () => {
     const arr = defaultArrangement(team);

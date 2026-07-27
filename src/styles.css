@@ -2764,6 +2764,13 @@ table {
   padding: 2px 8px;
   cursor: pointer;
 }
+
+/* Ruolo POTENZIALE swingman "SP/RP": evidenziato (può fare partente e rilievo). */
+.rolebadge.swing {
+  border: 1px solid #6d8bd0;
+  color: #9fbcff;
+  cursor: help;
+}
 /* Difesa: select per casella */
 .def-edit select {
   width: 100%;

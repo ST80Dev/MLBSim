@@ -2,6 +2,20 @@ import type { Batter, Pitcher, Position, Team } from './types';
 import { ratingsAtPosition } from './positions';
 import { validateFieldSet } from './lineup';
 import type { FieldSetCheck } from './lineup';
+import { deriveStamina } from './ratings';
+
+// Ri-assegna il RUOLO effettivo di un lanciatore secondo lo slot in cui viene
+// schierato e RICALCOLA la resistenza (battitori affrontabili) dal suo RATING di
+// Resistenza per quel ruolo. Così un long-reliever con resistenza alta, spostato
+// in rotazione, diventa un VERO partente (regge una partenza intera) invece di
+// restare tappato alla soglia da rilievo con cui era stato generato — e un
+// partente spostato in bullpen accorcia. L'endurance dipende dal RATING, non dal
+// ruolo di generazione. No-op se ruolo e resistenza sono già coerenti.
+function asRole(p: Pitcher, role: 'SP' | 'RP' | 'CL'): Pitcher {
+  const stamina = deriveStamina(p.ratings.stamina, role);
+  if (p.role === role && p.stamina === stamina) return p;
+  return { ...p, role, stamina };
+}
 
 // Assetto del match: chi partecipa (dalla rosa completa, divisa battitori /
 // lanciatori), il loro ordine di battuta, la difesa (chi copre quale casella),
@@ -103,18 +117,20 @@ export function buildManagedTeam(t: Team, arr: MatchArrangement): Team {
     return out;
   };
   const seenP = new Set<string>();
-  let rotation = pick(arr.rotation, seenP);
-  let bullpen = pick(arr.bullpen, seenP);
-  if (rotation.length === 0) rotation = t.rotation; // il motore esige uno starter
+  // Chi va in ROTAZIONE diventa SP e la sua resistenza si RICALCOLA dal rating per
+  // il ruolo SP (un long-reliever forte regge una partenza intera); chi va in
+  // BULLPEN diventa RP (o resta CL). L'endurance segue il rating, non il ruolo di
+  // generazione.
+  let rotation = pick(arr.rotation, seenP).map((p) => asRole(p, 'SP'));
+  let bullpen = pick(arr.bullpen, seenP).map((p) => asRole(p, p.role === 'CL' ? 'CL' : 'RP'));
+  if (rotation.length === 0) rotation = t.rotation.map((p) => asRole(p, 'SP')); // il motore esige uno starter
 
   // Closer designato: lo si porta in fondo al bullpen (chiude la gara) e a video
   // e' CL; gli altri eventuali CL tornano RP. Il ruolo non e' rigido.
   if (arr.closerId && bullpen.some((p) => p.id === arr.closerId)) {
-    const closer = bullpen.find((p) => p.id === arr.closerId)!;
-    const rest = bullpen
-      .filter((p) => p.id !== arr.closerId)
-      .map((p) => (p.role === 'CL' ? { ...p, role: 'RP' as const } : p));
-    bullpen = [...rest, closer.role === 'CL' ? closer : { ...closer, role: 'CL' as const }];
+    const closer = asRole(bullpen.find((p) => p.id === arr.closerId)!, 'CL');
+    const rest = bullpen.filter((p) => p.id !== arr.closerId).map((p) => asRole(p, 'RP'));
+    bullpen = [...rest, closer];
   }
 
   const usedB = new Set(lineup.map((b) => b.id));

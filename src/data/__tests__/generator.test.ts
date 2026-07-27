@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateLeague } from '../league';
-import { withRotationStarter } from '../generator';
-import { batterOverall, pitcherOverall } from '../../engine/ratings';
+import { withRotationStarter, swingCapable } from '../generator';
+import { batterOverall, pitcherOverall, RATING_AVG } from '../../engine/ratings';
 import { canOccupy } from '../../engine/positions';
 import type { Team } from '../../engine/types';
 
@@ -121,5 +121,100 @@ describe('determinismo', () => {
     const a = generateLeague(77).map((t) => [...t.lineup, ...t.rotation, ...t.bullpen].map((p) => p.id).join(','));
     const b = generateLeague(77).map((t) => [...t.lineup, ...t.rotation, ...t.bullpen].map((p) => p.id).join(','));
     expect(a).toEqual(b);
+  });
+});
+
+describe('realismo delle doti: gli elite sono SPECIALISTI', () => {
+  const bats = teams.flatMap((t) => [...t.lineup, ...t.bench, ...t.reserveBatters]);
+  const pits = teams.flatMap((t) => [...t.rotation, ...t.bullpen, ...t.reservePitchers]);
+
+  it('i fast-slugger (POT e VEL entrambi >=90) sono rari (<1.5%)', () => {
+    const fast = bats.filter((b) => b.ratings.power >= 90 && b.ratings.speed >= 90).length;
+    expect(fast / bats.length).toBeLessThan(0.015);
+  });
+
+  it('la difesa è disaccoppiata: pochi bat-first anche guanto-elite', () => {
+    const both = bats.filter(
+      (b) => b.ratings.contact >= 92 && b.ratings.power >= 92 && b.ratings.eye >= 92 && b.ratings.fielding >= 92,
+    ).length;
+    expect(both / bats.length).toBeLessThan(0.01);
+  });
+
+  it('i lanciatori sono specializzati: spread interno alle doti-skill ampio', () => {
+    const spread = avg(
+      pits.map((p) => {
+        const v = [p.ratings.stuff, p.ratings.control, p.ratings.movement, p.ratings.groundball];
+        return Math.max(...v) - Math.min(...v);
+      }),
+    );
+    expect(spread).toBeGreaterThan(18); // non "tutte allineate all'OVR"
+  });
+
+  it('la resistenza del lanciatore è indipendente dalla bravura', () => {
+    const o = pits.map((p) => pitcherOverall(p.ratings));
+    const s = pits.map((p) => p.ratings.stamina);
+    const mo = avg(o);
+    const ms = avg(s);
+    let cov = 0;
+    let vo = 0;
+    let vs = 0;
+    for (let i = 0; i < o.length; i++) {
+      cov += (o[i] - mo) * (s[i] - ms);
+      vo += (o[i] - mo) ** 2;
+      vs += (s[i] - ms) ** 2;
+    }
+    const corr = cov / Math.sqrt(vo * vs);
+    expect(Math.abs(corr)).toBeLessThan(0.2); // ~0 = indipendente
+  });
+
+  it('anche le squadre deboli hanno staff vari (non tutte le doti allineate all’OVR)', () => {
+    // Su TUTTE le rotazioni: lo spread medio interno alle doti-skill è ampio,
+    // anche per i lanciatori sotto media — c'è sempre il power-arm, il finesse, ecc.
+    const rotationArms = teams.flatMap((t) => t.rotation);
+    const spread = avg(
+      rotationArms.map((p) => {
+        const v = [p.ratings.stuff, p.ratings.control, p.ratings.movement, p.ratings.groundball];
+        return Math.max(...v) - Math.min(...v);
+      }),
+    );
+    expect(spread).toBeGreaterThan(15);
+  });
+
+  it('la difesa dei lanciatori NON è da fielder (centrata sotto media)', () => {
+    const f = pits.map((p) => p.ratings.fielding);
+    expect(avg(f)).toBeLessThan(64); // ~57, non ~70
+    expect(f.filter((x) => x >= 80).length / f.length).toBeLessThan(0.03); // rari i "Maddux"
+  });
+});
+
+describe('allocazione lanciatori: i migliori CON resistenza partono', () => {
+  const pits = teams.flatMap((t) => [...t.rotation, ...t.bullpen, ...t.reservePitchers]);
+  const startScore = (p: { ratings: { stamina: number } }, ovr: number) =>
+    ovr + 0.9 * (p.ratings.stamina - RATING_AVG);
+
+  it('nessun braccio da bullpen ha attitudine-a-partire sopra un titolare', () => {
+    // Invariante dell'allocazione: la rotazione è il top-5 per "starter value"
+    // (qualità + resistenza), quindi nessun rilievo la supera — non conviene
+    // spostarlo. (I RP con overall alto ma poca resistenza sono correttamente lì.)
+    for (const t of teams) {
+      const rotMin = Math.min(...t.rotation.map((p) => startScore(p, pitcherOverall(p.ratings))));
+      const bpMax = Math.max(...t.bullpen.map((p) => startScore(p, pitcherOverall(p.ratings))));
+      expect(rotMin).toBeGreaterThanOrEqual(bpMax - 0.001);
+    }
+  });
+
+  it('la rotazione ha varianza VERA di resistenza (cavalli e partenti corti)', () => {
+    const spread = avg(
+      teams.map((t) => {
+        const s = t.rotation.map((p) => p.ratings.stamina);
+        return Math.max(...s) - Math.min(...s);
+      }),
+    );
+    expect(spread).toBeGreaterThan(15);
+  });
+
+  it('esistono swingman (SP/RP) segnalabili al giocatore', () => {
+    const swing = pits.filter((p) => swingCapable(p.ratings)).length;
+    expect(swing).toBeGreaterThan(pits.length * 0.2);
   });
 });
