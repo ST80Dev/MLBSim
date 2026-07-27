@@ -57,6 +57,17 @@ const SP_SLOTS: Array<{ bias: number; age: [number, number] }> = [
 // Riserve SP (depth): back-end/prospetti giovani, piu' deboli dei titolari.
 const DEPTH_SP: { bias: number; age: [number, number] } = { bias: -5, age: [21, 27] };
 
+// Pavimenti realistici. ROT_FLOOR: un partente titolare, anche il #5 di una
+// squadra scarsa, e' sotto media ma di livello MLB (mai un braccio da Tripla-A
+// in rotazione). STAR_FLOOR: ogni squadra ha almeno una stella.
+const ROT_FLOOR = 52;
+const STAR_FLOOR = 80;
+// Un titolare di movimento, anche il peggiore di una squadra scarsa, e' un
+// regolare di livello MLB: pavimento simmetrico a quello della rotazione (via i
+// giocatori sotto-replacement dal lineup di partenza). Tiene anche l'equilibrio
+// offesa/lancio dell'epoca (i due pavimenti si compensano).
+const LINEUP_FLOOR = 55;
+
 // Modellazione per ruolo: i difensori centrali difendono meglio, gli angoli
 // picchiano di piu', ecc. (bonus applicati alle doti in generazione).
 const POS_SHAPE: Record<string, { field: number; power: number; speed: number; arm: number }> = {
@@ -235,16 +246,25 @@ function makeAge(rng: Rng): number {
   return Math.round(clamp(27 + z * spread, 20, 40));
 }
 
-function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position, teamTalent = 0): Batter {
+function makeBatter(
+  rng: Rng,
+  names: NameFactory,
+  id: string,
+  position: Position,
+  teamTalent = 0,
+  talentBias = 0,
+  ageSkew = 0,
+): Batter {
   // Il DH non e' un ruolo difensivo, e' uno slot di battuta: spesso lo occupa la
   // riserva di un altro ruolo che oggi riposa il guanto. Quindi gli diamo una
   // VERA posizione difensiva naturale (secondaria) e ne deriviamo doti e difesa,
   // invece del vuoto difensivo fisso.
   const isDH = position === 'DH';
   const ratingsPos = isDH ? rng.pick(DH_HOME_POSITIONS) : position;
-  const ratings = makeBatterRatings(rng, ratingsPos, teamTalent);
+  const ratings = makeBatterRatings(rng, ratingsPos, teamTalent + talentBias);
   const stats = deriveBatterStats(ratings);
-  const age = makeAge(rng);
+  // Distribuzione età realistica (makeAge) + profilo età della franchigia (ageSkew).
+  const age = Math.round(clamp(makeAge(rng) + ageSkew, 20, 40));
   const ovr = batterOverall(ratings);
   const secondaryPosition = isDH ? ratingsPos : pickSecondary(rng, position);
   const nm = names.next();
@@ -273,13 +293,17 @@ function makePitcher(
   teamTalent = 0,
   talentBias = 0,
   ageRange?: [number, number],
+  ageSkew = 0,
   tilt: PitchTilt = {},
 ): Pitcher {
   const ratings = makePitcherRatings(rng, role, teamTalent + talentBias, tilt);
   const stats = derivePitcherStats(ratings);
   // Finestra d'età di slot presente (partenti SP_SLOTS/depth) → uniforme nella
   // finestra voluta; altrimenti (rilievi) → distribuzione realistica makeAge.
-  const age = ageRange ? rng.int(ageRange[0], ageRange[1]) : makeAge(rng);
+  // In più il profilo età della franchigia (ageSkew).
+  const age = ageRange
+    ? clamp(rng.int(ageRange[0], ageRange[1]) + ageSkew, 21, 41)
+    : Math.round(clamp(makeAge(rng) + ageSkew, 20, 40));
   const ovr = pitcherOverall(ratings);
   const nm = names.next();
   return {
@@ -352,18 +376,74 @@ function alignLineupDefense(players: Batter[]): Batter[] {
   });
 }
 
+/** Alza uniformemente le doti (preserva l'archetipo) finche' l'overall raggiunge
+ *  `floor`; ri-deriva stat e stipendio. No-op se gia' sopra. Muta in place. */
+function floorBatter(b: Batter, floor: number): void {
+  const cur = batterOverall(b.ratings);
+  if (cur >= floor) return;
+  const d = floor - cur;
+  b.ratings = {
+    contact: clampRating(b.ratings.contact + d),
+    power: clampRating(b.ratings.power + d),
+    eye: clampRating(b.ratings.eye + d),
+    speed: clampRating(b.ratings.speed + d),
+    fielding: clampRating(b.ratings.fielding + d),
+    arm: clampRating(b.ratings.arm + d),
+  };
+  b.stats = deriveBatterStats(b.ratings);
+  const ovr = batterOverall(b.ratings);
+  b.salary = salaryFor(ovr, b.age);
+  b.potential = Math.max(b.potential, ovr);
+}
+function floorPitcher(p: Pitcher, floor: number): void {
+  const cur = pitcherOverall(p.ratings);
+  if (cur >= floor) return;
+  const d = floor - cur;
+  p.ratings = {
+    stuff: clampRating(p.ratings.stuff + d),
+    control: clampRating(p.ratings.control + d),
+    movement: clampRating(p.ratings.movement + d),
+    groundball: clampRating(p.ratings.groundball + d),
+    stamina: clampRating(p.ratings.stamina + d),
+    fielding: clampRating(p.ratings.fielding + d),
+  };
+  p.stats = derivePitcherStats(p.ratings);
+  p.stamina = deriveStamina(p.ratings.stamina, p.role);
+  const ovr = pitcherOverall(p.ratings);
+  p.salary = salaryFor(ovr, p.age);
+  p.potential = Math.max(p.potential, ovr);
+}
+
 export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   // Una fabbrica di nomi per squadra: nomi unici, cognomi vari.
   const names = makeNameFactory(rng);
-  // Offset di talento della SQUADRA: sposta TUTTI i suoi giocatori su/giu' insieme,
-  // cosi' alcune rose sono davvero da contender e altre da cantina (le stagioni
-  // non finiscono tutte sul filo del .500). Centrato su 0 (la media di lega resta),
-  // sigma CONTENUTA e clamp: niente cantine/corazzate irreali (payroll fuori scala).
-  const teamTalent = Math.max(-8, Math.min(8, rng.gauss(0, 3.8)));
+  // TALENTO di squadra MORBIDO (qualita' della PROFONDITA'): sposta lievemente
+  // tutta la rosa. La differenza forte fra squadre viene dal NUMERO di stelle e
+  // dalla profondita', non da uno shift uniforme. Centrato su 0: media di lega resta.
+  const teamTalent = clamp(rng.gauss(0, 2.5), -6, 6);
+  // PROFILO D'ETA' della franchigia (win-now vecchia vs rebuild giovane): sposta il
+  // PAYROLL via youthFactor SENZA toccare la forza → squadre cheap-good ed
+  // expensive-mediocre. Attenuato (σ2.0, ±4) perché si somma alla distribuzione
+  // età già realistica di makeAge: con il ±6 originale (tarato sull'uniforme) le
+  // medie-squadra diventavano assurde (22→36); così restano ~25-31 come in MLB.
+  const ageSkew = clamp(Math.round(rng.gauss(0, 2.0)), -4, 4);
+  // STELLE GARANTITE: ogni squadra, anche la peggiore, ha 1-3 franchise player (mai
+  // una rosa tutta <80). Le migliori ne hanno di piu' (teamTalent alza la 3a). ~1/3
+  // dei team con 2+ stelle ne spende una sull'asso (bonus ridotto, asso ~85).
+  const starCount = 1 + (rng.next() < 0.55 ? 1 : 0) + (rng.next() < 0.28 + teamTalent * 0.03 ? 1 : 0);
+  const aceStar = starCount >= 2 && rng.next() < 0.32;
+  const starBats = starCount - (aceStar ? 1 : 0);
+  const starBias = () => clamp(rng.gauss(19, 3), 14, 26);
+  const starIdx = new Set<number>();
+  while (starIdx.size < starBats) starIdx.add(rng.int(0, LINEUP_POSITIONS.length - 1));
+  // Le posizioni (di lineup) che ospitano una stella garantita.
+  const starPositions = new Set<Position>();
+  for (const i of starIdx) starPositions.add(LINEUP_POSITIONS[i]);
 
-  // --- Battitori: genera per posizione, il MIGLIORE di ogni posizione parte ---
-  // (best-starts: una gemma non finisce sepolta in panca/riserva). Stesso multiset
-  // di posizioni → copertura e aggregati invariati.
+  // --- Battitori: genera per posizione (best-starts: il MIGLIORE di ogni posizione
+  // parte, la gemma non finisce sepolta), con la stella garantita assegnata al
+  // titolare della sua posizione. Poi allineamento difensivo (2ª posizione, DH al
+  // miglior bat) e ordine di battuta realistico (autoLineup). ageSkew su tutti. ---
   const slotsByPos = new Map<Position, BatterTier[]>();
   for (const s of BATTER_SLOTS) {
     const arr = slotsByPos.get(s.pos) ?? [];
@@ -375,57 +455,78 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   const reserveBatters: Batter[] = [];
   const batterBucket: Record<BatterTier, Batter[]> = { lineup: lineupRaw, bench, reserve: reserveBatters };
   for (const [pos, tiers] of slotsByPos) {
-    const cands = tiers.map((_, k) => makeBatter(rng, names, `${f.abbrev}-${pos}-${k}`, pos, teamTalent));
+    let starLeft = starPositions.has(pos) ? 1 : 0;
+    const cands = tiers.map((_, k) => {
+      const bias = starLeft > 0 ? ((starLeft = 0), starBias()) : 0;
+      return makeBatter(rng, names, `${f.abbrev}-${pos}-${k}`, pos, teamTalent, bias, ageSkew);
+    });
     cands.sort((a, b) => batterOverall(b.ratings) - batterOverall(a.ratings));
     const order = [...tiers].sort((x, y) => BATTER_TIER_RANK[x] - BATTER_TIER_RANK[y]);
     order.forEach((tier, i) => batterBucket[tier].push(cands[i]));
   }
-  // Schieramento difensivo (2ª posizione, DH al miglior bat) poi ORDINE di battuta
-  // realistico via autoLineup (leadoff OBP, cleanup potenza…).
   const lineup = autoLineup(alignLineupDefense(lineupRaw));
 
-  // --- Lanciatori: genera col GRADIENTE SP_SLOTS, poi ordina per best-starts ---
-  // I bias/età di SP_SLOTS (asso forte e maturo … #5 debole e giovane) modellano
-  // la GENERAZIONE; poi si mette in rotazione i 5 migliori (n.1 = asso) e in
-  // profondità i più deboli, così una gemma back-end/depth non resta fuori.
+  // --- Lanciatori: gradiente SP_SLOTS (+ bonus asso se stella), poi pool-sort
+  // best-starts: i 5 migliori in rotazione (n.1 = asso), i più deboli in profondità. ---
   const spPool = [
-    ...SP_SLOTS.map((s, i) => makePitcher(rng, names, `${f.abbrev}-SP${i}`, 'SP', teamTalent, s.bias, s.age)),
+    ...SP_SLOTS.map((s, i) =>
+      makePitcher(
+        rng,
+        names,
+        `${f.abbrev}-SP${i}`,
+        'SP',
+        teamTalent,
+        s.bias + (aceStar && i === 0 ? starBias() * 0.65 : 0),
+        s.age,
+        ageSkew,
+      ),
+    ),
     ...Array.from({ length: 2 }, (_, i) =>
-      makePitcher(rng, names, `${f.abbrev}-DSP${i}`, 'SP', teamTalent, DEPTH_SP.bias, DEPTH_SP.age),
+      makePitcher(rng, names, `${f.abbrev}-DSP${i}`, 'SP', teamTalent, DEPTH_SP.bias, DEPTH_SP.age, ageSkew),
     ),
   ];
   spPool.sort((a, b) => pitcherOverall(b.ratings) - pitcherOverall(a.ratings));
   const rotation = spPool.slice(0, 5);
   const reserveSP = spPool.slice(5);
 
-  // BULLPEN COERENTE: non rilievi a caso, ma ruoli definiti — un closer shutdown
-  // (dominio+controllo), un setup/candidato-closer (stessa stoffa, poca
-  // resistenza), 2 long-reliever (resistenza alta per coprire più inning) e i
-  // middle-reliever fungibili. I ruoli strutturali sono garantiti; il best-starts
-  // (gemma non sepolta) si applica ai MIDDLE, che hanno profondità.
-  const closer = makePitcher(rng, names, `${f.abbrev}-CL`, 'CL', teamTalent, 0, undefined, {
+  // BULLPEN COERENTE (archetipi): closer shutdown (dominio+controllo), un
+  // setup/candidato-closer (stessa stoffa, poca resistenza), 2 long-reliever
+  // (resistenza alta) e i middle-reliever fungibili (best-starts fra loro). ageSkew
+  // su tutti. Tilt per-dote a somma ~0 (non sposta gli aggregati).
+  const closer = makePitcher(rng, names, `${f.abbrev}-CL`, 'CL', teamTalent, 0, undefined, ageSkew, {
     stuff: 6,
     control: 3,
   });
-  const setup = makePitcher(rng, names, `${f.abbrev}-SU`, 'RP', teamTalent, 0, undefined, {
+  const setup = makePitcher(rng, names, `${f.abbrev}-SU`, 'RP', teamTalent, 0, undefined, ageSkew, {
     stuff: 5,
     control: 2,
     stamina: -4,
   });
   const longRelievers = Array.from({ length: 2 }, (_, i) =>
-    makePitcher(rng, names, `${f.abbrev}-LR${i}`, 'RP', teamTalent, 0, undefined, {
+    makePitcher(rng, names, `${f.abbrev}-LR${i}`, 'RP', teamTalent, 0, undefined, ageSkew, {
       stamina: 14,
       stuff: -3,
       control: 2,
     }),
   );
-  // Middle-reliever: 4 generati (fungibili), i 2 migliori attivi, 2 in profondità.
   const middlePool = Array.from({ length: 4 }, (_, i) =>
-    makePitcher(rng, names, `${f.abbrev}-MR${i}`, 'RP', teamTalent),
+    makePitcher(rng, names, `${f.abbrev}-MR${i}`, 'RP', teamTalent, 0, undefined, ageSkew),
   );
   middlePool.sort((a, b) => pitcherOverall(b.ratings) - pitcherOverall(a.ratings));
   const bullpen: Pitcher[] = [setup, ...longRelievers, ...middlePool.slice(0, 2), closer];
   const reservePitchers: Pitcher[] = [...reserveSP, ...middlePool.slice(2)];
+
+  // Pavimenti realistici: nessun partente titolare sotto ROT_FLOOR (via i bracci
+  // da Tripla-A), e almeno una stella 80+ in lineup (rete di sicurezza se le
+  // stelle iniettate sono uscite sfortunate sotto soglia).
+  for (const p of rotation) floorPitcher(p, ROT_FLOOR);
+  for (const b of lineup) floorBatter(b, LINEUP_FLOOR);
+  if (!lineup.some((b) => batterOverall(b.ratings) >= STAR_FLOOR)) {
+    const best = lineup.reduce((a, b) =>
+      batterOverall(b.ratings) >= batterOverall(a.ratings) ? b : a,
+    );
+    floorBatter(best, STAR_FLOOR);
+  }
 
   return {
     id: f.id,
