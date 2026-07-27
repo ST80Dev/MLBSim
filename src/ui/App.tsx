@@ -419,12 +419,18 @@ export function App() {
   // aggiornano subito. `live` cambia identità solo quando si ricrea la partita,
   // non a ogni turno: l'effetto qui sotto riazzera i marker a inizio gara.
   const [shownField, setShownField] = useState<FieldSnap>(() => fieldSnap(sit));
+  // Quante giocate sono già "lette": le cronache laterali NON anticipano l'esito
+  // scritto al centro (PlayBanner), che resta la prima fonte del turno. Cresce
+  // solo al verdetto della telecronaca, in sync coi marker sul diamante.
+  const [shownPlays, setShownPlays] = useState<number>(() => result.play.length);
   useEffect(() => {
     setShownField(fieldSnap(situation(live)));
+    setShownPlays(toGameResult(live).play.length);
   }, [live]);
   // Passata al PlayBanner: chiamata al verdetto (o subito se non c'è cronaca).
   const revealField = useCallback(() => {
     setShownField(fieldSnap(situation(live)));
+    setShownPlays(toGameResult(live).play.length);
   }, [live]);
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
@@ -703,6 +709,7 @@ export function App() {
           basesShown={shownField.bases}
           runners={shownField.baseRunners}
           batterName={shownField.batterName}
+          shownPlays={shownPlays}
           onReveal={revealField}
           controls={
             final ? (
@@ -834,6 +841,7 @@ function GameScreen({
   basesShown,
   runners,
   batterName,
+  shownPlays,
   onReveal,
   controls,
 }: {
@@ -849,6 +857,9 @@ function GameScreen({
   basesShown?: [boolean, boolean, boolean];
   runners?: (string | null)[];
   batterName?: string | null;
+  // Numero di giocate già "lette" al centro: le cronache laterali si fermano qui
+  // per non anticipare l'esito. Se omesso, si mostra tutto.
+  shownPlays?: number;
   onReveal?: () => void;
   controls: ReactNode;
 }) {
@@ -881,10 +892,10 @@ function GameScreen({
         {!editing && <PlayBanner result={result} onReveal={onReveal} />}
 
         <div className="cronaca-corner left">
-          <CronacaTeam result={result} side="away" />
+          <CronacaTeam result={result} side="away" shownPlays={shownPlays} />
         </div>
         <div className="cronaca-corner right">
-          <CronacaTeam result={result} side="home" />
+          <CronacaTeam result={result} side="home" shownPlays={shownPlays} />
         </div>
 
         <div className="lineup-corner left">
@@ -2452,14 +2463,26 @@ function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?: () =>
 
 /** Cronaca di UNA squadra (ospite = mezzi alti; casa = mezzi bassi). Sempre
  *  visibile, scorre verso l'ultimo evento. */
-function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
+function CronacaTeam({
+  result,
+  side,
+  shownPlays,
+}: {
+  result: GameResult;
+  side: Side;
+  shownPlays?: number;
+}) {
   const half = side === 'away' ? 'top' : 'bottom';
-  const groups = groupPlays(result).filter((g) => g.key.endsWith(half));
+  // Le cronache laterali non anticipano l'esito scritto al centro: si fermano
+  // alle giocate già "lette" (shownPlays). Se omesso, si mostra tutto.
+  const shownLen = shownPlays ?? result.play.length;
+  const shown = shownLen >= result.play.length ? result : { ...result, play: result.play.slice(0, shownLen) };
+  const groups = groupPlays(shown).filter((g) => g.key.endsWith(half));
   const team = side === 'away' ? result.away : result.home;
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-  }, [result.play.length]);
+  }, [shownLen]);
 
   return (
     <div className="cronaca-team" style={{ ['--tc' as string]: team.primaryColor }}>
