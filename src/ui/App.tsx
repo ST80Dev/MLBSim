@@ -733,10 +733,6 @@ export function App() {
           schedule={schedule}
           season={season}
           onPlay={playGame}
-          onManagedChange={(id) => {
-            setManagedId(id);
-            setActiveGame(null);
-          }}
           onOverview={() => setView('overview')}
           onNewLeague={() => setStage('start')}
         />
@@ -3626,7 +3622,7 @@ function RosterPage({
 
       {tab === 'fielders' ? (
         fieldView === 'lineup' ? (
-          <>
+          <div className="lineup-layout">
             <div className="card">
               <div className="card-title">
                 Ordine di battuta <InfoDot onClick={() => setLegend('bat')} />{' '}
@@ -3731,7 +3727,7 @@ function RosterPage({
                 </table>
               </div>
             </div>
-          </>
+          </div>
         ) : (
           <div className="def-layout">
             <div className="def-col-list">
@@ -4106,7 +4102,6 @@ function HomePage({
   schedule,
   season,
   onPlay,
-  onManagedChange,
   onOverview,
   onNewLeague,
 }: {
@@ -4115,7 +4110,6 @@ function HomePage({
   schedule: Schedule;
   season: SeasonState;
   onPlay: (g: ScheduleGame) => void;
-  onManagedChange: (id: string) => void;
   onOverview: () => void;
   onNewLeague: () => void;
 }) {
@@ -4161,10 +4155,10 @@ function HomePage({
   const myDiv = sortByRecord(season, divisionRivals(league, managedTeam.id));
   const divLeader = recordOf(season, myDiv[0]?.id ?? managedTeam.id);
 
-  // Calendario a finestra: ~10 gare attorno al turno, scorrimento manuale.
+  // Calendario a finestra: -3gg / oggi / +3gg (7 gare), scorrimento manuale.
   const regState = (i: number): ChipState =>
     i < day ? 'played' : i === day ? 'current' : 'locked';
-  const WIN = 10;
+  const WIN = 7;
   const maxStart = Math.max(0, schedule.regular.length - WIN);
   const [winStart, setWinStart] = useState(() => Math.min(maxStart, Math.max(0, day - 3)));
   const shift = (d: number) => setWinStart((s) => Math.max(0, Math.min(maxStart, s + d)));
@@ -4189,16 +4183,6 @@ function HomePage({
           </button>
         )}
         <div className="dash-actions">
-          <label className="dash-pick">
-            <span>Squadra gestita</span>
-            <select value={managedTeam.id} onChange={(e) => onManagedChange(e.target.value)}>
-              {league.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.abbrev} — {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <button className="btn" onClick={onOverview} title="Vedi tutte le squadre della lega">
             📋 Panoramica lega
           </button>
@@ -4335,16 +4319,18 @@ function HomePage({
         </div>
       </div>
 
-      <div className="card cal-section">
-        <div className="card-title">
-          Prestagione <span className="card-sub">amichevoli · non incidono su record/stat</span>
+      {day === 0 && (
+        <div className="card cal-section">
+          <div className="card-title">
+            Prestagione <span className="card-sub">amichevoli · non incidono su record/stat</span>
+          </div>
+          <div className="cal-chips">
+            {schedule.preseason.map((g) => (
+              <GameChip key={g.id} g={g} league={league} state="exhibition" onPlay={onPlay} />
+            ))}
+          </div>
         </div>
-        <div className="cal-chips">
-          {schedule.preseason.map((g) => (
-            <GameChip key={g.id} g={g} league={league} state="exhibition" onPlay={onPlay} />
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -4381,12 +4367,12 @@ function MatchCard({
       </div>
       <div className="mc-teams">
         <span className="mc-team">
-          <TeamBadge team={managedTeam} size={18} /> {managedTeam.abbrev}
+          <TeamBadge team={managedTeam} size={26} /> {managedTeam.abbrev}
           <span className="mc-rec">{myRec.w}-{myRec.l}</span>
         </span>
         <span className="mc-vs">{g.home ? 'vs' : '@'}</span>
         <span className="mc-team">
-          <TeamBadge team={opp} size={18} /> {opp.abbrev}
+          <TeamBadge team={opp} size={26} /> {opp.abbrev}
           <span className="mc-rec">{oppRec.w}-{oppRec.l}</span>
         </span>
       </div>
