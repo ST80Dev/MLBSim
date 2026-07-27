@@ -64,10 +64,15 @@ describe('derivazione dalle caratteristiche', () => {
 });
 
 describe('cime di eccellenza (stile anni 90/00)', () => {
-  it('un contact hitter da manuale batte oltre .320', () => {
+  it('un contact hitter da manuale batte ~.315 con OBP elite', () => {
+    // Con gli hit derivati dagli AB (non dalle PA), la MEDIA è guidata dal
+    // contatto (~.315), mentre l'occhio alza l'OBP coi walk (non gonfia più la
+    // media): eccellenza = media alta + OBP elite, non entrambe massime insieme.
     const s = deriveBatterStats({ ...AVG, contact: 100, eye: 85 });
     const ba = s.h / (s.pa - s.bb - s.hbp);
-    expect(ba).toBeGreaterThan(0.32);
+    const obp = (s.h + s.bb + s.hbp) / s.pa;
+    expect(ba).toBeGreaterThan(0.31);
+    expect(obp).toBeGreaterThan(0.39);
   });
 
   it('uno slugger da manuale sfonda i 42 fuoricampo', () => {

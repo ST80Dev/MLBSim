@@ -21,6 +21,42 @@ l'overall spazia davvero da 2 a 4 stelle con qualche 5★, invece di incollarsi 
 3★. Il talento resta **centrato**, quindi cambia la *dispersione*, non gli
 aggregati di lega (epoca "alta offesa").
 
+### Elite = SPECIALISTI, non maxati-ovunque (archetipi pesati)
+
+Un OVR alto **non** deve avere 100 in tutto: il 50 HR / 50 SB, i 15 tripli per un
+massiccio, il bat-first che difende anche 100 sono irreali. La generazione separa
+due componenti:
+- **`base`** = livello uniforme (talento di squadra + rumore individuale): dà la
+  varietà d'overall, sposta tutte le doti insieme.
+- **`spec`** = bonus di **specializzazione** (coda-gemma + bias-stella): fluisce
+  nelle doti **CORE** dell'archetipo (peso ~1) ed è **smorzato** sulle **OFF-TYPE**
+  (peso ~0.1-0.3). Così una stella è elite nel SUO mestiere e resta media/bassa
+  nell'opposto.
+
+**Battitori** (`BATTER_ARCHETYPES`): slugger (potenza, lento), pura-potenza/TTO,
+contatto/slap, occhio/OBP, velocista (speed, poca potenza), **battitore completo**
+(il vero 96 OVR: elite col bastone, lento, difesa media — RARO), **guanto-first**
+(difesa/braccio elite, bastone modesto), equilibrato. La **difesa è disaccoppiata**
+dall'attacco (peso spec basso su fielding/arm per i bat-first). Misurato: i
+fast-slugger passano dal 4.4% allo **0.8%**, i "5-tool" dal 3.6% allo 0.8%.
+
+**Lanciatori** (`PITCHER_ARCHETYPES`): power/strikeout (tanti K, controllo così
+così), finesse/pitch-to-contact (pochi BB e valide, pochi K), sinkerballer (palla
+a terra), **flamethrower selvaggio** (stoffa elite ma tante BB), ace completo
+(RARO), equilibrato. Anche una squadra **scarsa** ha così il suo power-arm, il
+finesse, il long-man — non 5 cloni allineati all'OVR (spread medio interno alle
+doti-skill ~25 punti). La **Resistenza è indipendente** dalla bravura (base di
+ruolo + varianza ampia sd 11, non tocca il talento): un partente forte di stoffa
+può avere resistenza da long-reliever (corr overall↔resistenza ≈ 0).
+
+### Ruolo/resistenza seguono lo SLOT, non la generazione
+
+`buildManagedTeam` ora **ri-assegna ruolo e ricalcola la resistenza** (`asRole` →
+`deriveStamina(rating, ruolo)`) secondo dove schieri il lanciatore: un long-reliever
+con Resistenza alta spostato in **rotazione** diventa un **vero SP** (regge una
+partenza intera), un partente in bullpen accorcia. L'endurance dipende dal *rating*,
+non dai battitori-soglia fissati alla generazione.
+
 ### Età alla generazione (`makeAge`)
 
 L'età dei **battitori** e dei **rilievi** non è uniforme: `makeAge` usa una
@@ -135,6 +171,13 @@ In `src/engine/ratings.ts`:
   ×`perSigma` ogni 10 punti. A tutte le doti = 70 si ottengono le medie di lega.
 - I moltiplicatori sono **tarati** (vedi `docs/engine-calibration.md`): non
   toccarli senza rimisurare gli aggregati.
+- **Battute valide ∝ AB, non PA.** BB e HBP consumano una PA che NON è un AB:
+  gli esiti da AB (SO e valide) si scalano sugli **AB** (`ab·AB_SCALE`, con
+  `AB_SCALE = 1/(1−bb−hbp)` che riporta il giocatore *medio* esattamente a `pa` →
+  media di lega **neutra**). Effetto: chi cammina di più ha meno AB → **meno hit** —
+  niente più "BB alte E media alta insieme" (un occhio-100 alza l'OBP coi walk, non
+  la media). L'inverso `statsToRatings` divide per la stessa base-AB (round-trip
+  coerente).
 - `deriveStamina(rating, role)` converte la Resistenza in soglia di battitori.
 - `batterOverall` / `pitcherOverall` = media pesata delle doti (40-100).
 - `salaryFromOverall(overall)` = curva base dello stipendio (milioni). La curva è
