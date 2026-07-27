@@ -2584,18 +2584,10 @@ table {
   cursor: pointer;
 }
 
-/* Chip "SP/RP": lanciatore swingman (doppio ruolo per resistenza + doti). */
-.swing-chip {
-  display: inline-block;
-  margin-left: 5px;
-  padding: 0 5px;
-  border-radius: 4px;
+/* Ruolo POTENZIALE swingman "SP/RP": evidenziato (può fare partente e rilievo). */
+.rolebadge.swing {
   border: 1px solid #6d8bd0;
   color: #9fbcff;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  vertical-align: middle;
   cursor: help;
 }
 /* Difesa: select per casella */

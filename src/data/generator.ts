@@ -290,12 +290,21 @@ function setPitcherRole(p: Pitcher, role: PitcherRole): Pitcher {
   return { ...p, role, stamina: deriveStamina(p.ratings.stamina, role) };
 }
 
-// Un braccio è SWINGMAN (doppio ruolo SP/RP) quando ha resistenza da PARTENZA e
-// insieme qualità/predisposizione da rilievo: può fare entrambi. Sotto la soglia di
-// resistenza è solo rilievo; il cavallo puro o l'asso restano SP. Serve al giocatore
-// per sapere chi può spostare tra rotazione e bullpen.
+// RUOLI POTENZIALI di un lanciatore, dedotti dalla RESISTENZA (rating): quali ruoli
+// può ricoprire a prescindere da dove è schierato ora.
+//  - cavallo (resistenza alta): "SP" — regge una rotazione;
+//  - braccio corto (resistenza bassa): "RP" — solo rilievo;
+//  - in mezzo: "SP/RP" — swingman, può fare entrambi.
+export function potentialRole(r: PitcherRatings): 'SP' | 'RP' | 'SP/RP' {
+  if (r.stamina >= 78) return 'SP';
+  if (r.stamina >= 60) return 'SP/RP';
+  return 'RP';
+}
+
+// Swingman = ha entrambi i ruoli potenziali. Serve al giocatore per sapere chi può
+// spostare tra rotazione e bullpen.
 export function swingCapable(r: PitcherRatings): boolean {
-  return r.stamina >= 60 && r.stamina <= 82 && pitcherOverall(r) >= 52;
+  return potentialRole(r) === 'SP/RP';
 }
 
 function pickSecondary(rng: Rng, primary: Position): Position | undefined {
