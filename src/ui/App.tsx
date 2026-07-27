@@ -1,4 +1,5 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useReducer, useRef, useState, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import type { Batter, Pitcher, Position, Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
@@ -1770,7 +1771,12 @@ function subRatingChips(p: Batter | Pitcher): Array<[string, number]> {
   ];
 }
 
-/** Riga sostituto: OVR, nome (apre la scheda), sottotitolo, caratteristiche, «Scegli». */
+/** Etichette-colonna delle caratteristiche per il tipo (batter/pitcher). */
+function subRatingKeys(p: Batter | Pitcher): string[] {
+  return subRatingChips(p).map(([k]) => k);
+}
+
+/** Riga sostituto come nel Roster: OVR, nome+sottotitolo, colonne dote, «Scegli». */
 function SubRow({
   player,
   subtitle,
@@ -1784,28 +1790,29 @@ function SubRow({
     ? batterOverall(player.ratings)
     : pitcherOverall((player as Pitcher).ratings);
   return (
-    <div className="subrow">
-      <span className="subrow-ovr" style={{ background: ratingColor(ovr) }}>
-        {ovr}
-      </span>
-      <span className="subrow-id">
+    <tr className="subrow">
+      <td className="subrow-ovr-c">
+        <span className="subrow-ovr" style={{ background: ratingColor(ovr) }}>
+          {ovr}
+        </span>
+      </td>
+      <td className="l subrow-id">
         <PlayerLink player={player} className="subrow-name">
           {player.name}
         </PlayerLink>
         <span className="subrow-sub">{subtitle}</span>
-      </span>
-      <span className="subrow-chips">
-        {subRatingChips(player).map(([k, v]) => (
-          <span key={k} className="subrow-chip">
-            <i>{k}</i>
-            <b style={{ color: ratingColor(v) }}>{v}</b>
-          </span>
-        ))}
-      </span>
-      <button className="btn sm primary subrow-pick" onClick={onPick}>
-        Scegli ▸
-      </button>
-    </div>
+      </td>
+      {subRatingChips(player).map(([k, v]) => (
+        <td key={k} className="subrow-stat">
+          <b style={{ color: ratingColor(v) }}>{v}</b>
+        </td>
+      ))}
+      <td className="subrow-pick-c">
+        <button className="btn sm primary subrow-pick" onClick={onPick}>
+          Scegli ▸
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -1930,7 +1937,9 @@ function SubModal({
     }
   }
 
-  return (
+  const statCols = incoming.length > 0 ? subRatingKeys(incoming[0].player) : [];
+
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal submodal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
@@ -1945,14 +1954,29 @@ function SubModal({
             {incoming.length === 0 ? (
               <div className="sub-empty">{emptyMsg}</div>
             ) : (
-              incoming.map((it) => (
-                <SubRow key={it.id} player={it.player} subtitle={it.subtitle} onPick={it.onPick} />
-              ))
+              <table className="ratings sub-tbl">
+                <thead>
+                  <tr>
+                    <th title="Valore totale">OVR</th>
+                    <th className="l">Giocatore</th>
+                    {statCols.map((k) => (
+                      <th key={k}>{k}</th>
+                    ))}
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {incoming.map((it) => (
+                    <SubRow key={it.id} player={it.player} subtitle={it.subtitle} onPick={it.onPick} />
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
