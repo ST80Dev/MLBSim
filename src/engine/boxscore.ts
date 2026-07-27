@@ -82,6 +82,18 @@ export function formatIp(outs: number): string {
   return `${Math.floor(outs / 3)}.${outs % 3}`;
 }
 
+/**
+ * Stima dei lanci effettuati da un lanciatore, dalla sua linea, con la formula
+ * classica di Tango: 3.3·BF + 1.5·SO + 2.2·BB. NON è un dato simulato dal motore
+ * (nessun RNG, nessun impatto sulla calibrazione): è una stima DETERMINISTICA
+ * che cresce con i battitori affrontati (quindi con inning e valide subite, che
+ * sono battitori affrontati), con le basi su ball e con gli strikeout — così la
+ * UI rende l'idea dell'affaticamento del lanciatore, per entrambe le squadre.
+ */
+export function estimatedPitches(l: Pick<PitchingLine, 'bf' | 'so' | 'bb'>): number {
+  return Math.round(3.3 * l.bf + 1.5 * l.so + 2.2 * l.bb);
+}
+
 /** Formatta una media come nel baseball: senza lo zero iniziale (.256). */
 export function formatAvg(value: number): string {
   if (!isFinite(value)) return '.000';

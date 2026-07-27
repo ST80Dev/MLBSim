@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useReducer, useRef, useState, Fragment } from 'react';
 import type { ReactNode } from 'react';
 import type { Batter, Pitcher, Position, Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
@@ -13,6 +13,10 @@ import {
   intentionalWalk,
   changePitcher,
   defenseSide,
+  offenseSide,
+  availableRelievers,
+  substituteFielder,
+  pinchRun,
   autoManageDefense,
   quickSim,
   hitAndRun,
@@ -44,7 +48,7 @@ import {
 import type { LeagueMode, LeagueSource, CapZone } from '../data/leagueMode';
 import { teamStrength } from '../engine/strength';
 import type { TeamStrength } from '../engine/strength';
-import { formatIp } from '../engine/boxscore';
+import { formatIp, estimatedPitches } from '../engine/boxscore';
 import {
   generateLeague,
   teamById,
@@ -212,6 +216,20 @@ function pickMatchCalibration(
   const pick = variants[Math.abs(gameSeed(leagueSeed, gnum)) % variants.length];
   return getCalibrationFor(homeId, pick.image);
 }
+
+// Istantanea dei soli marker sul diamante (basi + corridori + battitore),
+// mostrata con ritardo rispetto allo stato reale finché la telecronaca del
+// turno non arriva al verdetto. Vedi `shownField` in App.
+type FieldSnap = {
+  bases: [boolean, boolean, boolean];
+  baseRunners: [string | null, string | null, string | null];
+  batterName: string | null;
+};
+const fieldSnap = (s: LiveSituation): FieldSnap => ({
+  bases: s.bases,
+  baseRunners: s.baseRunners,
+  batterName: s.batter?.name ?? null,
+});
 
 export function App() {
   const [leagueSeed, setLeagueSeed] = useState<number>(() => newRandomSeed());
@@ -382,6 +400,22 @@ export function App() {
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
+
+  // --- Rivelazione ritardata dei marker sulle basi -------------------------
+  // I marker (basi + corridori sul diamante) NON si spostano appena eseguito il
+  // turno: aspettano il VERDETTO della telecronaca di quel turno (PlayBanner),
+  // così non si vede il corridore già in base prima di averne letto l'esito in
+  // cronaca. Fuori dalla telecronaca (ripresa partita, quick-sim, cambio) si
+  // aggiornano subito. `live` cambia identità solo quando si ricrea la partita,
+  // non a ogni turno: l'effetto qui sotto riazzera i marker a inizio gara.
+  const [shownField, setShownField] = useState<FieldSnap>(() => fieldSnap(sit));
+  useEffect(() => {
+    setShownField(fieldSnap(situation(live)));
+  }, [live]);
+  // Passata al PlayBanner: chiamata al verdetto (o subito se non c'è cronaca).
+  const revealField = useCallback(() => {
+    setShownField(fieldSnap(situation(live)));
+  }, [live]);
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
   const inLiveGame = view === 'game' && !!activeGame && !final;
@@ -655,8 +689,10 @@ export function App() {
           editing={editing}
           cal={cal}
           onMarkerMove={moveMarker}
-          runners={sit.baseRunners}
-          batterName={sit.batter.name}
+          basesShown={shownField.bases}
+          runners={shownField.baseRunners}
+          batterName={shownField.batterName}
+          onReveal={revealField}
           controls={
             final ? (
               <FinalOverlay
@@ -774,8 +810,10 @@ function GameScreen({
   editing,
   cal,
   onMarkerMove,
+  basesShown,
   runners,
   batterName,
+  onReveal,
   controls,
 }: {
   result: GameResult;
@@ -785,28 +823,41 @@ function GameScreen({
   editing: boolean;
   cal: FieldCalibration;
   onMarkerMove: (id: string, pos: { x: number; y: number }) => void;
+  // Basi mostrate sul diamante: possono essere in ritardo rispetto a `sit.bases`
+  // (rivelate al verdetto della cronaca). Se omesse, si usa lo stato reale.
+  basesShown?: [boolean, boolean, boolean];
   runners?: (string | null)[];
   batterName?: string | null;
+  onReveal?: () => void;
   controls: ReactNode;
 }) {
+  const fieldBases = basesShown ?? sit.bases;
   return (
     <div className="game-screen">
-      <StatBar result={result} sit={sit} statsMode={statsMode} setStatsMode={setStatsMode} />
+      <StatBar
+        result={result}
+        sit={sit}
+        basesShown={fieldBases}
+        statsMode={statsMode}
+        setStatsMode={setStatsMode}
+      />
 
       <div className={editing ? 'gamefield editing' : 'gamefield'}>
         <Diamond
           home={result.home}
           away={result.away}
           background
-          bases={sit.bases}
+          bases={fieldBases}
           runners={runners}
           batterName={batterName}
+          defenseTeam={sit.offenseSide === 'away' ? result.home : result.away}
+          pitcherName={sit.pitcher.name}
           cal={cal}
           editable={editing}
           onMarkerMove={onMarkerMove}
         />
 
-        {!editing && <PlayBanner result={result} />}
+        {!editing && <PlayBanner result={result} onReveal={onReveal} />}
 
         <div className="cronaca-corner left">
           <CronacaTeam result={result} side="away" />
@@ -868,11 +919,13 @@ function involvedFor(result: GameResult, sit: LiveSituation, side: Side): Involv
 function StatBar({
   result,
   sit,
+  basesShown,
   statsMode,
   setStatsMode,
 }: {
   result: GameResult;
   sit: LiveSituation;
+  basesShown?: [boolean, boolean, boolean];
   statsMode: StatsMode;
   setStatsMode: (m: StatsMode) => void;
 }) {
@@ -897,7 +950,7 @@ function StatBar({
           <span className="sb-inning">
             {arrow} {sit.inning}° <span className="sb-half">{halfLabel}</span>
           </span>
-          <BaseDiamond bases={sit.bases} />
+          <BaseDiamond bases={basesShown ?? sit.bases} />
           <OutsDots outs={sit.outs} />
         </div>
       </div>
@@ -1540,7 +1593,14 @@ function ActionBar({
   sit: LiveSituation;
   act: (fn: (g: LiveGame) => void) => void;
 }) {
-  return sit.controlledBatting ? (
+  // Modale di sostituzione (popup a tutto schermo): rimpiazza i vecchi menu a
+  // discesa che restavano nascosti dietro la barra comandi.
+  const [sub, setSub] = useState<SubMode | null>(null);
+  const noBench = sit.bench.length === 0;
+  const noRelievers = availableRelievers(defenseSide(live)).length === 0;
+  const hasRunner = sit.bases.some(Boolean);
+
+  const bar = sit.controlledBatting ? (
     <div className="card actionbar compact">
       <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
       <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
@@ -1581,7 +1641,24 @@ function ActionBar({
           Mob &amp; corri
         </button>
       )}
-      <PinchHitMenu bench={sit.bench} act={act} />
+      <button
+        className="btn sm"
+        disabled={noBench}
+        onClick={() => setSub('pinchhit')}
+        title="Pinch-hit: sostituisci il battitore"
+      >
+        Pinch-hit
+      </button>
+      {hasRunner && (
+        <button
+          className="btn sm"
+          disabled={noBench}
+          onClick={() => setSub('pinchrun')}
+          title="Pinch-runner: sostituisci un corridore in base"
+        >
+          Pinch-run
+        </button>
+      )}
     </div>
   ) : (
     <div className="card actionbar compact">
@@ -1609,83 +1686,252 @@ function ActionBar({
           Interni dentro
         </button>
       )}
-      <PitcherChange live={live} act={act} />
-    </div>
-  );
-}
-
-function PinchHitMenu({
-  bench,
-  act,
-}: {
-  bench: Batter[];
-  act: (fn: (g: LiveGame) => void) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  if (bench.length === 0) return null;
-  return (
-    <div className="pchange">
-      <button className="btn sm" onClick={() => setOpen((o) => !o)} title="Sostituisci il battitore">
-        Pinch-hit ▾
+      <button
+        className="btn sm"
+        disabled={noRelievers}
+        onClick={() => setSub('pitcher')}
+        title="Cambio lanciatore: scegli un rilievo dal bullpen"
+      >
+        Cambio lanc.
       </button>
-      {open && (
-        <div className="pchange-menu">
-          {bench.map((b) => (
-            <button
-              key={b.id}
-              className="pchange-item"
-              onClick={() => {
-                act((g) => pinchHit(g, b.id));
-                setOpen(false);
-              }}
-            >
-              <span className="pos">{b.position}</span> {b.name}
-              <span className="pchange-ovr">
-                <OvrBadge overall={batterOverall(b.ratings)} />
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      <button
+        className="btn sm"
+        disabled={noBench}
+        onClick={() => setSub('fielders')}
+        title="Sostituzione difensiva: cambia un difensore"
+      >
+        Cambio dif.
+      </button>
+    </div>
+  );
+
+  return (
+    <>
+      {bar}
+      {sub && <SubModal live={live} mode={sub} act={act} onClose={() => setSub(null)} />}
+    </>
+  );
+}
+
+// --- Sostituzioni: popup "ad hoc" in stile roster --------------------------
+// Un unico modale mostra il pool giusto (rilievi / panchina) con OVR e
+// caratteristiche, come una mini-scheda roster. Per i cambi difensivi e i
+// pinch-runner c'è un primo passo (chi esce), poi la scelta di chi entra.
+type SubMode = 'pitcher' | 'fielders' | 'pinchhit' | 'pinchrun';
+
+const SUB_TITLE: Record<SubMode, string> = {
+  pitcher: 'Cambio lanciatore',
+  fielders: 'Sostituzione difensiva',
+  pinchhit: 'Pinch-hit',
+  pinchrun: 'Pinch-runner',
+};
+
+const BASE_LABEL = ['1ª', '2ª', '3ª'];
+
+/** Caratteristiche fondamentali per la riga sostituto (come nel roster). */
+function subRatingChips(p: Batter | Pitcher): Array<[string, number]> {
+  if (isBatter(p)) {
+    return [
+      ['CON', p.ratings.contact],
+      ['POT', p.ratings.power],
+      ['OCC', p.ratings.eye],
+      ['VEL', p.ratings.speed],
+      ['DIF', p.ratings.fielding],
+      ['BRA', p.ratings.arm],
+    ];
+  }
+  const r = (p as Pitcher).ratings;
+  return [
+    ['DOM', r.stuff],
+    ['CTR', r.control],
+    ['MOV', r.movement],
+    ['RES', r.stamina],
+    ['DIF', r.fielding],
+  ];
+}
+
+/** Riga sostituto: OVR, nome (apre la scheda), sottotitolo, caratteristiche, «Scegli». */
+function SubRow({
+  player,
+  subtitle,
+  onPick,
+}: {
+  player: Batter | Pitcher;
+  subtitle: string;
+  onPick: () => void;
+}) {
+  const ovr = isBatter(player)
+    ? batterOverall(player.ratings)
+    : pitcherOverall((player as Pitcher).ratings);
+  return (
+    <div className="subrow">
+      <span className="subrow-ovr" style={{ background: ratingColor(ovr) }}>
+        {ovr}
+      </span>
+      <span className="subrow-id">
+        <PlayerLink player={player} className="subrow-name">
+          {player.name}
+        </PlayerLink>
+        <span className="subrow-sub">{subtitle}</span>
+      </span>
+      <span className="subrow-chips">
+        {subRatingChips(player).map(([k, v]) => (
+          <span key={k} className="subrow-chip">
+            <i>{k}</i>
+            <b style={{ color: ratingColor(v) }}>{v}</b>
+          </span>
+        ))}
+      </span>
+      <button className="btn sm primary subrow-pick" onClick={onPick}>
+        Scegli ▸
+      </button>
     </div>
   );
 }
 
-function PitcherChange({
+function SubModal({
   live,
+  mode,
   act,
+  onClose,
 }: {
   live: LiveGame;
+  mode: SubMode;
   act: (fn: (g: LiveGame) => void) => void;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [outId, setOutId] = useState<string | null>(null); // titolare che esce (fielders)
+  const [outBase, setOutBase] = useState<number | null>(null); // corridore (pinchrun)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const off = offenseSide(live);
   const def = defenseSide(live);
-  const relievers = def.pitchers.slice(def.pitcherIdx + 1);
-  if (relievers.length === 0) return null;
-  return (
-    <div className="pchange">
-      <button className="btn sm" onClick={() => setOpen((o) => !o)}>
-        Cambio lanc. ▾
-      </button>
-      {open && (
-        <div className="pchange-menu">
-          {relievers.map((p) => (
-            <button
-              key={p.id}
-              className="pchange-item"
-              onClick={() => {
-                act((g) => changePitcher(g, defenseSide(g), p.id));
-                setOpen(false);
-              }}
-            >
-              <span className="pos">{p.role}</span> {p.name}
-              <span className="pchange-ovr">
-                <OvrBadge overall={pitcherOverall(p.ratings)} />
+
+  let hint = '';
+  let targets: ReactNode = null; // primo passo (chi esce), quando serve
+  let incoming: Array<{ id: string; player: Batter | Pitcher; subtitle: string; onPick: () => void }> = [];
+  let emptyMsg = 'Nessun giocatore disponibile.';
+
+  if (mode === 'pitcher') {
+    hint = 'Scegli il rilievo da mandare sul monte.';
+    emptyMsg = 'Nessun rilievo disponibile in bullpen.';
+    incoming = availableRelievers(def).map((p) => ({
+      id: p.id,
+      player: p,
+      subtitle: p.role === 'CL' ? 'RP (closer)' : p.role,
+      onPick: () => {
+        act((g) => changePitcher(g, defenseSide(g), p.id));
+        onClose();
+      },
+    }));
+  } else if (mode === 'pinchhit') {
+    const cur = off.team.lineup[off.battingIndex];
+    hint = `Sostituisci ${cur.name} in battuta.`;
+    emptyMsg = 'Nessun giocatore in panchina.';
+    incoming = off.team.bench.map((b) => ({
+      id: b.id,
+      player: b,
+      subtitle: `panchina · ${b.position}`,
+      onPick: () => {
+        act((g) => pinchHit(g, b.id));
+        onClose();
+      },
+    }));
+  } else if (mode === 'fielders') {
+    emptyMsg = 'Nessun giocatore in panchina.';
+    if (outId == null) {
+      hint = 'Chi esce dalla difesa?';
+      targets = (
+        <div className="sub-targets">
+          {def.team.lineup.map((b) => (
+            <button key={b.id} className="sub-target" onClick={() => setOutId(b.id)}>
+              <span className="pos">{b.position}</span>
+              <span className="nm">{b.name}</span>
+              <span className="ov" style={{ color: ratingColor(batterOverall(b.ratings)) }}>
+                {batterOverall(b.ratings)}
               </span>
             </button>
           ))}
         </div>
-      )}
+      );
+    } else {
+      const out = def.team.lineup.find((b) => b.id === outId)!;
+      hint = `Chi entra per ${out.name} (${out.position})?`;
+      incoming = def.team.bench.map((b) => ({
+        id: b.id,
+        player: b,
+        subtitle: `entra in ${out.position}`,
+        onPick: () => {
+          act((g) => substituteFielder(g, defenseSide(g), outId, b.id));
+          onClose();
+        },
+      }));
+    }
+  } else {
+    // pinchrun
+    emptyMsg = 'Nessun giocatore in panchina.';
+    const occupied = [0, 1, 2].filter((i) => live.bases[i]);
+    if (outBase == null) {
+      hint = 'Quale corridore sostituire?';
+      targets = (
+        <div className="sub-targets">
+          {occupied.map((i) => {
+            const r = live.bases[i]!.batter;
+            return (
+              <button key={i} className="sub-target" onClick={() => setOutBase(i)}>
+                <span className="pos">{BASE_LABEL[i]}</span>
+                <span className="nm">{r.name}</span>
+                <span className="ov" style={{ color: ratingColor(batterOverall(r.ratings)) }}>
+                  {batterOverall(r.ratings)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      );
+    } else {
+      const r = live.bases[outBase]!.batter;
+      hint = `Chi corre per ${r.name} (${BASE_LABEL[outBase]})?`;
+      incoming = off.team.bench.map((b) => ({
+        id: b.id,
+        player: b,
+        subtitle: `panchina · VEL ${b.ratings.speed}`,
+        onPick: () => {
+          act((g) => pinchRun(g, offenseSide(g), outBase, b.id));
+          onClose();
+        },
+      }));
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal submodal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">{SUB_TITLE[mode]}</div>
+          <button className="modal-close" style={{ marginLeft: 'auto' }} onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="sub-hint">{hint}</div>
+        {targets ?? (
+          <div className="sub-list">
+            {incoming.length === 0 ? (
+              <div className="sub-empty">{emptyMsg}</div>
+            ) : (
+              incoming.map((it) => (
+                <SubRow key={it.id} player={it.player} subtitle={it.subtitle} onPick={it.onPick} />
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1787,6 +2033,16 @@ function strengthColor(v: number): string {
   return `hsl(${Math.round(t * 125)} 60% 46%)`;
 }
 
+/** Colore d'affaticamento per la stima lanci, calibrato sul ruolo (SP vs rilievo). */
+function pitchTone(pitches: number, role?: string): string | undefined {
+  const reliever = role === 'RP' || role === 'CL';
+  const amber = reliever ? 22 : 90;
+  const red = reliever ? 32 : 105;
+  if (pitches >= red) return '#ff6b6b';
+  if (pitches >= amber) return '#ffcf5c';
+  return undefined; // sotto soglia: colore normale
+}
+
 function LineupSide({
   team,
   stats,
@@ -1867,6 +2123,18 @@ function LineupSide({
             })()}
           </span>
           <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
+          {(() => {
+            const pt = estimatedPitches(curP);
+            return (
+              <span
+                className="ls-pit-stat"
+                style={{ color: pitchTone(pt, pitById.get(curP.id)?.role) }}
+                title="Lanci (stima): cresce con battitori affrontati, valide, BB e SO — rende l'affaticamento"
+              >
+                {pt} PT
+              </span>
+            );
+          })()}
           <span className="ls-pit-stat">{curP.so} SO</span>
           <span className="ls-pit-stat">{curP.er} ER</span>
           {curP.dec && <span className={`dec dec-${curP.dec}`}>{decLabel(curP.dec)}</span>}
@@ -2049,7 +2317,7 @@ function groupPlays(result: GameResult): CronacaGroup[] {
  * piu' straordinari (fuoricampo, doppio gioco…). A fine sequenza svanisce e la
  * frase sintetica resta nella cronaca laterale (dx/sx).
  */
-function PlayBanner({ result }: { result: GameResult }) {
+function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?: () => void }) {
   const plays = result.play;
   const len = plays.length;
   // Non ri-animare le giocate gia' presenti al montaggio (partita ripresa).
@@ -2057,10 +2325,17 @@ function PlayBanner({ result }: { result: GameResult }) {
   const [state, setState] = useState<{ com: Commentary; phase: number; leaving: boolean } | null>(
     null,
   );
+  // `onReveal` cambia identita' quando cambia la partita: lo leggo da una ref
+  // cosi' i timer schedulati usano sempre l'ultima versione senza ri-eseguire
+  // l'effetto (che dipende solo da `len`).
+  const revealRef = useRef(onReveal);
+  revealRef.current = onReveal;
+  const reveal = () => revealRef.current?.();
 
   useEffect(() => {
     if (len <= seenRef.current) {
       seenRef.current = len;
+      reveal(); // nessuna telecronaca da animare: marker allineati subito.
       return;
     }
     seenRef.current = len;
@@ -2068,6 +2343,7 @@ function PlayBanner({ result }: { result: GameResult }) {
     // La sostituzione (pinch-hit) non e' una giocata: niente banner.
     if (ev.kind === 'sub') {
       setState(null);
+      reveal();
       return;
     }
     const offenseIsAway = ev.half === 'top';
@@ -2083,6 +2359,10 @@ function PlayBanner({ result }: { result: GameResult }) {
     for (let i = 1; i < com.phases.length; i++) {
       timers.push(setTimeout(() => setState((s) => (s ? { ...s, phase: i } : s)), i * PHASE_MS));
     }
+    // Al VERDETTO (ultima fase, "conquista la base"/"eliminato") sposto i marker
+    // sul diamante: e' il momento in cui l'esito viene letto in cronaca.
+    const revealAt = (com.phases.length - 1) * PHASE_MS;
+    timers.push(setTimeout(reveal, revealAt));
     const end = (com.phases.length - 1) * PHASE_MS + HOLD_MS;
     timers.push(setTimeout(() => setState((s) => (s ? { ...s, leaving: true } : s)), end));
     timers.push(setTimeout(() => setState(null), end + 420));
@@ -2145,11 +2425,20 @@ function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
         </span>
         <span className="crt-title">Cronaca {side === 'away' ? 'ospite' : 'casa'}</span>
       </div>
+      {/* Testate ed eventi sono figli DIRETTI del contenitore scrollabile (non
+          annidati in un box per-inning): così ogni testata `sticky` resta
+          agganciata all'intero corpo e le testate si IMPILANO in cima invece di
+          scorrere via una alla volta. */}
       <div className="crt-body" ref={bodyRef}>
         {groups.length === 0 && <div className="cr-empty">In attesa…</div>}
-        {groups.map((g) => (
-          <div key={g.key} className="cr-inning">
-            <div className="cr-inhead">
+        {groups.map((g, gi) => (
+          <Fragment key={g.key}>
+            <div
+              className="cr-inhead"
+              // Impilamento: ogni testata si ferma un gradino più in basso della
+              // precedente, così 1°/2°/3°… restano accumulati e fissi in cima.
+              style={{ top: `calc(var(--crh) * ${gi})`, zIndex: groups.length - gi }}
+            >
               <span>{g.header}</span>
               <span className="cr-score">
                 {g.events[g.events.length - 1].away}–{g.events[g.events.length - 1].home}
@@ -2170,7 +2459,7 @@ function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
                 );
               })}
             </ul>
-          </div>
+          </Fragment>
         ))}
       </div>
     </div>

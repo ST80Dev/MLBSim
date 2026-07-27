@@ -690,45 +690,135 @@ table {
 }
 
 /* Menu cambio lanciatore */
-.pchange {
-  position: relative;
+/* --- Modale sostituzioni (pinch-hit / pinch-run / cambio lanc./difensore) --- */
+.modal.submodal {
+  width: min(620px, 96vw);
+  max-height: min(88vh, 760px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.pchange-menu {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 4px);
-  left: 0;
-  background: var(--card2);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 6px;
-  min-width: 220px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  max-height: 260px;
+.sub-hint {
+  padding: 10px 16px 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sub-list {
+  padding: 8px 12px 14px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.pchange-item {
+.sub-empty {
+  padding: 22px;
+  text-align: center;
+  color: var(--muted);
+}
+/* Riga sostituto in stile roster. */
+.subrow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  padding: 7px 8px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card2);
+}
+.subrow-ovr {
+  flex: 0 0 auto;
+  min-width: 30px;
+  text-align: center;
+  font-weight: 800;
   font-size: 13px;
+  color: #06121a;
+  border-radius: 7px;
+  padding: 3px 5px;
+}
+.subrow-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 118px;
+}
+.subrow-name {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.subrow-sub {
+  color: var(--muted);
+  font-size: 11px;
+}
+.subrow-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-left: auto;
+}
+.subrow-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 11px;
+}
+.subrow-chip i {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.3px;
+}
+.subrow-chip b {
+  font-weight: 800;
+  font-size: 12.5px;
+}
+.subrow-pick {
+  flex: 0 0 auto;
+}
+/* Primo passo: chi esce (difensore / corridore). */
+.sub-targets {
+  padding: 8px 12px 14px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+.sub-target {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card2);
+  color: var(--text);
   cursor: pointer;
   text-align: left;
 }
-.pchange-item:hover {
+.sub-target:hover {
+  border-color: var(--accent);
   background: var(--card);
 }
-.pchange-ovr {
+.sub-target .pos {
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--accent);
+  min-width: 24px;
+}
+.sub-target .nm {
+  font-weight: 700;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sub-target .ov {
   margin-left: auto;
-  color: #ffd15c;
-  letter-spacing: -1px;
-  font-size: 12px;
+  font-weight: 800;
+  font-size: 13px;
 }
 
 /* Banner finale */
@@ -1822,28 +1912,39 @@ table {
   letter-spacing: 0.4px;
 }
 .crt-body {
+  /* --crh = altezza di UNA testata d'inning: serve sia al box della testata sia
+     all'offset di impilamento (top = --crh * indice) calcolato inline in JSX. */
+  --crh: 22px;
   max-height: 34vh;
   overflow-y: auto;
   padding: 4px 8px 6px;
 }
-.crt-body .cr-inning {
-  margin-bottom: 6px;
-}
+/* Testata d'inning "appiccicosa" e IMPILABILE: scorrendo, gli inning passati
+   collassano alla loro testata e queste si accumulano in cima (1°/2°/3°…),
+   ciascuna a un offset crescente (`top` inline = --crh * indice). Testate ed
+   eventi sono figli diretti di .crt-body (vedi JSX) perché lo stacking regga. */
 .crt-body .cr-inhead {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  height: var(--crh);
+  box-sizing: border-box;
   font-weight: 800;
   font-size: 12px;
   color: var(--accent);
   border-bottom: 1px dashed var(--line);
-  padding: 3px 0;
+  padding: 0 0 1px;
   position: sticky;
-  top: 0;
-  background: rgba(8, 14, 26, 0.96);
+  top: 0; /* sovrascritto inline con l'offset di impilamento per-inning */
+  background: #0a1019;
+}
+/* La testata impilata copre gli eventi che le scorrono sotto. */
+.crt-body .cr-inning:hover .cr-inhead {
+  color: #fff;
 }
 .crt-body ul {
   list-style: none;
-  margin: 3px 0 0;
+  margin: 3px 0 6px;
   padding: 0;
 }
 .crt-body li {

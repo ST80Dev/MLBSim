@@ -16,6 +16,28 @@ Le costanti di corsa sulle basi sono in `TUNING` (`constants.ts`): probabilità 
 GIDP, di segnare dalla terza su out, di segnare dalla seconda su singolo, di
 arrivare in terza dalla prima, bonus/penalità di platoon, affaticamento.
 
+### Logica di campo sugli out in gioco (`resolveInPlayOut`)
+
+L'out su palla in gioco (`IPO`) non è più "lineare" (battitore eliminato e
+corridori fermi): `resolveInPlayOut` decide un **tipo di battuta** e i relativi
+**effetti reali** sui corridori. Il tipo (`ground` / `fly` / `popup`) diventa
+`PlayEvent.outInfo.ball` ed è la **fonte di verità** condivisa con la UI, così
+telecronaca e codice da segnapunti concordano fra loro e con ciò che accade sulle
+basi (niente più "out in prima" con un codice di volata). Effetti:
+
+- **Rimbalzo** (`ground`): doppio gioco (corridore in 1ª, `gidpProb`); **scelta
+  difensiva** (corridore in 2ª, 1ª e 3ª libere → eliminato verso la 3ª, battitore
+  salvo in prima: `outInfo.fc`); **groundout RBI** dalla 3ª; **out produttivo**
+  (i corridori salgono di una base se quella davanti è libera).
+- **Volata profonda** (`fly`): **volata di sacrificio** / punto dalla 3ª e
+  **tag-up 2ª→3ª**.
+- **Presa comoda** (`popup`): nessun avanzamento.
+
+Costanti in `TUNING.outField`. L'impatto sull'ambiente-punti è modesto (misurato:
++~0.1 R/squadra/partita, ben dentro la banda di realismo 4.3–6.2) e i corridori
+avanzano rispettando l'occupazione delle basi. Coperto dai test in
+`engine/__tests__/live.test.ts` e `ui/__tests__/scorecode.test.ts`.
+
 ## Tattiche interattive (Fase 1) e loro calibrazione
 
 Il motore è una **macchina a stati** (`LiveGame` in `game.ts`): `simulateGame`

@@ -11,6 +11,7 @@
 // sempre lo stesso codice. E' una notazione descrittiva, non un dato del motore.
 
 import type { PlayEvent } from '../engine/game';
+import { inPlayOutShape } from './commentary';
 
 /** Nome italiano del ruolo per numero di segnapunti (1..9). */
 const POS_NAME: Record<number, string> = {
@@ -72,15 +73,26 @@ function seq(nums: number[]): { code: string; parts: string } {
   };
 }
 
-// Sequenze plausibili (con peso realistico) per gli out su palla in gioco.
-const GROUND_OUTS: Array<[number[], number]> = [
-  [[6, 3], 24],
-  [[4, 3], 22],
-  [[5, 3], 18],
-  [[1, 3], 10],
-  [[3], 14], // 3U: prima base non assistito
-  [[6, 4], 6],
-  [[5, 4], 6],
+// Rimbalzi eliminati IN PRIMA (tutte le sequenze finiscono al 3 = prima base):
+// coerenti col verdetto "out in prima" della telecronaca per `shape === 'ground'`.
+const GROUND_TO_FIRST: Array<[number[], number]> = [
+  [[6, 3], 26],
+  [[4, 3], 24],
+  [[5, 3], 20],
+  [[1, 3], 12],
+  [[3], 18], // 3U: prima base non assistito
+];
+// Prese comode ("presa comoda", shape === 'air'): pop d'interno (ruoli ≤6) o
+// volata di routine d'esterno (≥7). Nessun rimbalzo: e' sempre una PRESA al volo.
+const AIR_CATCH: Array<[number, number]> = [
+  [6, 16],
+  [4, 14],
+  [5, 12],
+  [3, 12],
+  [2, 10],
+  [8, 12],
+  [7, 10],
+  [9, 6],
 ];
 const DOUBLE_PLAYS: Array<[number[], number]> = [
   [[6, 4, 3], 40],
@@ -105,25 +117,13 @@ const OUTFIELD: Array<[number, number]> = [
   [8, 40],
   [9, 26],
 ];
-const LINE_POS: Array<[number, number]> = [
-  [8, 20],
-  [7, 18],
-  [9, 16],
-  [6, 16],
-  [4, 14],
-  [5, 10],
-  [3, 6],
-];
-const POP_POS: Array<[number, number]> = [
-  [6, 20],
-  [3, 18],
-  [4, 18],
-  [5, 16],
-  [2, 16],
-  [1, 4],
-  [9, 4],
-  [7, 2],
-  [8, 2],
+// Scelta difensiva: corridore dalla 2ª eliminato in 3ª (tiro alla terza = 5).
+const FIELDER_CHOICE: Array<[number[], number]> = [
+  [[6, 5], 34], // SS → 3B
+  [[4, 5], 20], // 2B → 3B
+  [[1, 5], 14], // P → 3B
+  [[5], 18], // 3B non assistito
+  [[3, 5], 14], // 1B → 3B
 ];
 
 /**
@@ -186,26 +186,30 @@ export function scoreCode(ev: PlayEvent): ScoreCode | null {
       return { code: s.code, title: `eliminato su smorzata: ${s.parts}` };
     }
     case 'inplayout': {
-      const cat = wpick(mix(h, 6), [
-        ['GO', 46],
-        ['F', 34],
-        ['L', 12],
-        ['P', 8],
-      ] as Array<['GO' | 'F' | 'L' | 'P', number]>);
-      if (cat === 'GO') {
-        const s = seq(wpick(mix(h, 7), GROUND_OUTS));
-        return { code: s.code, title: `eliminato di rimbalzo: ${s.parts}` };
+      // Scelta difensiva: out sul corridore (in 3ª), battitore salvo in prima.
+      if (ev.outInfo?.fc) {
+        const s = seq(wpick(mix(h, 11), FIELDER_CHOICE));
+        return { code: `FC ${s.code}`, title: `scelta difensiva, corridore eliminato in terza: ${s.parts}` };
       }
-      if (cat === 'F') {
+      // La categoria (rimbalzo / volata / presa) viene dalla STESSA fonte della
+      // telecronaca (motore → ev.outInfo), così codice e banner non si
+      // contraddicono mai, nemmeno con gli avanzamenti reali dei corridori.
+      const shape = inPlayOutShape(ev);
+      if (shape === 'ground') {
+        const s = seq(wpick(mix(h, 7), GROUND_TO_FIRST));
+        return { code: s.code, title: `eliminato di rimbalzo, out in prima: ${s.parts}` };
+      }
+      if (shape === 'fly') {
         const of = wpick(mix(h, 8), OUTFIELD);
         return { code: `F${of}`, title: `eliminato al volo: ${POS_NAME[of]} (${of})` };
       }
-      if (cat === 'L') {
-        const p = wpick(mix(h, 9), LINE_POS);
-        return { code: `L${p}`, title: `eliminato su linea: ${POS_NAME[p]} (${p})` };
-      }
-      const p = wpick(mix(h, 10), POP_POS);
-      return { code: `P${p}`, title: `eliminato su cielo (pop-up): ${POS_NAME[p]} (${p})` };
+      // 'air' = "presa comoda": pop d'interno o volata di routine d'esterno.
+      const p = wpick(mix(h, 9), AIR_CATCH);
+      const pop = p <= 6;
+      return {
+        code: `${pop ? 'P' : 'F'}${p}`,
+        title: `${pop ? 'eliminato su cielo (pop-up)' : 'eliminato al volo'}: ${POS_NAME[p]} (${p})`,
+      };
     }
     case 'sub':
     case 'other':

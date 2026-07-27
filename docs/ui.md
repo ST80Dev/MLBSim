@@ -56,12 +56,48 @@ Regioni, dall'alto in basso:
     motore, **niente RNG, determinismo invariato**. Quando la difesa sarà
     simulata (fase futura) i ruoli reali sostituiranno la sintesi senza cambiare
     la UI. Coperto da test (`src/ui/__tests__/scorecode.test.ts`).
+    - **Coerenza cronaca ↔ codice.** Per l'out su palla in gioco (`inplayout`)
+      la categoria (rimbalzo / volata / presa) NON è più scelta due volte in
+      modo indipendente: viene da un'unica fonte, `inPlayOutShape(ev)` in
+      `commentary.ts`, usata sia dal verdetto del banner sia dal codice. Così
+      non capita più "out in prima" (rimbalzo) con un codice di volata `F8`.
+    - **Testate d'inning impilabili.** Testate (`cr-inhead`) ed eventi sono
+      figli **diretti** di `.crt-body`: ogni testata è `position: sticky` con
+      `top = --crh * indice`, così scorrendo gli inning passati collassano alla
+      loro testata e queste si **accumulano fisse** in cima (1°/2°/3°…). Se
+      restassero annidate in un box per-inning scorrerebbero via una per volta.
+  - **Marker sulle basi a rivelazione ritardata.** I marker del diamante (basi +
+    corridori) NON si spostano appena eseguito il turno: si aggiornano al
+    **verdetto** della telecronaca di quel turno (callback `onReveal` dal
+    `PlayBanner`, sincronizzata con l'ultima fase). Così non si vede il corridore
+    già in base prima di averne letto l'esito. Fuori dalla telecronaca (ripresa
+    partita, quick-sim, cambio) i marker si allineano subito. Stato in `App`
+    (`shownField`), passato a `Diamond`/`BaseDiamond`; il motore e i controlli
+    restano sullo stato reale (`sit`), solo i marker sono in ritardo.
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
-    battitore corrente evidenziato, lanciatore in pedana).
+    battitore corrente evidenziato, lanciatore in pedana). La riga del lanciatore
+    mostra **IP / PT / SO / ER** per **entrambe** le squadre: **PT = stima lanci**
+    (`estimatedPitches`, formula di Tango `3.3·BF + 1.5·SO + 2.2·BB`) — stima
+    DETERMINISTICA (nessun RNG, nessun impatto sulla calibrazione) che cresce con
+    battitori affrontati, valide, BB e SO, così si percepisce l'affaticamento; il
+    numero vira all'ambra/rosso oltre soglie tarate sul ruolo (SP vs rilievo).
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
     in attacco Battuta / Bunt / Ruba / **Mob & corri** (hit-and-run, se corridore
-    in 1ª e 2ª libera) / **Pinch-hit** (menu panchina); in difesa Lancia / Base
-    int. / **Interni dentro** (se corridore in 3ª e <2 out) / Cambio lanc.
+    in 1ª e 2ª libera) / **Pinch-hit** / **Pinch-run** (se c'è un corridore); in
+    difesa Lancia / Base int. / **Interni dentro** (se corridore in 3ª e <2 out) /
+    **Cambio lanc.** / **Cambio dif.**
+  - **Sostituzioni — modale in stile roster** (`SubModal`). I vecchi menu a
+    discesa (nascosti dietro la barra) sono sostituiti da un **popup ad hoc** che
+    mostra il pool giusto con **OVR e caratteristiche** (come una mini-scheda
+    roster) e i nomi cliccabili aprono la scheda giocatore:
+    - **Pinch-hit** (`pinchHit`): panchina → battitore corrente.
+    - **Pinch-run** (`pinchRun`): scegli il corridore in base → panchina.
+    - **Cambio lanc.** (`changePitcher`): bullpen (rilievi disponibili).
+    - **Cambio dif.** (`substituteFielder`): scegli il difensore che esce →
+      panchina; il sostituto ne eredita ruolo e slot in battuta.
+    Cambio lanciatore e difensore sono disponibili **per tutta la fase difensiva**
+    (non solo appena prima del lancio). Le sostituzioni non consumano il turno.
+    Motore in `engine/game.ts`; test in `engine/__tests__/live.test.ts`.
   - A partita finita, **overlay del risultato** con Recap/Nuova partita.
 
 Il campo generato disegna **solo il terreno di gioco** (niente tribune/cielo
