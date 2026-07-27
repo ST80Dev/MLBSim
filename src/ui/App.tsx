@@ -19,7 +19,7 @@ import {
   pinchHit,
   setInfieldIn,
 } from '../engine/game';
-import { batterOverall, pitcherOverall, RATING_MIN, RATING_AVG } from '../engine/ratings';
+import { batterOverall, pitcherOverall, RATING_AVG } from '../engine/ratings';
 import { disambiguateLastNames } from '../engine/names';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import { teamSynthesis, staffSynthesis } from '../engine/teamRatings';
@@ -79,7 +79,7 @@ import {
   CALIBRATION_LABEL,
 } from '../data/stadiumCalibration';
 import type { FieldCalibration, NumericCalKey } from '../data/stadiumCalibration';
-import { gameSeed, newRandomSeed, ratingColor, stars } from './format';
+import { gameSeed, newRandomSeed, ratingColor } from './format';
 import { Diamond, computeMarkers } from './Diamond';
 import {
   batterStatLine,
@@ -1605,7 +1605,9 @@ function PinchHitMenu({
               }}
             >
               <span className="pos">{b.position}</span> {b.name}
-              <span className="pchange-ovr">{stars(batterOverall(b.ratings))}</span>
+              <span className="pchange-ovr">
+                <OvrBadge overall={batterOverall(b.ratings)} />
+              </span>
             </button>
           ))}
         </div>
@@ -1642,7 +1644,9 @@ function PitcherChange({
               }}
             >
               <span className="pos">{p.role}</span> {p.name}
-              <span className="pchange-ovr">{stars(pitcherOverall(p.ratings))}</span>
+              <span className="pchange-ovr">
+                <OvrBadge overall={pitcherOverall(p.ratings)} />
+              </span>
             </button>
           ))}
         </div>
@@ -2334,7 +2338,7 @@ function PlayerModal({
               <span className="pm-meta">{player.age} anni · {salaryFmt(player.salary)}</span>
             </div>
             <div className="pm-ovr">
-              <Stars overall={overall} />
+              <OvrBadge overall={overall} />
               <span className="pm-ovr-n" style={{ color: ratingColor(overall) }}>
                 {overall}
               </span>
@@ -2401,15 +2405,15 @@ function SynthBadges({ synth, staff }: { synth: TeamSynth; staff: number }) {
 }
 
 /** Voto in stelle 1..5 dall'overall: piene evidenti, vuote smorzate. */
-function Stars({ overall }: { overall: number }) {
-  const n = Math.max(1, Math.min(5, Math.round((overall - RATING_MIN) / 15) + 1));
+/**
+ * Rating generale numerico in una card colorata in tono con la forza (testo
+ * bianco grassetto), come le celle delle singole caratteristiche: stima precisa,
+ * al posto delle stelle (troppo grossolane).
+ */
+function OvrBadge({ overall }: { overall: number }) {
   return (
-    <span className="stars" title={`${overall} OVR`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < n ? 'st full' : 'st empty'}>
-          {i < n ? '★' : '☆'}
-        </span>
-      ))}
+    <span className="ovr-badge" style={{ background: ratingColor(overall) }} title={`${overall} OVR`}>
+      {overall}
     </span>
   );
 }
@@ -2847,7 +2851,7 @@ function RosterPage({
           </button>
         )}
       </td>
-      <td className="ovr"><Stars overall={pitcherOverall(p.ratings)} /></td>
+      <td className="ovr"><OvrBadge overall={pitcherOverall(p.ratings)} /></td>
       <td>{p.age}</td>
       {pitStatCells(p)}
     </tr>
@@ -3029,7 +3033,7 @@ function RosterPage({
                           ⠿ <PlayerLink player={b} pos={arr.defense[b.id] ?? b.position} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
@@ -3072,7 +3076,7 @@ function RosterPage({
                           ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
@@ -3135,7 +3139,7 @@ function RosterPage({
                               ⠿ <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
                             </td>
                             <td className="roles">{rolesOf(b)}</td>
-                            <td className="ovr"><Stars overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
+                            <td className="ovr"><OvrBadge overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
                             <td className="age">{b.age}</td>
                             {batDefCells(b, pos)}
                           </tr>
@@ -3178,7 +3182,7 @@ function RosterPage({
                             ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
                           </td>
                           <td className="roles">{rolesOf(b)}</td>
-                          <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                          <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
                           <td className="age">{b.age}</td>
                           {batDefCells(b, b.position)}
                         </tr>
