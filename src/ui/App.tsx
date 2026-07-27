@@ -2453,6 +2453,51 @@ function OvrBadge({ overall }: { overall: number }) {
   );
 }
 
+// Percentuale 0-100 di un rating sulla scala 40-100 (per le barre).
+const ratingPct = (v: number) => clamp01((v - 40) / 60, 0, 1) * 100;
+
+// Barra OVR mini: il riempimento (colore del rating) è l'overall corrente; se il
+// tetto di crescita (potential) lo supera, il tratto fino al potenziale resta
+// visibile come segmento più chiaro = "spazio di crescita". Solo info di corredo.
+function OvrBar({ overall, potential }: { overall: number; potential: number }) {
+  const head = potential > overall;
+  return (
+    <span className="ovr-bar" title={head ? `OVR ${overall} · potenziale ${potential}` : `OVR ${overall}`}>
+      {head && <span className="ovr-bar-pot" style={{ width: `${ratingPct(potential)}%` }} />}
+      <span className="ovr-bar-fill" style={{ width: `${ratingPct(overall)}%`, background: ratingColor(overall) }} />
+    </span>
+  );
+}
+
+// Colonna DEDICATA per la barra OVR (fissa, allineata verticalmente riga per
+// riga: niente più barre "a scorrimento" dopo nomi di lunghezza diversa).
+function OvrBarCell({ overall, potential }: { overall: number; potential: number }) {
+  return (
+    <td className="ovrbar-c">
+      <OvrBar overall={overall} potential={potential} />
+    </td>
+  );
+}
+
+// Colonna DEDICATA per il potenziale (tetto di crescita 40-100). Mostra SEMPRE un
+// numero: il potenziale se c'è margine (con freccetta ▲, tinta verde tenue), o lo
+// stesso overall quando non c'è (tinta grigia neutra). Formato volutamente diverso
+// dal badge OVR per non confonderlo a colpo d'occhio: è info di corredo.
+function PotCell({ overall, potential }: { overall: number; potential: number }) {
+  const max = Math.max(overall, potential);
+  const grows = max > overall;
+  return (
+    <td className="pot-c">
+      <span
+        className={`pot-num${grows ? ' up' : ''}`}
+        title={grows ? `Potenziale ${max} — tetto di crescita` : 'Al tetto di crescita (nessun margine)'}
+      >
+        {grows ? `▲${max}` : max}
+      </span>
+    </td>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Pagina "Roster": gestione rosa della squadra gestita, anche schermata di
 // preparazione partita. Linguette Fielders / Pitchers. Le mosse si fanno per
@@ -2575,6 +2620,161 @@ const BAT_DEF_RATING_COLS = ['DIF', 'BRA', 'VEL'];
 const PIT_COLS = ['W', 'L', 'G', 'GS', 'IP', 'ERA', 'H', 'BB', 'K', 'SVO', 'SV', 'WHIP', 'K/9'];
 const PIT_RATING_COLS = ['DOM', 'CTR', 'MOV', 'PAT', 'RES', 'DIF'];
 
+// Legenda delle sigle mostrate nel roster. Per le DOTI (rating) la descrizione
+// dice SU COSA INFLUISCONO nel motore (fonte: docs/players-and-ratings.md); per
+// le STATISTICHE dice cosa rappresentano. Divisa per sezione (attacco / difesa /
+// lancio) cosi' l'icona "i" a fianco di ogni tabella apre solo il pezzo pertinente.
+type GlossItem = { k: string; name: string; desc: string };
+type GlossBlock = { title: string; kind: 'rating' | 'stat'; items: GlossItem[] };
+const GLOSSARY: Record<'bat' | 'def' | 'pit', GlossBlock[]> = {
+  bat: [
+    {
+      title: 'Doti offensive (scala 40-100, 70 = media di lega)',
+      kind: 'rating',
+      items: [
+        { k: 'CON', name: 'Contatto', desc: 'battute valide e media: più singoli, meno strikeout (la parte "AVG").' },
+        { k: 'POT', name: 'Potenza', desc: 'extrabase e fuoricampo (la parte "SLG").' },
+        { k: 'OCC', name: 'Occhio', desc: 'basi ball: alza l\'OBP e limita un po\' gli strikeout.' },
+        { k: 'VEL', name: 'Velocità', desc: 'rubate, tripli e basi extra in corsa.' },
+      ],
+    },
+    {
+      title: 'Statistiche offensive',
+      kind: 'stat',
+      items: [
+        { k: 'G', name: 'Gare', desc: 'partite giocate.' },
+        { k: 'AVG', name: 'Media battuta', desc: 'valide / turni ufficiali.' },
+        { k: 'OBP', name: 'On-base %', desc: 'quante volte raggiunge la base (valide + BB su arrivi al piatto).' },
+        { k: 'SLG', name: 'Slugging %', desc: 'basi totali per turno: pesa gli extrabase.' },
+        { k: 'H', name: 'Valide', desc: 'battute valide totali.' },
+        { k: '2B', name: 'Doppi', desc: 'battute da due basi.' },
+        { k: '3B', name: 'Tripli', desc: 'battute da tre basi.' },
+        { k: 'HR', name: 'Fuoricampo', desc: 'home run.' },
+        { k: 'RBI', name: 'Punti battuti a casa', desc: 'corridori mandati a punto.' },
+        { k: 'BB', name: 'Basi ball', desc: 'basi su ball (walk).' },
+        { k: 'SO', name: 'Strikeout', desc: 'eliminazioni al piatto (K).' },
+        { k: 'SB', name: 'Basi rubate', desc: 'rubate riuscite.' },
+      ],
+    },
+  ],
+  def: [
+    {
+      title: 'Doti difensive (scala 40-100 · variano con la casella giocata)',
+      kind: 'rating',
+      items: [
+        { k: 'DIF', name: 'Difesa', desc: 'palle in gioco trasformate in out e meno errori; dipende dalla casella coperta.' },
+        { k: 'BRA', name: 'Braccio', desc: 'elimina i ladri di base (ricevitore) e gli assist dagli esterni.' },
+        { k: 'VEL', name: 'Velocità', desc: 'copertura di campo e corsa verso la palla.' },
+      ],
+    },
+    {
+      title: 'Statistiche difensive (stima: la difesa non è ancora simulata dal motore)',
+      kind: 'stat',
+      items: [
+        { k: 'G', name: 'Gare', desc: 'partite giocate.' },
+        { k: 'E', name: 'Errori', desc: 'giocate difensive sbagliate.' },
+        { k: 'A', name: 'Assist', desc: 'tocchi che portano a un\'eliminazione altrui.' },
+        { k: 'PO', name: 'Put-out', desc: 'eliminazioni dirette (presa al volo, out in base).' },
+        { k: 'FLD%', name: 'Fielding %', desc: 'giocate pulite su totali (PO+A su PO+A+E).' },
+      ],
+    },
+  ],
+  pit: [
+    {
+      title: 'Doti del lanciatore (scala 40-100, 70 = media di lega)',
+      kind: 'rating',
+      items: [
+        { k: 'DOM', name: 'Dominio (stuff)', desc: 'strikeout: più K, meno palle in gioco.' },
+        { k: 'CTR', name: 'Controllo', desc: 'pochi base ball concessi.' },
+        { k: 'MOV', name: 'Movimento', desc: 'poche battute valide concesse sulle palle in gioco.' },
+        { k: 'PAT', name: 'Palle a terra', desc: 'induce battute rasoterra: pochi fuoricampo concessi e più doppi giochi.' },
+        { k: 'RES', name: 'Resistenza', desc: 'quanti battitori regge prima di calare (durata sul monte).' },
+        { k: 'DIF', name: 'Difesa', desc: 'tiene i corridori (hold) e difende sui bunt.' },
+      ],
+    },
+    {
+      title: 'Statistiche di lancio',
+      kind: 'stat',
+      items: [
+        { k: 'W', name: 'Vittorie', desc: 'vittorie accreditate.' },
+        { k: 'L', name: 'Sconfitte', desc: 'sconfitte accreditate.' },
+        { k: 'G', name: 'Presenze', desc: 'partite in cui ha lanciato.' },
+        { k: 'GS', name: 'Partenze', desc: 'partite iniziate da starter (games started).' },
+        { k: 'IP', name: 'Inning lanciati', desc: 'riprese completate (.1/.2 = 1/3, 2/3).' },
+        { k: 'ERA', name: 'Media PGL', desc: 'punti guadagnati subiti ogni 9 inning: risultato di contesto, non dote diretta.' },
+        { k: 'H', name: 'Valide concesse', desc: 'battute valide subite.' },
+        { k: 'BB', name: 'Basi ball concesse', desc: 'basi su ball regalate.' },
+        { k: 'K', name: 'Strikeout', desc: 'battitori eliminati al piatto.' },
+        { k: 'SVO', name: 'Opportunità salvezza', desc: 'occasioni di save affrontate.' },
+        { k: 'SV', name: 'Salvezze', desc: 'save convertiti.' },
+        { k: 'WHIP', name: 'WHIP', desc: '(basi ball + valide) per inning: baserunner concessi.' },
+        { k: 'K/9', name: 'K per 9 inning', desc: 'strikeout ogni 9 riprese.' },
+      ],
+    },
+  ],
+};
+
+/** Modale-legenda: spiega le sigle di una sezione (attacco / difesa / lancio). */
+function StatLegend({ section, onClose }: { section: 'bat' | 'def' | 'pit'; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const title = section === 'bat' ? 'Legenda — Attacco' : section === 'def' ? 'Legenda — Difesa' : 'Legenda — Lancio';
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal legend" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">{title}</div>
+          <button className="modal-close" onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="modal-body legend-body">
+          {GLOSSARY[section].map((block) => (
+            <div className="legend-block" key={block.title}>
+              <div className="legend-block-title">{block.title}</div>
+              <dl className="legend-dl">
+                {block.items.map((it) => (
+                  <div className="legend-row" key={it.k}>
+                    <dt className={`legend-abbr ${block.kind}`}>{it.k}</dt>
+                    <dd className="legend-def">
+                      <b>{it.name}</b> — {it.desc}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
+          <p className="muted pm-note">
+            Le <b>doti</b> (40-100) sono la fonte di verità e guidano ciò che il giocatore
+            controlla; le <b>statistiche</b> sono un risultato simulato. ERA e Vittorie dipendono
+            anche dal contesto (difesa, stadio, supporto), non solo dal talento.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Iconcina "i" cliccabile da mettere a fianco della testata di una tabella. */
+function InfoDot({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="info-dot"
+      onClick={onClick}
+      aria-label="Cosa significano le sigle"
+      title="Cosa significano le sigle"
+    >
+      i
+    </button>
+  );
+}
+
 // Posizioni difensive sul campo semplificato (percentuali dentro il riquadro).
 // Le CASELLE sono FISSE: si spostano i giocatori. Il DH sta fuori dal diamante.
 const FIELD_LAYOUT: Array<{ pos: Position; x: number; y: number }> = [
@@ -2611,6 +2811,27 @@ function DefenseFieldSVG() {
   );
 }
 
+/**
+ * Ordina `pool` secondo la lista di id preferiti `pref` (quelli noti nell'ordine
+ * indicato, poi il resto nell'ordine originale). Usato per le riserve battitori:
+ * l'ordine scelto dal manager e' stabile e i nuovi arrivi finiscono in coda.
+ */
+function orderByPref<T extends { id: string }>(pool: T[], pref?: string[]): T[] {
+  if (!pref || pref.length === 0) return pool;
+  const byId = new Map(pool.map((x) => [x.id, x]));
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const id of pref) {
+    const x = byId.get(id);
+    if (x && !seen.has(id)) {
+      out.push(x);
+      seen.add(id);
+    }
+  }
+  for (const x of pool) if (!seen.has(x.id)) out.push(x);
+  return out;
+}
+
 function RosterPage({
   team,
   seed,
@@ -2642,6 +2863,7 @@ function RosterPage({
   const [statMode, setStatMode] = useState<RosterStat>('ratings');
   const [drag, setDrag] = useState<{ id: string; from: string } | null>(null);
   const [over, setOver] = useState<string | null>(null); // bersaglio sotto il cursore
+  const [legend, setLegend] = useState<'bat' | 'def' | 'pit' | null>(null); // popup sigle
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const batters = rosterBatters(team);
@@ -2650,7 +2872,11 @@ function RosterPage({
   const pById = new Map(pitchers.map((p) => [p.id, p]));
   const lineup = arr.order.map((id) => bById.get(id)).filter(Boolean) as Batter[];
   const starterIds = new Set(arr.order);
-  const bench = batters.filter((b) => !starterIds.has(b.id));
+  // Riserve = non-titolari, ORDINATE secondo la preferenza salvata (benchOrder):
+  // gli id noti in quell'ordine, poi eventuali nuovi (es. un titolare appena
+  // scaricato) in coda. Cosi' l'ordine scelto dal manager e' stabile e persistente.
+  const benchPool = batters.filter((b) => !starterIds.has(b.id));
+  const bench = orderByPref(benchPool, arr.benchOrder);
   const check = validateArrangement(team, arr);
   const ratingsMode = statMode === 'ratings';
 
@@ -2708,17 +2934,16 @@ function RosterPage({
     }
     update({ defense, order: reconcileOrder(arr.order, Object.keys(defense)) });
   };
+  // Riordino dell'ordine di battuta come SWAP: i due slot si SCAMBIANO e tutti
+  // gli altri restano fermi (niente inserimento a scorrimento). La difesa, che e'
+  // indipendente dall'ordine di battuta, non viene toccata.
   const reorderBatting = (targetId: string, draggedId: string) => {
     if (draggedId === targetId) return;
-    const cur = arr.order;
-    const fromI = cur.indexOf(draggedId);
-    const toI = cur.indexOf(targetId);
+    const order = [...arr.order];
+    const fromI = order.indexOf(draggedId);
+    const toI = order.indexOf(targetId);
     if (fromI < 0 || toI < 0) return;
-    const order = cur.filter((id) => id !== draggedId);
-    // Scendendo si inserisce DOPO il target, salendo PRIMA: cosi' il riordino
-    // funziona in entrambe le direzioni (prima scendeva "una posizione corta").
-    const at = order.indexOf(targetId) + (fromI < toI ? 1 : 0);
-    order.splice(at, 0, draggedId);
+    [order[fromI], order[toI]] = [order[toI], order[fromI]];
     update({ order });
   };
   const substitute = (starterId: string, benchId: string) => {
@@ -2748,8 +2973,25 @@ function RosterPage({
     }
     setDrag(null);
   };
+  // Riordino delle riserve come SWAP: le due riserve si scambiano di posto nella
+  // preferenza (benchOrder), le altre restano ferme. Si parte dall'ordine mostrato.
+  const reorderBench = (targetId: string, draggedId: string) => {
+    if (draggedId === targetId) return;
+    const ids = bench.map((b) => b.id);
+    const fromI = ids.indexOf(draggedId);
+    const toI = ids.indexOf(targetId);
+    if (fromI < 0 || toI < 0) return;
+    [ids[fromI], ids[toI]] = [ids[toI], ids[fromI]];
+    update({ benchOrder: ids });
+  };
+  // Drop su una riga riserva: un TITOLARE trascinato qui (dalla lista battuta o
+  // dalla difesa) fa lo swap e scende; una RISERVA trascinata su un'altra riserva
+  // riordina la lista dei backup.
   const dropBenchRow = (benchId: string) => {
-    if (drag && drag.from === 'lineup') substitute(drag.id, benchId);
+    if (drag && drag.id !== benchId) {
+      if (arr.order.includes(drag.id)) substitute(drag.id, benchId);
+      else reorderBench(benchId, drag.id);
+    }
     setDrag(null);
   };
 
@@ -2759,6 +3001,22 @@ function RosterPage({
   const placePitcher = (toList: 'rotation' | 'bullpen' | 'avail', targetId?: string) => {
     if (!drag) return;
     const id = drag.id;
+    // Riordino DENTRO la stessa lista (rotazione o bullpen) = SWAP: i due si
+    // scambiano di posto, gli altri restano fermi. Cross-lista resta uno spostamento
+    // (il numero di lanciatori per lista e' variabile, non c'e' una casella fissa).
+    if (drag.from === toList && targetId && id !== targetId && toList !== 'avail') {
+      const swap = (list: string[]) => {
+        const a = list.indexOf(id);
+        const b = list.indexOf(targetId);
+        if (a < 0 || b < 0) return list;
+        const next = [...list];
+        [next[a], next[b]] = [next[b], next[a]];
+        return next;
+      };
+      update(toList === 'rotation' ? { rotation: swap(arr.rotation) } : { bullpen: swap(arr.bullpen) });
+      setDrag(null);
+      return;
+    }
     let rotation = arr.rotation.filter((x) => x !== id);
     let bullpen = arr.bullpen.filter((x) => x !== id);
     const insert = (list: string[]) => {
@@ -2893,6 +3151,8 @@ function RosterPage({
         )}
       </td>
       <td className="ovr"><OvrBadge overall={pitcherOverall(p.ratings)} /></td>
+      <OvrBarCell overall={pitcherOverall(p.ratings)} potential={p.potential} />
+      <PotCell overall={pitcherOverall(p.ratings)} potential={p.potential} />
       <td>{p.age}</td>
       {pitStatCells(p)}
     </tr>
@@ -2910,7 +3170,7 @@ function RosterPage({
       onDrop={() => placePitcher(list)}
     >
       <div className="card-title">
-        {title} <span className="card-sub">{hint}</span>
+        {title} <InfoDot onClick={() => setLegend('pit')} /> <span className="card-sub">{hint}</span>
       </div>
       <div className="roster-scroll">
         <table className="ratings roster-tbl">
@@ -2920,6 +3180,8 @@ function RosterPage({
               <th className="l">Lanciatore</th>
               <th>RUOLO</th>
               <th title="Valore totale">OVR</th>
+              <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+              <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
               <th title="Età">ETÀ</th>
               {pitCols.map((c) => (
                 <th key={c}>{c}</th>
@@ -2932,7 +3194,7 @@ function RosterPage({
             )}
             {rows.length === 0 && (
               <tr>
-                <td className="l" colSpan={5 + pitCols.length}>
+                <td className="l" colSpan={7 + pitCols.length}>
                   {list === 'avail' ? 'Nessun disponibile.' : 'Trascina qui un lanciatore.'}
                 </td>
               </tr>
@@ -3039,9 +3301,9 @@ function RosterPage({
           <>
             <div className="card">
               <div className="card-title">
-                Ordine di battuta{' '}
+                Ordine di battuta <InfoDot onClick={() => setLegend('bat')} />{' '}
                 <span className="card-sub">
-                  trascina per riordinare (su e giù); un disponibile su un titolare = sostituzione
+                  trascina un titolare su un altro per scambiarli; un disponibile su un titolare = sostituzione
                 </span>
               </div>
               <div className="roster-scroll">
@@ -3052,6 +3314,8 @@ function RosterPage({
                       <th className="l">Giocatore</th>
                       <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                       <th title="Valore totale">OVR</th>
+                      <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                      <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                       <th className="age-h" title="Età">ETÀ</th>
                       {batAtkCols.map((c) => (
                         <th key={c}>{c}</th>
@@ -3075,6 +3339,8 @@ function RosterPage({
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
                         <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                        <OvrBarCell overall={batterOverall(b.ratings)} potential={b.potential} />
+                        <PotCell overall={batterOverall(b.ratings)} potential={b.potential} />
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
@@ -3086,8 +3352,8 @@ function RosterPage({
 
             <div className="card" onDragOver={(e) => e.preventDefault()}>
               <div className="card-title">
-                Disponibili ({bench.length}){' '}
-                <span className="card-sub">trascina su un titolare per sostituire</span>
+                Disponibili ({bench.length}) <InfoDot onClick={() => setLegend('bat')} />{' '}
+                <span className="card-sub">trascina un titolare qui per scaricarlo · o riordina le riserve fra loro</span>
               </div>
               <div className="roster-scroll">
                 <table className="ratings roster-tbl">
@@ -3096,6 +3362,8 @@ function RosterPage({
                       <th className="l">Giocatore</th>
                       <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                       <th title="Valore totale">OVR</th>
+                      <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                      <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                       <th className="age-h" title="Età">ETÀ</th>
                       {batAtkCols.map((c) => (
                         <th key={c}>{c}</th>
@@ -3106,11 +3374,11 @@ function RosterPage({
                     {bench.map((b) => (
                       <tr
                         key={b.id}
-                        className={`drow${drag?.id === b.id ? ' dragging' : ''}`}
+                        className={`drow${drag?.id === b.id ? ' dragging' : ''}${over === b.id && drag?.id !== b.id ? ' over' : ''}`}
                         draggable
                         onDragStart={() => setDrag({ id: b.id, from: 'bench' })}
                         onDragEnd={() => { setDrag(null); setOver(null); }}
-                        onDragOver={(e) => e.preventDefault()}
+                        onDragOver={(e) => { e.preventDefault(); setOver(b.id); }}
                         onDrop={() => { dropBenchRow(b.id); setOver(null); }}
                       >
                         <td className="l grip">
@@ -3118,13 +3386,15 @@ function RosterPage({
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
                         <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                        <OvrBarCell overall={batterOverall(b.ratings)} potential={b.potential} />
+                        <PotCell overall={batterOverall(b.ratings)} potential={b.potential} />
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
                     ))}
                     {bench.length === 0 && (
                       <tr>
-                        <td className="l" colSpan={4 + batAtkCols.length}>
+                        <td className="l" colSpan={6 + batAtkCols.length}>
                           Nessun disponibile.
                         </td>
                       </tr>
@@ -3139,7 +3409,7 @@ function RosterPage({
             <div className="def-col-list">
               <div className="card">
                 <div className="card-title">
-                  Per posizione{' '}
+                  Per posizione <InfoDot onClick={() => setLegend('def')} />{' '}
                   <span className="card-sub">
                     dal ricevitore al n.9; trascina un nome (o una riserva) su una riga/casella
                   </span>
@@ -3152,6 +3422,8 @@ function RosterPage({
                         <th className="l">Giocatore</th>
                         <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                         <th title="Valore totale">OVR</th>
+                        <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                        <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                         <th className="age-h" title="Età">ETÀ</th>
                         {batDefCols.map((c) => (
                           <th key={c}>{c}</th>
@@ -3181,6 +3453,8 @@ function RosterPage({
                             </td>
                             <td className="roles">{rolesOf(b)}</td>
                             <td className="ovr"><OvrBadge overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
+                            <OvrBarCell overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} />
+                            <PotCell overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} />
                             <td className="age">{b.age}</td>
                             {batDefCells(b, pos)}
                           </tr>
@@ -3193,8 +3467,8 @@ function RosterPage({
 
               <div className="card">
                 <div className="card-title">
-                  Riserve ({bench.length}){' '}
-                  <span className="card-sub">trascina su una casella del campo per schierarle</span>
+                  Riserve ({bench.length}) <InfoDot onClick={() => setLegend('def')} />{' '}
+                  <span className="card-sub">trascina su una casella per schierarle · un titolare qui lo scarica · fra riserve = riordina</span>
                 </div>
                 <div className="roster-scroll">
                   <table className="ratings roster-tbl">
@@ -3203,6 +3477,8 @@ function RosterPage({
                         <th className="l">Giocatore</th>
                         <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                         <th title="Valore totale">OVR</th>
+                        <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                        <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                         <th className="age-h" title="Età">ETÀ</th>
                         {batDefCols.map((c) => (
                           <th key={c}>{c}</th>
@@ -3213,24 +3489,27 @@ function RosterPage({
                       {bench.map((b) => (
                         <tr
                           key={b.id}
-                          className={`drow${drag?.id === b.id ? ' dragging' : ''}`}
+                          className={`drow${drag?.id === b.id ? ' dragging' : ''}${over === b.id && drag?.id !== b.id ? ' over' : ''}`}
                           draggable
                           onDragStart={() => setDrag({ id: b.id, from: 'bench' })}
                           onDragEnd={() => { setDrag(null); setOver(null); }}
-                          onDragOver={(e) => e.preventDefault()}
+                          onDragOver={(e) => { e.preventDefault(); setOver(b.id); }}
+                          onDrop={() => { dropBenchRow(b.id); setOver(null); }}
                         >
                           <td className="l grip">
                             ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
                           </td>
                           <td className="roles">{rolesOf(b)}</td>
                           <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                          <OvrBarCell overall={batterOverall(b.ratings)} potential={b.potential} />
+                          <PotCell overall={batterOverall(b.ratings)} potential={b.potential} />
                           <td className="age">{b.age}</td>
                           {batDefCells(b, b.position)}
                         </tr>
                       ))}
                       {bench.length === 0 && (
                         <tr>
-                          <td className="l" colSpan={4 + batDefCols.length}>Nessuna riserva.</td>
+                          <td className="l" colSpan={6 + batDefCols.length}>Nessuna riserva.</td>
                         </tr>
                       )}
                     </tbody>
@@ -3415,6 +3694,8 @@ function RosterPage({
           {pitTable('Disponibili', 'trascina in rotazione o bullpen', 'avail', availP)}
         </>
       )}
+
+      {legend && <StatLegend section={legend} onClose={() => setLegend(null)} />}
     </div>
   );
 }
