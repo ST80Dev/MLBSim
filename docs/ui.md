@@ -163,12 +163,18 @@ rivalutato sulla casella via `ratingsAtPosition`, come il badge). La **posizione
 secondaria** non ha una colonna propria: è già nella colonna **RUOLI**
 (`rolesOf` → `SS/3B`). Fuori scope il menu Pinch-hit in partita.
 
-### Larghezza celle rating
+**Ordine colonne**: `# · Giocatore · ETÀ · RUOLI · OVR · barra · MAX · stat…`
+(l'età sta **a sinistra** del ruolo).
+
+### Larghezza tabella e celle rating
 
 Le card colorate dei rating (`.rat`) hanno **larghezza fissa** (~34px, quasi
-quadrate) scoped a `.roster-tbl`: prima la tabella al 100% distribuiva lo spazio
-in eccesso allungandole. Lo slack orizzontale lo assorbe ora la colonna
-**Giocatore** (`.l { width:100% }`), che libera la riga per il corredo qui sopra.
+quadrate) scoped a `.roster-tbl`. La tabella NON si stira più a tutta larghezza:
+`.roster-tbl { width:auto; margin-inline:auto }` la dimensiona sul **contenuto**
+e la **centra** nel contenitore — così su desktop largo non resta un enorme vuoto
+fra i nomi e le stat, e la tabella è sempre centrata (con molte colonne, se
+supera il contenitore, `.roster-scroll` scrolla). La colonna **Giocatore** è a
+larghezza-contenuto (non più `width:100%`).
 
 ### Legenda sigle (icona «i»)
 
