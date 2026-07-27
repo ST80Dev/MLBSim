@@ -2434,37 +2434,32 @@ function OvrBar({ overall, potential }: { overall: number; potential: number }) 
   );
 }
 
-// Potenziale ESPLICITO accanto all'OVR (tetto di crescita 40-100). Formato
-// volutamente diverso dal badge OVR — niente pill piena, testo piccolo con
-// freccetta e tinta tenue — così non si confonde a colpo d'occhio. Mostrato solo
-// quando c'è margine (potential > overall): un veterano "al tetto" non lo mostra.
-function PotTag({ overall, potential }: { overall: number; potential: number }) {
-  if (potential <= overall) return null;
+// Colonna DEDICATA per la barra OVR (fissa, allineata verticalmente riga per
+// riga: niente più barre "a scorrimento" dopo nomi di lunghezza diversa).
+function OvrBarCell({ overall, potential }: { overall: number; potential: number }) {
   return (
-    <span className="pot-tag" title={`Potenziale ${potential} — tetto di crescita`}>
-      ▲{potential}
-    </span>
+    <td className="ovrbar-c">
+      <OvrBar overall={overall} potential={potential} />
+    </td>
   );
 }
 
-// Corredo riga giocatore, nello spazio libero della cella nome: barra OVR +
-// (se esiste, solo battitori) posizione secondaria difensiva.
-function RowExtras({
-  overall,
-  potential,
-  secondary,
-}: {
-  overall: number;
-  potential: number;
-  secondary?: Position;
-}) {
+// Colonna DEDICATA per il potenziale (tetto di crescita 40-100). Mostra SEMPRE un
+// numero: il potenziale se c'è margine (con freccetta ▲, tinta verde tenue), o lo
+// stesso overall quando non c'è (tinta grigia neutra). Formato volutamente diverso
+// dal badge OVR per non confonderlo a colpo d'occhio: è info di corredo.
+function PotCell({ overall, potential }: { overall: number; potential: number }) {
+  const max = Math.max(overall, potential);
+  const grows = max > overall;
   return (
-    <span className="row-extras">
-      <OvrBar overall={overall} potential={potential} />
-      {secondary && (
-        <span className="sec-pos" title="Posizione secondaria (difesa)">⇄ {secondary}</span>
-      )}
-    </span>
+    <td className="pot-c">
+      <span
+        className={`pot-num${grows ? ' up' : ''}`}
+        title={grows ? `Potenziale ${max} — tetto di crescita` : 'Al tetto di crescita (nessun margine)'}
+      >
+        {grows ? `▲${max}` : max}
+      </span>
+    </td>
   );
 }
 
@@ -3096,7 +3091,6 @@ function RosterPage({
       <td className="l grip">
         ⠿ <PlayerLink player={p}>{p.name}</PlayerLink>
         {tag && <span className="tag">{tag}</span>}
-        <RowExtras overall={pitcherOverall(p.ratings)} potential={p.potential} />
       </td>
       <td className="roles">
         <span className="rolebadge">{p.role === 'CL' ? 'RP' : p.role}</span>
@@ -3115,10 +3109,9 @@ function RosterPage({
           </button>
         )}
       </td>
-      <td className="ovr">
-        <OvrBadge overall={pitcherOverall(p.ratings)} />
-        <PotTag overall={pitcherOverall(p.ratings)} potential={p.potential} />
-      </td>
+      <td className="ovr"><OvrBadge overall={pitcherOverall(p.ratings)} /></td>
+      <OvrBarCell overall={pitcherOverall(p.ratings)} potential={p.potential} />
+      <PotCell overall={pitcherOverall(p.ratings)} potential={p.potential} />
       <td>{p.age}</td>
       {pitStatCells(p)}
     </tr>
@@ -3146,6 +3139,8 @@ function RosterPage({
               <th className="l">Lanciatore</th>
               <th>RUOLO</th>
               <th title="Valore totale">OVR</th>
+              <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+              <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
               <th title="Età">ETÀ</th>
               {pitCols.map((c) => (
                 <th key={c}>{c}</th>
@@ -3158,7 +3153,7 @@ function RosterPage({
             )}
             {rows.length === 0 && (
               <tr>
-                <td className="l" colSpan={5 + pitCols.length}>
+                <td className="l" colSpan={7 + pitCols.length}>
                   {list === 'avail' ? 'Nessun disponibile.' : 'Trascina qui un lanciatore.'}
                 </td>
               </tr>
@@ -3278,6 +3273,8 @@ function RosterPage({
                       <th className="l">Giocatore</th>
                       <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                       <th title="Valore totale">OVR</th>
+                      <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                      <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                       <th className="age-h" title="Età">ETÀ</th>
                       {batAtkCols.map((c) => (
                         <th key={c}>{c}</th>
@@ -3298,10 +3295,11 @@ function RosterPage({
                         <td className="n">{i + 1}</td>
                         <td className="l grip">
                           ⠿ <PlayerLink player={b} pos={arr.defense[b.id] ?? b.position} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
-                          <RowExtras overall={batterOverall(b.ratings)} potential={b.potential} secondary={b.secondaryPosition} />
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /><PotTag overall={batterOverall(b.ratings)} potential={b.potential} /></td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                        <OvrBarCell overall={batterOverall(b.ratings)} potential={b.potential} />
+                        <PotCell overall={batterOverall(b.ratings)} potential={b.potential} />
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
@@ -3323,6 +3321,8 @@ function RosterPage({
                       <th className="l">Giocatore</th>
                       <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                       <th title="Valore totale">OVR</th>
+                      <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                      <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                       <th className="age-h" title="Età">ETÀ</th>
                       {batAtkCols.map((c) => (
                         <th key={c}>{c}</th>
@@ -3342,17 +3342,18 @@ function RosterPage({
                       >
                         <td className="l grip">
                           ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
-                          <RowExtras overall={batterOverall(b.ratings)} potential={b.potential} secondary={b.secondaryPosition} />
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /><PotTag overall={batterOverall(b.ratings)} potential={b.potential} /></td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                        <OvrBarCell overall={batterOverall(b.ratings)} potential={b.potential} />
+                        <PotCell overall={batterOverall(b.ratings)} potential={b.potential} />
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
                     ))}
                     {bench.length === 0 && (
                       <tr>
-                        <td className="l" colSpan={4 + batAtkCols.length}>
+                        <td className="l" colSpan={6 + batAtkCols.length}>
                           Nessun disponibile.
                         </td>
                       </tr>
@@ -3380,6 +3381,8 @@ function RosterPage({
                         <th className="l">Giocatore</th>
                         <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                         <th title="Valore totale">OVR</th>
+                        <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                        <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                         <th className="age-h" title="Età">ETÀ</th>
                         {batDefCols.map((c) => (
                           <th key={c}>{c}</th>
@@ -3406,10 +3409,11 @@ function RosterPage({
                             </td>
                             <td className="l grip">
                               ⠿ <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
-                              <RowExtras overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} secondary={b.secondaryPosition} />
                             </td>
                             <td className="roles">{rolesOf(b)}</td>
-                            <td className="ovr"><OvrBadge overall={batterOverall(ratingsAtPosition(b, pos))} /><PotTag overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} /></td>
+                            <td className="ovr"><OvrBadge overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
+                            <OvrBarCell overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} />
+                            <PotCell overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} />
                             <td className="age">{b.age}</td>
                             {batDefCells(b, pos)}
                           </tr>
@@ -3432,6 +3436,8 @@ function RosterPage({
                         <th className="l">Giocatore</th>
                         <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                         <th title="Valore totale">OVR</th>
+                        <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                        <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                         <th className="age-h" title="Età">ETÀ</th>
                         {batDefCols.map((c) => (
                           <th key={c}>{c}</th>
@@ -3451,17 +3457,18 @@ function RosterPage({
                         >
                           <td className="l grip">
                             ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
-                            <RowExtras overall={batterOverall(b.ratings)} potential={b.potential} secondary={b.secondaryPosition} />
                           </td>
                           <td className="roles">{rolesOf(b)}</td>
-                          <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /><PotTag overall={batterOverall(b.ratings)} potential={b.potential} /></td>
+                          <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                          <OvrBarCell overall={batterOverall(b.ratings)} potential={b.potential} />
+                          <PotCell overall={batterOverall(b.ratings)} potential={b.potential} />
                           <td className="age">{b.age}</td>
                           {batDefCells(b, b.position)}
                         </tr>
                       ))}
                       {bench.length === 0 && (
                         <tr>
-                          <td className="l" colSpan={4 + batDefCols.length}>Nessuna riserva.</td>
+                          <td className="l" colSpan={6 + batDefCols.length}>Nessuna riserva.</td>
                         </tr>
                       )}
                     </tbody>

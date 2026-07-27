@@ -139,27 +139,29 @@ scambiano di posto, gli altri restano fermi — mai inserimento a scorrimento);
   lista è variabile: nessuna casella fissa), `placePitcher` distingue i due casi
   da `drag.from` vs lista di destinazione.
 
-### Corredo riga giocatore (barra OVR · pos. secondaria · potenziale)
+### Colonne OVR bar e MAX (potenziale)
 
-Nello spazio libero della cella nome (le celle rating sono ora a larghezza fissa,
-vedi sotto) ogni riga mostra info **di corredo**, tenui, che non rubano
-attenzione al nome:
+Ogni elenco del roster ha, subito dopo la colonna **OVR**, due **colonne
+dedicate a larghezza fissa** (allineate verticalmente riga per riga — niente
+info impilate nella stessa cella, quindi zero disallineamenti):
 
-- **Mini-barra OVR** (`OvrBar`): riempimento colorato = overall corrente
-  (`ratingColor`); se il **potenziale** supera l'overall, il tratto fino al tetto
-  resta come segmento più chiaro = *spazio di crescita*. Scala 40-100 → 0-100%.
-- **Posizione secondaria** (`⇄ <ruolo>`): solo battitori con `secondaryPosition`.
-- **Potenziale esplicito** (`PotTag`, `▲<n>`) **accanto al badge OVR**: tetto di
-  crescita 40-100, in **formato distinto** (niente pill piena, più piccolo,
-  verdino tenue) per non confonderlo con l'OVR a colpo d'occhio. Mostrato **solo
-  se c'è margine** (`potential > overall`): un veterano al tetto non lo mostra.
-  Non esiste una "forma" da game-log: il potenziale è l'unica prospettiva reale
-  nei dati.
+- **Barra OVR** (`OvrBarCell`/`OvrBar`, header vuoto): riempimento colorato =
+  overall corrente (`ratingColor`); se il **potenziale** supera l'overall, il
+  tratto fino al tetto resta come segmento più chiaro = *spazio di crescita*.
+  Scala 40-100 → 0-100% (`ratingPct`).
+- **MAX** (`PotCell`, potenziale = tetto di crescita 40-100): mostra **sempre un
+  numero**. Con margine → `▲<pot>` in verde tenue; **al tetto** (`potential ≤
+  overall`) → lo **stesso numero dell'OVR** in grigio neutro. Formato distinto
+  dal badge OVR (niente pill piena, più piccolo) per non confonderlo a colpo
+  d'occhio. Non esiste una "forma" da game-log: il potenziale è l'unica
+  prospettiva reale nei dati. NB: l'etichetta è `MAX`, non `POT`, perché in
+  modalità *Caratteristiche* `POT` è già la **Potenza** del battitore.
 
-Presente in tutti gli elenchi del roster (Ordine di battuta, Disponibili, Per
-posizione, Riserve, tabelle lanciatori). L'overall usato è quello della riga (in
-Difesa è rivalutato sulla casella via `ratingsAtPosition`, come il badge). Fuori
-scope il menu Pinch-hit in partita.
+Presente in tutti gli elenchi (Ordine di battuta, Disponibili, Per posizione,
+Riserve, tabelle lanciatori); l'overall usato è quello della riga (in Difesa è
+rivalutato sulla casella via `ratingsAtPosition`, come il badge). La **posizione
+secondaria** non ha una colonna propria: è già nella colonna **RUOLI**
+(`rolesOf` → `SS/3B`). Fuori scope il menu Pinch-hit in partita.
 
 ### Larghezza celle rating
 
