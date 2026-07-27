@@ -709,28 +709,55 @@ table {
 }
 .sub-list {
   padding: 8px 12px 14px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  overflow: auto;
 }
 .sub-empty {
   padding: 22px;
   text-align: center;
   color: var(--muted);
 }
-/* Riga sostituto in stile roster. */
-.subrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+/* Elenco sostituti come tabella del Roster: colonne dote allineate. */
+.sub-tbl {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+.sub-tbl thead th {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0 8px 2px;
+  white-space: nowrap;
+}
+.sub-tbl thead th.l {
+  text-align: left;
+}
+.subrow > td {
   background: var(--card2);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 8px;
+  vertical-align: middle;
+}
+.subrow > td:first-child {
+  border-left: 1px solid var(--line);
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+}
+.subrow > td:last-child {
+  border-right: 1px solid var(--line);
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+.subrow-ovr-c {
+  text-align: center;
+  width: 1%;
 }
 .subrow-ovr {
-  flex: 0 0 auto;
+  display: inline-block;
   min-width: 30px;
   text-align: center;
   font-weight: 800;
@@ -740,9 +767,7 @@ table {
   padding: 3px 5px;
 }
 .subrow-id {
-  display: flex;
-  flex-direction: column;
-  min-width: 118px;
+  white-space: nowrap;
 }
 .subrow-name {
   font-weight: 700;
@@ -751,32 +776,23 @@ table {
 .subrow-sub {
   color: var(--muted);
   font-size: 11px;
+  margin-left: 8px;
 }
-.subrow-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  margin-left: auto;
+.subrow-stat {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
-.subrow-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  font-size: 11px;
-}
-.subrow-chip i {
-  color: var(--muted);
-  font-style: normal;
-  font-weight: 700;
-  font-size: 9.5px;
-  letter-spacing: 0.3px;
-}
-.subrow-chip b {
+.subrow-stat b {
   font-weight: 800;
-  font-size: 12.5px;
+  font-size: 13px;
+}
+.subrow-pick-c {
+  text-align: right;
+  width: 1%;
 }
 .subrow-pick {
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 /* Primo passo: chi esce (difensore / corridore). */
 .sub-targets {
@@ -2979,22 +2995,6 @@ table {
   gap: 10px;
   flex-wrap: wrap;
 }
-.dash-pick {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 11px;
-  color: var(--muted);
-}
-.dash-pick select {
-  background: var(--panel);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 5px 7px;
-  font-size: 13px;
-  min-width: 220px;
-}
 .next-game {
   font-size: 14px;
 }
@@ -3378,22 +3378,22 @@ table {
 }
 .match-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
 }
 .match-card {
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 14px;
+  padding: 16px 18px;
   background: var(--card2);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 .match-card.current {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset;
-  background: rgba(79, 157, 255, 0.1);
+  box-shadow: 0 0 0 2px var(--accent) inset;
+  background: rgba(79, 157, 255, 0.12);
 }
 .match-card.locked {
   opacity: 0.62;
@@ -3402,46 +3402,52 @@ table {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 11px;
+  font-size: 13px;
 }
 .mc-day {
   font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.01em;
 }
 .mc-loc {
   color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .mc-teams {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 10px;
   font-family: var(--mono);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 20px;
 }
 .mc-team {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
 }
 .mc-rec {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
 }
 .mc-vs {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 700;
 }
 .mc-sp {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  font-size: 11px;
+  gap: 8px;
+  font-size: 13px;
   color: var(--muted);
   border-top: 1px dashed var(--line);
-  padding-top: 6px;
+  padding-top: 10px;
 }
 .mc-spn {
   flex: 1;
@@ -3454,25 +3460,30 @@ table {
   text-align: right;
 }
 .mc-vs2 {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.05em;
   border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 0 3px;
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 .mc-foot {
   display: flex;
   justify-content: center;
+  padding-top: 2px;
 }
 .btn.sm {
   padding: 4px 12px;
   font-size: 13px;
 }
+.match-card .btn.primary.sm {
+  padding: 8px 22px;
+  font-size: 15px;
+}
 .mc-res {
   font-family: var(--mono);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 16px;
 }
 .mc-res.w {
   color: var(--win);
@@ -3482,7 +3493,7 @@ table {
 }
 .mc-status.lock {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* --- Leaderboard di lega -------------------------------------------- */
@@ -3552,6 +3563,19 @@ table {
 
 /* Campo difensivo semplificato: caselle FISSE, giocatori spostabili. */
 /* Difesa: elenco+riserve a sinistra, campo a destra. */
+.lineup-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.lineup-layout > .card {
+  min-width: 0;
+  margin-bottom: 0;
+}
+@media (max-width: 1100px) {
+  .lineup-layout { grid-template-columns: 1fr; }
+}
 .def-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.95fr);
