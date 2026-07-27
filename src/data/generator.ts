@@ -15,7 +15,7 @@ import {
   deriveStamina,
   batterOverall,
   pitcherOverall,
-  salaryFromOverall,
+  salaryFor,
   clampRating,
   projectPotential,
   RATING_AVG,
@@ -222,7 +222,7 @@ function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position
     stats,
     age,
     potential: projectPotential(rng, ovr, age),
-    salary: salaryFromOverall(ovr),
+    salary: salaryFor(ovr, age),
     retired: false,
   };
 }
@@ -245,7 +245,7 @@ function makePitcher(rng: Rng, names: NameFactory, id: string, role: PitcherRole
     stamina: deriveStamina(ratings.stamina, role),
     age,
     potential: projectPotential(rng, ovr, age),
-    salary: salaryFromOverall(ovr),
+    salary: salaryFor(ovr, age),
     retired: false,
   };
 }

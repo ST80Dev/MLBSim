@@ -127,9 +127,40 @@ export function projectPotential(rng: Rng, overall: number, age: number): number
   return clampRating(overall + Math.max(0, boost));
 }
 
-/** Stipendio annuale (milioni) da un overall 40-100. */
+/**
+ * Curva BASE dello stipendio annuale (milioni) dall'overall 40-100.
+ *
+ * CALIBRAZIONE (vedi docs/franchise.md § Salary cap): l'esponente e' piu' dolce
+ * della prima versione e il tetto piu' basso, cosi' il monte-ingaggi MEDIO di
+ * squadra cade SOTTO il cap base (la vecchia 1.13/tetto-45 dava payroll ~2x il
+ * cap: il tetto non vincolava nulla). La forma resta esponenziale (le stelle
+ * costano molto piu' della media), solo compressa: lo spread fra squadre passa
+ * da ~10x a ~2.5-3x. Non toccare senza rimisurare col probe (scripts sotto).
+ */
 export function salaryFromOverall(ovr: number): number {
   // Riferimento "replacement level" = 10 punti sotto la media di lega.
-  const s = 0.7 * Math.pow(1.13, ovr - (RATING_AVG - 10));
-  return Math.round(clamp(s, 0.5, 45) * 10) / 10;
+  const s = 1.05 * Math.pow(1.085, ovr - (RATING_AVG - 10));
+  return Math.round(clamp(s, 0.5, 30) * 10) / 10;
+}
+
+/**
+ * Sconto gioventu' (modello "B-lite", vedi docs/franchise.md § Stipendi): un
+ * moltiplicatore funzione della SOLA eta', stateless — nessun contratto/arbitrato.
+ * Sale da ~0.4 a 21 anni a 1.0 a ~27 (poi 1.0). Rende il neo-draftato un asset a
+ * buon mercato che si apprezza mentre matura.
+ */
+export function youthFactor(age: number): number {
+  if (age >= 27) return 1;
+  if (age <= 21) return 0.4;
+  return 0.4 + ((age - 21) / 6) * 0.6;
+}
+
+/**
+ * Stipendio EFFETTIVO (milioni) = curva base × sconto gioventu'. E' la funzione
+ * usata ovunque (generatore, import storico, aging). Pavimento a 0.5 (minimo di
+ * lega): lo sconto non scende mai sotto il minimo.
+ */
+export function salaryFor(overall: number, age: number): number {
+  const s = salaryFromOverall(overall) * youthFactor(age);
+  return Math.round(Math.max(0.5, s) * 10) / 10;
 }

@@ -226,8 +226,8 @@ Conseguenze:
 
 ### C'è spazio aggregato? Sì, per costruzione
 
-Se la curva è calibrata così che il **payroll medio ≈ 0.85 × cap base**, allora
-`Σ stipendi ≈ 25.5 unità-cap` contro `Σ tetti ≈ 30`: **avanza spazio
+La curva è calibrata così che il **payroll medio ≈ 116M ≈ 0.77 × cap base
+(150M)**: `Σ stipendi ≈ 23 unità-cap` contro `Σ tetti ≈ 30` → **avanza spazio
 aggregato**, quindi un giocatore scaricato trova sempre una destinazione a
 stipendio adeguato. L'unico che non si ricolloca è il vero *replacement-level*,
 che nella realtà sarebbe fuori dalla lega comunque (churn fisiologico). **La

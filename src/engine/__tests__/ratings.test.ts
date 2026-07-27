@@ -4,6 +4,10 @@ import {
   derivePitcherStats,
   ratingMult,
   batterOverall,
+  salaryFromOverall,
+  salaryFor,
+  youthFactor,
+  RATING_AVG,
 } from '../ratings';
 import { advanceSeasonBatter } from '../aging';
 import { makeRng } from '../rng';
@@ -107,6 +111,36 @@ describe('evoluzione eta/potenziale', () => {
     const start = batterOverall(vet.ratings);
     for (let i = 0; i < 3; i++) advanceSeasonBatter(vet, rng);
     expect(batterOverall(vet.ratings)).toBeLessThan(start);
+  });
+});
+
+describe('stipendio: curva base + sconto gioventu (youthFactor)', () => {
+  it('la curva base cresce con l\'overall, con pavimento 0.5 e tetto 30', () => {
+    expect(salaryFromOverall(40)).toBe(0.5); // pavimento (minimo di lega)
+    expect(salaryFromOverall(100)).toBeGreaterThan(20); // stella molto pagata
+    expect(salaryFromOverall(100)).toBeLessThanOrEqual(30); // ma sotto il tetto
+    expect(salaryFromOverall(85)).toBeGreaterThan(salaryFromOverall(70));
+    expect(salaryFromOverall(70)).toBeGreaterThan(salaryFromOverall(60));
+  });
+
+  it('youthFactor: ~0.4 a 21, 1.0 dai 27 in su, monotono in mezzo', () => {
+    expect(youthFactor(21)).toBeCloseTo(0.4, 5);
+    expect(youthFactor(27)).toBe(1);
+    expect(youthFactor(35)).toBe(1);
+    expect(youthFactor(24)).toBeGreaterThan(youthFactor(22));
+    expect(youthFactor(24)).toBeLessThan(youthFactor(26));
+  });
+
+  it('a parita\' di overall il giovane costa MENO del maturo', () => {
+    const ovr = 88;
+    expect(salaryFor(ovr, 22)).toBeLessThan(salaryFor(ovr, 30));
+    // Il fenomeno 22enne e' un affare rispetto al pari-overall maturo.
+    expect(salaryFor(ovr, 22)).toBeCloseTo(salaryFromOverall(ovr) * youthFactor(22), 1);
+  });
+
+  it('mai sotto il minimo di lega (0.5)', () => {
+    expect(salaryFor(45, 21)).toBeGreaterThanOrEqual(0.5);
+    expect(salaryFor(RATING_AVG, 21)).toBeGreaterThanOrEqual(0.5);
   });
 });
 
