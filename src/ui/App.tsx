@@ -19,7 +19,7 @@ import {
   pinchHit,
   setInfieldIn,
 } from '../engine/game';
-import { batterOverall, pitcherOverall, RATING_MIN, RATING_AVG } from '../engine/ratings';
+import { batterOverall, pitcherOverall, RATING_AVG } from '../engine/ratings';
 import { disambiguateLastNames } from '../engine/names';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import { teamSynthesis, staffSynthesis } from '../engine/teamRatings';
@@ -33,7 +33,7 @@ import {
   rosterPitchers,
 } from '../engine/arrangement';
 import { saveStore } from '../data/persistence';
-import type { MatchArrangement, SaveMeta } from '../data/persistence';
+import type { MatchArrangement } from '../data/persistence';
 import {
   teamPayroll,
   capZone,
@@ -65,7 +65,7 @@ import {
   addBat,
   addPit,
 } from '../data/season';
-import type { SeasonState, SeasonBat, SeasonPit } from '../data/season';
+import type { SeasonState, SeasonBat, SeasonPit, WLRecord } from '../data/season';
 import { projectBatterSeason, projectPitcherSeason, SEASON_GAMES } from '../data/projection';
 import type { BatTier } from '../data/projection';
 import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
@@ -79,7 +79,7 @@ import {
   CALIBRATION_LABEL,
 } from '../data/stadiumCalibration';
 import type { FieldCalibration, NumericCalKey } from '../data/stadiumCalibration';
-import { gameSeed, newRandomSeed, ratingColor, stars } from './format';
+import { gameSeed, newRandomSeed, ratingColor } from './format';
 import { Diamond, computeMarkers } from './Diamond';
 import {
   batterStatLine,
@@ -94,8 +94,30 @@ import { scoreCode } from './scorecode';
 
 type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'calibrate' | 'game';
 
-/** Slot di salvataggio unico della Fase 2 (single-player, una carriera). */
-const SAVE_SLOT = 'principale';
+// Nota: le prime build usavano un unico slot 'principale'; quei salvataggi
+// compaiono comunque nell'hub via `saveStore.list()` (retro-compatibili). Le
+// nuove carriere usano slot dedicati (`newSlotId`).
+
+/** Id di slot unico per una nuova carriera. */
+function newSlotId(): string {
+  return `save-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/**
+ * Una partita salvata, arricchita per l'hub di caricamento: metadati dello slot +
+ * dati derivati (squadra gestita, anno, giornata, record) letti dal payload.
+ */
+interface SavedGame {
+  slot: string;
+  updatedAt: string;
+  source: LeagueSource;
+  seed?: number;
+  managedTeamId?: string;
+  team?: Team;
+  year: number;
+  day: number;
+  record: WLRecord;
+}
 
 /**
  * Applica un foglio partita alla squadra gestita ricostruendo lineup, difesa,
@@ -211,10 +233,13 @@ export function App() {
   // squadra → gioco (dashboard). Sotto 'play' vive la navigazione `view`.
   const [stage, setStage] = useState<'start' | 'league' | 'play'>('start');
   // Idratazione conclusa? Evita di lampeggiare la schermata iniziale prima di
-  // sapere se esiste un salvataggio da riprendere.
+  // aver elencato i salvataggi.
   const [booted, setBooted] = useState(false);
-  // Metadati del salvataggio esistente (per il pulsante "Carica").
-  const [saveMeta, setSaveMeta] = useState<SaveMeta | null>(null);
+  // Elenco delle partite salvate (multi-slot), per l'hub di caricamento.
+  const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
+  // Slot del salvataggio ATTIVO: ogni nuova carriera ne crea uno dedicato, così
+  // più partite coesistono invece di sovrascrivere un'unica cache.
+  const [currentSlot, setCurrentSlot] = useState<string>('');
   // Mini-popup giocatore: aperto da qualsiasi nome cliccabile via Context.
   const [playerModal, setPlayerModal] = useState<PlayerModalRequest | null>(null);
   const openPlayer = useCallback((req: PlayerModalRequest) => setPlayerModal(req), []);
@@ -245,36 +270,52 @@ export function App() {
       : { away: applied, home: opponent };
   }, [managedTeam, opponent, controlled, arrangement]);
 
-  // Idrata dal salvataggio (una volta). Se c'e' una carriera con squadra gestita
-  // si RIPRENDE (stage 'play'); altrimenti si mostra la schermata iniziale.
+  // Ricarica l'elenco delle partite salvate (multi-slot), arricchendo ogni slot
+  // con squadra/anno/giornata/record letti dal payload per l'hub di caricamento.
+  const refreshSaves = useCallback(async (): Promise<void> => {
+    try {
+      const metas = await saveStore.list();
+      const games = await Promise.all(
+        metas.map(async (m) => {
+          const rec = await saveStore.load(m.slot).catch(() => null);
+          const managedTeamId = rec?.payload.managedTeamId;
+          if (!rec || !managedTeamId) return null;
+          const pl = rec.payload;
+          const seas = pl.season ?? createSeason();
+          const team =
+            typeof pl.seed === 'number'
+              ? teamById(generateLeague(pl.seed), managedTeamId)
+              : undefined;
+          return {
+            slot: m.slot,
+            updatedAt: m.updatedAt,
+            source: pl.source ?? 'generated',
+            seed: pl.seed,
+            managedTeamId,
+            team,
+            year: seas.year,
+            day: seas.day,
+            record: recordOf(seas, managedTeamId),
+          } as SavedGame;
+        }),
+      );
+      setSavedGames(games.filter((g): g is SavedGame => g !== null));
+    } catch {
+      setSavedGames([]);
+    }
+  }, []);
+
+  // Elenca i salvataggi per l'hub (una volta). NON riprende in automatico: si
+  // parte SEMPRE dal pannello iniziale, dove si sceglie carica/nuova partita.
   useEffect(() => {
     let alive = true;
-    saveStore
-      .load(SAVE_SLOT)
-      .then((rec) => {
-        if (!alive) return;
-        if (rec) {
-          setSaveMeta({ slot: rec.slot, schemaVersion: rec.schemaVersion, updatedAt: rec.updatedAt });
-          if (typeof rec.payload.seed === 'number') setLeagueSeed(rec.payload.seed);
-          if (rec.payload.source) setSource(rec.payload.source);
-          if (rec.payload.lineups) setArrangements(rec.payload.lineups);
-          if (rec.payload.season) setSeason(rec.payload.season);
-          if (rec.payload.managedTeamId) {
-            setManagedId(rec.payload.managedTeamId);
-            setStage('play'); // carriera in corso: riprendi
-          }
-        }
-      })
-      .catch(() => {
-        /* offline o slot assente: si parte dalla schermata iniziale. */
-      })
-      .finally(() => {
-        if (alive) setBooted(true);
-      });
+    refreshSaves().finally(() => {
+      if (alive) setBooted(true);
+    });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [refreshSaves]);
 
   // Seme di gara deterministico dalla partita di calendario scelta.
   const gnum = activeGame
@@ -344,15 +385,16 @@ export function App() {
     !!activeGame && activeGame.phase === 'regular' && activeGame.id === currentRegular?.id;
 
   const persist = (arrs: Record<string, MatchArrangement>, seas: SeasonState) => {
+    if (!currentSlot) return; // nessuno slot attivo: niente da salvare
     saveStore
-      .save(SAVE_SLOT, { seed: leagueSeed, source, managedTeamId: myId, lineups: arrs, season: seas })
+      .save(currentSlot, { seed: leagueSeed, source, managedTeamId: myId, lineups: arrs, season: seas })
       .catch(() => {
         /* offline: si continua, si risalvera' piu' tardi. */
       });
   };
 
-  // Dalla schermata iniziale: avvia una NUOVA lega con la sorgente scelta e
-  // vai alla panoramica per scegliere la squadra da gestire.
+  // Dall'hub: avvia una NUOVA carriera con la sorgente scelta e vai alla
+  // panoramica per scegliere la squadra da gestire.
   const startNewLeague = (src: LeagueSource) => {
     setSource(src);
     setLeagueSeed(newRandomSeed());
@@ -360,23 +402,56 @@ export function App() {
     setArrangements({});
     setActiveGame(null);
     setSeason(createSeason());
+    setCurrentSlot(''); // lo slot nasce alla conferma della squadra
     setStage('league');
   };
 
-  // Dalla panoramica: conferma la squadra gestita, salva e passa alla dashboard.
+  // Dalla panoramica: conferma la squadra gestita, CREA un nuovo slot dedicato,
+  // salva e passa alla dashboard. Così più carriere coesistono.
   const pickManagedTeam = (id: string) => {
+    const slot = newSlotId();
+    setCurrentSlot(slot);
     setManagedId(id);
     setActiveGame(null);
     setStage('play');
     setView('home');
     saveStore
-      .save(SAVE_SLOT, { seed: leagueSeed, source, managedTeamId: id, lineups: arrangements, season })
-      .then(() =>
-        setSaveMeta({ slot: SAVE_SLOT, schemaVersion: 2, updatedAt: new Date().toISOString() }),
-      )
+      .save(slot, { seed: leagueSeed, source, managedTeamId: id, lineups: arrangements, season })
+      .then(() => refreshSaves())
       .catch(() => {
         /* offline: si continua. */
       });
+  };
+
+  // Dall'hub: carica una partita salvata e riprendi dalla dashboard.
+  const loadSave = async (game: SavedGame) => {
+    try {
+      const rec = await saveStore.load(game.slot);
+      if (!rec) return;
+      const pl = rec.payload;
+      if (typeof pl.seed === 'number') setLeagueSeed(pl.seed);
+      setSource(pl.source ?? 'generated');
+      setArrangements(pl.lineups ?? {});
+      setSeason(pl.season ?? createSeason());
+      setManagedId(pl.managedTeamId ?? '');
+      setCurrentSlot(game.slot);
+      setActiveGame(null);
+      setView('home');
+      setStage('play');
+    } catch {
+      /* offline o slot sparito: resta nell'hub. */
+    }
+  };
+
+  // Dall'hub: elimina una partita salvata.
+  const deleteSave = async (slot: string) => {
+    try {
+      await saveStore.remove(slot);
+    } catch {
+      /* offline: ignora */
+    }
+    if (slot === currentSlot) setCurrentSlot('');
+    await refreshSaves();
   };
 
   // Dal calendario: scegli la gara. "Gioca" apre la preparazione (Roster), da
@@ -404,7 +479,9 @@ export function App() {
   const saveManaged = async (arr: MatchArrangement) => {
     const next = { ...arrangements, [myId]: arr };
     setArrangements(next);
-    await saveStore.save(SAVE_SLOT, {
+    const slot = currentSlot || newSlotId();
+    if (!currentSlot) setCurrentSlot(slot);
+    await saveStore.save(slot, {
       seed: leagueSeed,
       source,
       managedTeamId: myId,
@@ -425,13 +502,11 @@ export function App() {
   if (stage === 'start') {
     return (
       <StartScreen
-        hasSave={!!managedId}
-        saveMeta={saveMeta}
+        savedGames={savedGames}
+        onLoad={loadSave}
+        onDelete={deleteSave}
         onNewGenerated={() => startNewLeague('generated')}
         onNewHistorical={() => startNewLeague('historical')}
-        onResume={() => {
-          if (managedId) setStage('play');
-        }}
       />
     );
   }
@@ -1530,7 +1605,9 @@ function PinchHitMenu({
               }}
             >
               <span className="pos">{b.position}</span> {b.name}
-              <span className="pchange-ovr">{stars(batterOverall(b.ratings))}</span>
+              <span className="pchange-ovr">
+                <OvrBadge overall={batterOverall(b.ratings)} />
+              </span>
             </button>
           ))}
         </div>
@@ -1567,7 +1644,9 @@ function PitcherChange({
               }}
             >
               <span className="pos">{p.role}</span> {p.name}
-              <span className="pchange-ovr">{stars(pitcherOverall(p.ratings))}</span>
+              <span className="pchange-ovr">
+                <OvrBadge overall={pitcherOverall(p.ratings)} />
+              </span>
             </button>
           ))}
         </div>
@@ -2259,7 +2338,7 @@ function PlayerModal({
               <span className="pm-meta">{player.age} anni · {salaryFmt(player.salary)}</span>
             </div>
             <div className="pm-ovr">
-              <Stars overall={overall} />
+              <OvrBadge overall={overall} />
               <span className="pm-ovr-n" style={{ color: ratingColor(overall) }}>
                 {overall}
               </span>
@@ -2326,15 +2405,15 @@ function SynthBadges({ synth, staff }: { synth: TeamSynth; staff: number }) {
 }
 
 /** Voto in stelle 1..5 dall'overall: piene evidenti, vuote smorzate. */
-function Stars({ overall }: { overall: number }) {
-  const n = Math.max(1, Math.min(5, Math.round((overall - RATING_MIN) / 15) + 1));
+/**
+ * Rating generale numerico in una card colorata in tono con la forza (testo
+ * bianco grassetto), come le celle delle singole caratteristiche: stima precisa,
+ * al posto delle stelle (troppo grossolane).
+ */
+function OvrBadge({ overall }: { overall: number }) {
   return (
-    <span className="stars" title={`${overall} OVR`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < n ? 'st full' : 'st empty'}>
-          {i < n ? '★' : '☆'}
-        </span>
-      ))}
+    <span className="ovr-badge" style={{ background: ratingColor(overall) }} title={`${overall} OVR`}>
+      {overall}
     </span>
   );
 }
@@ -2772,7 +2851,7 @@ function RosterPage({
           </button>
         )}
       </td>
-      <td className="ovr"><Stars overall={pitcherOverall(p.ratings)} /></td>
+      <td className="ovr"><OvrBadge overall={pitcherOverall(p.ratings)} /></td>
       <td>{p.age}</td>
       {pitStatCells(p)}
     </tr>
@@ -2954,7 +3033,7 @@ function RosterPage({
                           ⠿ <PlayerLink player={b} pos={arr.defense[b.id] ?? b.position} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
@@ -2997,7 +3076,7 @@ function RosterPage({
                           ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
@@ -3060,7 +3139,7 @@ function RosterPage({
                               ⠿ <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
                             </td>
                             <td className="roles">{rolesOf(b)}</td>
-                            <td className="ovr"><Stars overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
+                            <td className="ovr"><OvrBadge overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
                             <td className="age">{b.age}</td>
                             {batDefCells(b, pos)}
                           </tr>
@@ -3103,7 +3182,7 @@ function RosterPage({
                             ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
                           </td>
                           <td className="roles">{rolesOf(b)}</td>
-                          <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                          <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
                           <td className="age">{b.age}</td>
                           {batDefCells(b, b.position)}
                         </tr>
@@ -3403,8 +3482,8 @@ function HomePage({
           <button className="btn" onClick={onOverview} title="Vedi tutte le squadre della lega">
             📋 Panoramica lega
           </button>
-          <button className="btn" onClick={onNewLeague} title="Torna alla schermata iniziale (nuova partita)">
-            🔄 Nuova partita
+          <button className="btn" onClick={onNewLeague} title="Torna al menu (carica/nuova partita)">
+            🏠 Menu
           </button>
         </div>
       </div>
@@ -4012,19 +4091,71 @@ function StrengthBars({ s }: { s: TeamStrength }) {
   );
 }
 
-/** Schermata iniziale: nuova partita (generata/storica) o riprendi salvataggio. */
+/** Card di una partita salvata nell'hub (Continua / Elimina). */
+function SavedGameCard({
+  game,
+  onLoad,
+  onDelete,
+}: {
+  game: SavedGame;
+  onLoad: (g: SavedGame) => void;
+  onDelete: (slot: string) => void;
+}) {
+  const when = (() => {
+    try {
+      return new Date(game.updatedAt).toLocaleString('it-IT');
+    } catch {
+      return '';
+    }
+  })();
+  const label = game.team ? `${game.team.abbrev} — ${game.team.name}` : game.managedTeamId ?? '—';
+  const played = game.day > 0 || game.record.w + game.record.l > 0;
+  return (
+    <div className="save-card">
+      <div className="save-badge">
+        {game.team ? <TeamBadge team={game.team} size={34} /> : <span className="sc-icon">💾</span>}
+      </div>
+      <div className="save-info">
+        <div className="save-name">{label}</div>
+        <div className="save-meta">
+          {game.source === 'historical' ? 'Storica' : 'Generata'} · Anno {game.year} ·{' '}
+          {played ? `giornata ${game.day} · ${game.record.w}-${game.record.l}` : 'nuova'}
+        </div>
+        {when && <div className="save-when muted">{when}</div>}
+      </div>
+      <div className="save-actions">
+        <button className="btn primary" onClick={() => onLoad(game)}>
+          Continua ▸
+        </button>
+        <button
+          className="btn ghost danger"
+          title="Elimina partita"
+          onClick={() => {
+            if (confirm(`Eliminare la partita ${label}? L'operazione è irreversibile.`)) {
+              onDelete(game.slot);
+            }
+          }}
+        >
+          🗑
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Hub iniziale: continua una partita salvata (caricamento) o iniziane una nuova. */
 function StartScreen({
-  hasSave,
-  saveMeta,
+  savedGames,
+  onLoad,
+  onDelete,
   onNewGenerated,
   onNewHistorical,
-  onResume,
 }: {
-  hasSave: boolean;
-  saveMeta: SaveMeta | null;
+  savedGames: SavedGame[];
+  onLoad: (g: SavedGame) => void;
+  onDelete: (slot: string) => void;
   onNewGenerated: () => void;
   onNewHistorical: () => void;
-  onResume: () => void;
 }) {
   return (
     <div className="app start-app">
@@ -4036,43 +4167,41 @@ function StartScreen({
           Simulatore di baseball testuale · epoca alta offesa anni '90/2000
         </div>
       </div>
-      <div className="start-cards">
-        {hasSave && (
-          <button className="start-card resume" onClick={onResume}>
-            <div className="sc-icon">▶</div>
-            <div className="sc-title">Riprendi carriera</div>
+
+      {savedGames.length > 0 && (
+        <section className="start-section">
+          <div className="start-section-title">Continua una partita</div>
+          <div className="save-list">
+            {savedGames.map((g) => (
+              <SavedGameCard key={g.slot} game={g} onLoad={onLoad} onDelete={onDelete} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="start-section">
+        <div className="start-section-title">Nuova partita</div>
+        <div className="start-cards">
+          <button className="start-card" onClick={onNewGenerated}>
+            <div className="sc-icon">🎲</div>
+            <div className="sc-title">Nuova carriera generata</div>
             <div className="sc-desc">
-              {saveMeta
-                ? `Ultimo salvataggio: ${new Date(saveMeta.updatedAt).toLocaleString('it-IT')}`
-                : 'Continua la partita salvata'}
+              30 franchigie con rose procedurali da un seed casuale. Calendario 162 gare, cap a due
+              confini, evoluzione negli anni.
             </div>
           </button>
-        )}
-        <button className="start-card" onClick={onNewGenerated}>
-          <div className="sc-icon">🎲</div>
-          <div className="sc-title">Nuova lega generata</div>
-          <div className="sc-desc">
-            30 franchigie con rose procedurali da un seed casuale. Cap a due confini, parità
-            morbida.
-          </div>
-        </button>
-        <button className="start-card" onClick={onNewHistorical}>
-          <div className="sc-icon">📜</div>
-          <div className="sc-title">
-            Stagione storica <span className="badge-soon">anteprima</span>
-          </div>
-          <div className="sc-desc">
-            Seed d'archivio da un'annata reale (rose sbilanciate, cap morbido). Dataset ancora
-            limitato: pipeline completa in arrivo.
-          </div>
-        </button>
-      </div>
-      {hasSave && (
-        <p className="muted start-note">
-          Avviando una nuova partita il salvataggio corrente verrà sovrascritto quando sceglierai
-          la squadra.
-        </p>
-      )}
+          <button className="start-card" onClick={onNewHistorical}>
+            <div className="sc-icon">📜</div>
+            <div className="sc-title">
+              Stagione storica <span className="badge-soon">anteprima</span>
+            </div>
+            <div className="sc-desc">
+              Seed d'archivio da un'annata reale (rose sbilanciate, cap morbido). Dataset ancora
+              limitato: pipeline completa in arrivo.
+            </div>
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
