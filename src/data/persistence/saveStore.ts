@@ -9,14 +9,21 @@
 
 import type { MatchArrangement } from '../../engine/arrangement';
 import type { SeasonState } from '../season';
+import type { LeagueSource } from '../leagueMode';
 
 // Il "foglio partita" persistente e' definito nel motore (`MatchArrangement`):
 // la persistenza lo importa e basta, cosi' il motore resta la fonte di verita'
 // del formato e non dipende dal layer di salvataggio.
 export type { MatchArrangement } from '../../engine/arrangement';
 
-/** Versione corrente del formato di `GameSave`. Da alzare a ogni cambio incompatibile. */
-export const SCHEMA_VERSION = 1;
+/**
+ * Versione corrente del formato di `GameSave`. Da alzare a ogni cambio
+ * incompatibile.
+ *   - v2: aggiunge `seed` e `source` (la lega generata da seed diventa
+ *     riproducibile; prima il seed era casuale ad ogni avvio → ricaricare un
+ *     salvataggio rigenerava una lega DIVERSA da quella salvata).
+ */
+export const SCHEMA_VERSION = 2;
 
 /**
  * Stato di gioco persistente (fetta della Fase 2). Cresce nelle fasi
@@ -27,6 +34,17 @@ export const SCHEMA_VERSION = 1;
  * nel bundle, non stato del giocatore.
  */
 export interface GameSave {
+  /**
+   * Seed della lega: RENDE RIPRODUCIBILE la lega generata (le 30 rose). Senza,
+   * ricaricare rigenererebbe rose diverse da quelle salvate. Assente nei save v1.
+   */
+  seed?: number;
+  /**
+   * Sorgente della lega: `generated` (seed casuale) o `historical` (import
+   * d'archivio). Determina la politica di cap (vedi `leagueMode.ts`). Assente
+   * nei save v1 → trattato come `generated`.
+   */
+  source?: LeagueSource;
   /**
    * Squadra gestita resa persistente: sostituisce il selettore per-partita
    * "ospite/casa" della Fase 1 (che resta come strumento di test/debug).
