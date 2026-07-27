@@ -186,10 +186,21 @@ Monte-Carlo nello scratchpad (distribuzione del leader + % gemme), non a occhio.
 
 ## Varietà: fra squadre, fra compagni, code basse
 
-**Fra squadre** — `generateTeamFromFranchise` estrae un `teamTalent` (gauss, σ≈5)
-che sposta TUTTI i giocatori della rosa su/giù insieme: alcune franchigie sono da
-contender, altre da cantina (le stagioni non finiscono tutte sul .500). Centrato
-su 0 → la media di lega non si sposta.
+**Fra squadre** — `generateTeamFromFranchise` estrae un `teamTalent` (gauss,
+**σ≈3.8, clamp ±8**) che sposta TUTTI i giocatori della rosa su/giù insieme:
+alcune franchigie sono da contender, altre da cantina (le stagioni non finiscono
+tutte sul .500). Centrato su 0 → la media di lega non si sposta. La σ è
+**contenuta** e clampata di proposito: con la curva stipendi esponenziale una
+varianza troppo ampia dava rose irreali (tutti <70 vs tutti >75) e monte-ingaggi
+fuori scala ($45M vs $390M). Ora il gap di forza fra squadre è ~11-19 e lo spread
+del monte-ingaggi ~2.5-4× (realistico).
+
+**Rotazione (gradiente)** — i 5 slot di partente NON sono uguali: `SP_SLOTS`
+applica un bias di talento a **media ~0** (asso +5 … #5 −6) più una fascia d'età,
+così ogni rosa ha **1-2 partenti forti**, un #3 medio e **#4/#5 più deboli e più
+giovani** (back-end da sviluppare, soggetti a rotazione con le riserve SP, anch'esse
+giovani). Media ~0 → non sposta la calibrazione di lega, cambia solo la
+distribuzione dentro la rotazione (niente "5 assi" su una squadra forte).
 
 **Fra compagni** — il talento individuale (σ≈7) + gli **archetipi** (`batterArchetype`:
 **slugger** HR+/media−, **contact/slap** media+/HR−−, **occhio/OBP** BB+, **velocista**

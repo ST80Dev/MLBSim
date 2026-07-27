@@ -43,6 +43,19 @@ const BENCH_POSITIONS: Position[] = ['C', 'CF', 'SS', '3B', 'RF'];
 // Profondita' (depth) oltre i 25 attivi: riserve per gestione/scambi.
 const DEPTH_BATTER_POSITIONS: Position[] = ['C', '1B', '2B', 'LF', '3B', 'CF'];
 
+// Gradiente per i 5 slot di rotazione: bias di talento (a MEDIA ~0 → non sposta
+// la calibrazione di lega) + fascia d'eta'. Gli assi (SP1/2) sono forti e maturi,
+// il #3 medio, il #4/#5 piu' deboli e piu' GIOVANI (back-end da sviluppare).
+const SP_SLOTS: Array<{ bias: number; age: [number, number] }> = [
+  { bias: 5, age: [25, 36] }, // #1 asso
+  { bias: 3, age: [25, 36] }, // #2
+  { bias: 1, age: [23, 35] }, // #3 medio
+  { bias: -3, age: [22, 30] }, // #4 sotto media
+  { bias: -6, age: [21, 27] }, // #5 giovane back-end
+];
+// Riserve SP (depth): back-end/prospetti giovani, piu' deboli dei titolari.
+const DEPTH_SP: { bias: number; age: [number, number] } = { bias: -5, age: [21, 27] };
+
 // Modellazione per ruolo: i difensori centrali difendono meglio, gli angoli
 // picchiano di piu', ecc. (bonus applicati alle doti in generazione).
 const POS_SHAPE: Record<string, { field: number; power: number; speed: number; arm: number }> = {
@@ -227,10 +240,18 @@ function makeBatter(rng: Rng, names: NameFactory, id: string, position: Position
   };
 }
 
-function makePitcher(rng: Rng, names: NameFactory, id: string, role: PitcherRole, teamTalent = 0): Pitcher {
-  const ratings = makePitcherRatings(rng, role, teamTalent);
+function makePitcher(
+  rng: Rng,
+  names: NameFactory,
+  id: string,
+  role: PitcherRole,
+  teamTalent = 0,
+  talentBias = 0,
+  ageRange: [number, number] = [21, 37],
+): Pitcher {
+  const ratings = makePitcherRatings(rng, role, teamTalent + talentBias);
   const stats = derivePitcherStats(ratings);
-  const age = rng.int(21, 37);
+  const age = rng.int(ageRange[0], ageRange[1]);
   const ovr = pitcherOverall(ratings);
   const nm = names.next();
   return {
@@ -255,8 +276,9 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   const names = makeNameFactory(rng);
   // Offset di talento della SQUADRA: sposta TUTTI i suoi giocatori su/giu' insieme,
   // cosi' alcune rose sono davvero da contender e altre da cantina (le stagioni
-  // non finiscono tutte sul filo del .500). Centrato su 0: la media di lega resta.
-  const teamTalent = rng.gauss(0, 5);
+  // non finiscono tutte sul filo del .500). Centrato su 0 (la media di lega resta),
+  // sigma CONTENUTA e clamp: niente cantine/corazzate irreali (payroll fuori scala).
+  const teamTalent = Math.max(-8, Math.min(8, rng.gauss(0, 3.8)));
   const lineup = LINEUP_POSITIONS.map((pos, i) =>
     makeBatter(rng, names, `${f.abbrev}-B${i}`, pos, teamTalent),
   );
@@ -267,8 +289,12 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   const bench = BENCH_POSITIONS.map((pos, i) =>
     makeBatter(rng, names, `${f.abbrev}-BN${i}`, pos, teamTalent),
   );
-  const rotation = Array.from({ length: 5 }, (_, i) =>
-    makePitcher(rng, names, `${f.abbrev}-SP${i}`, 'SP', teamTalent),
+  // GRADIENTE ROTAZIONE (realismo MLB): 1-2 partenti forti, un #3 medio, #4/#5
+  // piu' deboli e piu' GIOVANI (back-end da far crescere / soggetti a rotazione
+  // con le riserve). Bias a media ~0 sui 5 slot: non sposta la calibrazione di
+  // lega, cambia solo la DISTRIBUZIONE dentro la rotazione (niente "5 assi").
+  const rotation = SP_SLOTS.map((s, i) =>
+    makePitcher(rng, names, `${f.abbrev}-SP${i}`, 'SP', teamTalent, s.bias, s.age),
   );
   const bullpen: Pitcher[] = [
     ...Array.from({ length: 5 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-RP${i}`, 'RP', teamTalent)),
@@ -280,7 +306,9 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
     makeBatter(rng, names, `${f.abbrev}-DB${i}`, pos, teamTalent),
   );
   const reservePitchers: Pitcher[] = [
-    ...Array.from({ length: 2 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-DSP${i}`, 'SP', teamTalent)),
+    ...Array.from({ length: 2 }, (_, i) =>
+      makePitcher(rng, names, `${f.abbrev}-DSP${i}`, 'SP', teamTalent, DEPTH_SP.bias, DEPTH_SP.age),
+    ),
     ...Array.from({ length: 2 }, (_, i) => makePitcher(rng, names, `${f.abbrev}-DRP${i}`, 'RP', teamTalent)),
   ];
 
