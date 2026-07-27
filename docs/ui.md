@@ -76,11 +76,16 @@ Regioni, dall'alto in basso:
     restano sullo stato reale (`sit`), solo i marker sono in ritardo.
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
     battitore corrente evidenziato, lanciatore in pedana). La riga del lanciatore
-    mostra **IP / PT / SO / ER** per **entrambe** le squadre: **PT = stima lanci**
-    (`estimatedPitches`, formula di Tango `3.3·BF + 1.5·SO + 2.2·BB`) — stima
-    DETERMINISTICA (nessun RNG, nessun impatto sulla calibrazione) che cresce con
-    battitori affrontati, valide, BB e SO, così si percepisce l'affaticamento; il
-    numero vira all'ambra/rosso oltre soglie tarate sul ruolo (SP vs rilievo).
+    mostra **IP / PT / BF / SO / ER** per **entrambe** le squadre: **PT = stima
+    lanci** (`estimatedPitches`, formula di Tango `3.3·BF + 1.5·SO + 2.2·BB`) —
+    stima DETERMINISTICA (nessun RNG, nessun impatto sulla calibrazione) che cresce
+    con battitori affrontati, valide, BB e SO, così si percepisce l'affaticamento.
+    **BF = battitori affrontati / Resistenza** (`curP.bf` / `pitcher.stamina`): è il
+    **raffronto esplicito** sulla durata sul monte, ancorato alla *vera* meccanica
+    del motore (l'affaticamento va a battitori, non a lanci). Sia PT sia BF virano
+    all'**ambra** quando i battitori si avvicinano/superano la soglia di Resistenza
+    (malus ai peripherals attivo) e al **rosso** oltre la soglia di cambio
+    automatico (Resistenza +4 SP / +2 rilievo), via `pitcherFatigue`.
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
     in attacco Battuta / Bunt / Ruba / **Mob & corri** (hit-and-run, se corridore
     in 1ª e 2ª libera) / **Pinch-hit** / **Pinch-run** (se c'è un corridore); in
