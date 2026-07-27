@@ -99,7 +99,15 @@ In `src/engine/ratings.ts`:
   toccarli senza rimisurare gli aggregati.
 - `deriveStamina(rating, role)` converte la Resistenza in soglia di battitori.
 - `batterOverall` / `pitcherOverall` = media pesata delle doti (40-100).
-- `salaryFromOverall` = stipendio annuale (milioni) dall'overall.
+- `salaryFromOverall(overall)` = curva base dello stipendio (milioni). La curva è
+  **calibrata** perché il payroll **medio** di squadra stia sotto il cap base
+  (vedi `docs/franchise.md` § Salary cap); non toccarla senza rimisurare i
+  monte-ingaggi con lo script di probe.
+- `salaryFor(overall, age)` = `salaryFromOverall(overall) × youthFactor(age)`: lo
+  stipendio **effettivo** usato ovunque (generatore, import, aging). `youthFactor`
+  sale da ~0.4 a 21 anni a 1.0 a ~27 (sconto gioventù *stateless*, modello
+  "B-lite" — vedi `docs/franchise.md` § Stipendi). Un neo-draftato entra vicino al
+  minimo e si apprezza mentre matura.
 
 ## Minutaggio: PA/gare non uniformi
 
@@ -156,6 +164,20 @@ In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
 - **Ritiro** automatico quando età alta + overall crollato.
 - Ogni giocatore ha un solo **potenziale** (tetto 40-100). Dopo l'evoluzione le
   statistiche vengono ri-derivate dalle nuove caratteristiche.
+- Lo **stipendio** viene ri-derivato con `salaryFor(overall, età)`: cala coi
+  veterani in declino, sale coi giovani che maturano (doppia spinta overall +
+  youthFactor).
+
+### Impiego → crescita (design Fase 4, non ancora attivo)
+
+La crescita dei **giovani** dipenderà dall'**impiego** (partite/PA giocate), così
+che panchinare un prospetto **costi** in sviluppo — l'unica leva "manageriale"
+aggiunta (allenamento e mantenimento veterani: **scartati**; il declino resta
+**età-only**). Segnale = impiego reale (squadra gestita, dai box score) o
+proiettato (`projection.ts`, 29 CPU), letto verso un carico pieno da titolare. Le
+PA proiettate dei battitori andranno **normalizzate al budget-squadra** (~6.180)
+prima di alimentare l'aging. Dettaglio in `docs/franchise.md` § Evoluzione
+pluriennale.
 
 ### Potenziale come STIMA incerta
 
