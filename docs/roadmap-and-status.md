@@ -39,8 +39,23 @@
     **import storico** end-to-end (inversione stat→rating, prova 1999) e
     **fondazione modalità lega + salary cap**. In più, anticipati dalla Fase 4:
     **calendario**, **classifiche**, **Leaderboard** e accumulo stat reali.
+  - **Flusso d'ingresso — FATTO:** schermata iniziale (`StartScreen`: nuova lega
+    **generata** / **storica** in anteprima / riprendi salvataggio) → **panoramica
+    lega** (`LeagueOverview`: 30 squadre per division con forza `teamStrength` e
+    indicatore payroll-vs-cap; dettaglio rosa in modale) → scelta squadra gestita
+    → dashboard. Il **seed e la sorgente** sono ora **persistiti** nel `GameSave`
+    (schema v2): ricaricare rigenera la STESSA lega (prima il seed era casuale ad
+    ogni avvio → bug). Indicatore cap a due confini anche sulla **Franchigia**.
+  - **Salary cap — RICALIBRATO:** curva stipendi compressa (`salaryFromOverall`:
+    payroll medio ~193M sotto il cap base 250M, stelle fino a ~45M, spread da
+    ~10x a ~4-5x) +
+    **`youthFactor`** (stipendio = f(overall, età), modello B-lite). Modello a due
+    confini (base soft + muro esterno) con `capZone` per l'indicatore. Enforce
+    (ε, riconciliazione al rollover via pool) resta design di Fase 4/5. Vedi
+    `docs/franchise.md`.
   - **Manca per chiudere la fase:** pipeline Lahman completa (30 squadre ×
-    annata) + UI di selezione stagione/sorgente. Dettaglio sotto.
+    annata) per rendere davvero giocabile la modalità storica (oggi solo dataset
+    1999 di prova, esposta come **anteprima**). Dettaglio sotto.
 
 ## Roadmap
 - **Fase 2 — Costruzione squadra & import storico** *(quasi completa)*
@@ -97,10 +112,15 @@
     division reali) e pagina **Leaderboard** (Batting/Pitching: numeri reali per
     la mia squadra, **proiezione** d'annata credibile per le altre 29, con
     identità statistiche rispettate — `data/projection.ts`).
+  - **FATTO (scollegatore ERA):** **difesa dietro il lanciatore** — la sintesi
+    difensiva dei 9 schierati (`teamSynthesis().def`, la stessa della UI) sposta la
+    BABIP (hit su palla in gioco ⟷ out), mai i three true outcomes. Neutrale alla
+    media di lega (aggregati di Fase 0 invariati), scollega l'ERA del singolo
+    lanciatore di ~±0.35 fra difesa scarsa ed élite. Vedi
+    `docs/engine-calibration.md` § Difesa dietro il lanciatore; `TUNING.defense`.
   - **Manca:** **playoff giocabili** (ora slot placeholder); **rollover di
-    stagione** (stagione → scorsa → carriera dai dati reali degli anni gestiti);
-    scollegatori ERA-vs-talento (**difesa dietro il lanciatore**, **fattore
-    stadio**).
+    stagione** (stagione → scorsa → carriera dai dati reali degli anni gestiti). Il
+    **fattore stadio** è **fuori scope** per scelta (non serve a questo livello).
 - **Fase 5 — Franchigia (gestione leggera)**
   - Vedi `docs/franchise.md`: stipendi annuali, salary cap rigido, scambi a
     valore, draft semplice. Fondazione modalità/cap già presente (vedi Fase 2).

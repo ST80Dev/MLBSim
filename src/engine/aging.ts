@@ -5,7 +5,7 @@ import {
   deriveStamina,
   batterOverall,
   pitcherOverall,
-  salaryFromOverall,
+  salaryFor,
   clampRating,
 } from './ratings';
 import type { Rng } from './rng';
@@ -68,7 +68,7 @@ export function advanceSeasonBatter(b: Batter, rng: Rng): Batter {
   b.age += 1;
   b.stats = deriveBatterStats(b.ratings);
   const ovr = batterOverall(b.ratings);
-  b.salary = salaryFromOverall(ovr);
+  b.salary = salaryFor(ovr, b.age);
   if (b.age >= 40 || (b.age >= 34 && ovr < 34)) b.retired = true;
   return b;
 }
@@ -90,7 +90,7 @@ export function advanceSeasonPitcher(p: Pitcher, rng: Rng): Pitcher {
   p.stats = derivePitcherStats(p.ratings);
   p.stamina = deriveStamina(p.ratings.stamina, p.role);
   const ovr = pitcherOverall(p.ratings);
-  p.salary = salaryFromOverall(ovr);
+  p.salary = salaryFor(ovr, p.age);
   if (p.age >= 42 || (p.age >= 35 && ovr < 34)) p.retired = true;
   return p;
 }

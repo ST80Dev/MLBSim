@@ -153,6 +153,78 @@ variante compatta `.modal.player` (max ~560px).
 - **Scheda "Rose & caratteristiche"**: doti 40-100 colorate per lineup e rotazione,
   con OVR a stelle e lo scambio difensivo (seconda posizione).
 
+### Editor schieramento — drag&drop (Roster)
+
+Regola unica: **muovere dentro la stessa ripartizione è uno SWAP** (i due si
+scambiano di posto, gli altri restano fermi — mai inserimento a scorrimento);
+**passare fra ripartizioni è una sostituzione/spostamento**.
+
+- **Battuta / Difesa titolari.** Trascinare un titolare su un altro **scambia**
+  i due slot: nell'ordine di battuta scambia i numeri (la difesa resta), nella
+  vista difesa scambia le caselle (`setSlot`). Un **titolare trascinato su una
+  riserva** lo **scarica** (swap titolare↔riserva, tiene la casella;
+  `substitute`), valido sia dalla lista battuta sia dalla difesa
+  (`dropBenchRow` accetta qualunque id attualmente in `arr.order`).
+- **Riserve.** Una **riserva su un'altra riserva** le **riordina**: l'ordine
+  scelto è persistito in `MatchArrangement.benchOrder` (id preferiti in testa,
+  gli altri in coda via `orderByPref`). Campo **opzionale**, ignorato dal motore
+  (`buildManagedTeam`/`validateArrangement` non lo usano) e retrocompatibile coi
+  salvataggi che ne sono privi; un titolare appena scaricato finisce in coda.
+- **Lanciatori.** Riordino dentro Rotazione o Bullpen = **swap**; il drop fra
+  Rotazione / Bullpen / Disponibili resta uno **spostamento** (il numero per
+  lista è variabile: nessuna casella fissa), `placePitcher` distingue i due casi
+  da `drag.from` vs lista di destinazione.
+
+### Colonne OVR bar e MAX (potenziale)
+
+Ogni elenco del roster ha, subito dopo la colonna **OVR**, due **colonne
+dedicate a larghezza fissa** (allineate verticalmente riga per riga — niente
+info impilate nella stessa cella, quindi zero disallineamenti):
+
+- **Barra OVR** (`OvrBarCell`/`OvrBar`, header vuoto): riempimento colorato =
+  overall corrente (`ratingColor`); se il **potenziale** supera l'overall, il
+  tratto fino al tetto resta come segmento più chiaro = *spazio di crescita*.
+  Scala 40-100 → 0-100% (`ratingPct`).
+- **MAX** (`PotCell`, potenziale = tetto di crescita 40-100): mostra **sempre un
+  numero**. Con margine → `▲<pot>` in verde tenue; **al tetto** (`potential ≤
+  overall`) → lo **stesso numero dell'OVR** in grigio neutro. Formato distinto
+  dal badge OVR (niente pill piena, più piccolo) per non confonderlo a colpo
+  d'occhio. Non esiste una "forma" da game-log: il potenziale è l'unica
+  prospettiva reale nei dati. NB: l'etichetta è `MAX`, non `POT`, perché in
+  modalità *Caratteristiche* `POT` è già la **Potenza** del battitore.
+
+Presente in tutti gli elenchi (Ordine di battuta, Disponibili, Per posizione,
+Riserve, tabelle lanciatori); l'overall usato è quello della riga (in Difesa è
+rivalutato sulla casella via `ratingsAtPosition`, come il badge). La **posizione
+secondaria** non ha una colonna propria: è già nella colonna **RUOLI**
+(`rolesOf` → `SS/3B`). Fuori scope il menu Pinch-hit in partita.
+
+**Ordine colonne**: `# · Giocatore · ETÀ · RUOLI · OVR · barra · MAX · stat…`
+(l'età sta **a sinistra** del ruolo).
+
+### Larghezza tabella e celle rating
+
+Le card colorate dei rating (`.rat`) hanno **larghezza fissa** (~34px, quasi
+quadrate) scoped a `.roster-tbl`. La tabella NON si stira più a tutta larghezza:
+`.roster-tbl { width:auto; margin-inline:auto }` la dimensiona sul **contenuto**
+e la **centra** nel contenitore — così su desktop largo non resta un enorme vuoto
+fra i nomi e le stat, e la tabella è sempre centrata (con molte colonne, se
+supera il contenitore, `.roster-scroll` scrolla). La colonna **Giocatore** è a
+larghezza-contenuto (non più `width:100%`).
+
+### Legenda sigle (icona «i»)
+
+A fianco della testata di ogni tabella del roster c'è un'iconcina **`i`**
+(`InfoDot`) che apre un modale-legenda (`StatLegend`) con la spiegazione delle
+sigle **di quella sezione**: attacco (`bat`), difesa (`def`) o lancio (`pit`).
+Fonte unica `GLOSSARY` (in `App.tsx`): per ogni voce distingue **doti** (rating
+40-100, descrizione = *su cosa influiscono* nel motore, allineata a
+`docs/players-and-ratings.md`) e **statistiche** (descrizione = cosa
+rappresentano). Copre sia la modalità *Ratings* sia le modalità statistiche,
+così una sola «i» per sezione basta a chiarire tutte le colonne visibili.
+Chiudibile con ✕, backdrop o Esc, come gli altri modali. Se aggiungi/rinomini
+una colonna (`*_COLS`), aggiorna la voce corrispondente in `GLOSSARY`.
+
 La partita interattiva (`LiveGame`) è **mutabile** e vive tra i render: `App`
 la tiene in un `useRef` con chiave `teamSeed|gara|squadra`, ricreandola solo al
 cambio di quei parametri, e forza il re-render dopo ogni azione.

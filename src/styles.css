@@ -1763,6 +1763,86 @@ table {
   margin: 8px 0 0;
 }
 
+/* --- Icona "i" + legenda sigle ------------------------------------- */
+.info-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.info-dot:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.modal.legend {
+  width: min(620px, 96vw);
+  max-height: min(88vh, 760px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.legend-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.legend-block-title {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.legend-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.legend-row {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+.legend-abbr {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 12px;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+}
+.legend-abbr.rating {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.legend-def {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.legend-def b {
+  color: var(--text);
+}
+
 /* Nome cliccabile che apre il mini-popup (riusato ovunque). */
 .player-link {
   cursor: pointer;
@@ -2618,6 +2698,72 @@ table {
   color: var(--muted);
   margin-left: 6px;
 }
+
+/* Pannello "Rotazione del giorno": scelta 4/5 uomini + partente del giorno. */
+.rotation-day .rot-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+.rotation-day .rot-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.rot-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rot-sp {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--line, #2a3550);
+  border-radius: 8px;
+  background: var(--panel, #131c30);
+  color: var(--text, #dbe4f5);
+  cursor: pointer;
+  min-width: 92px;
+}
+.rot-sp:hover:not(:disabled) {
+  border-color: var(--accent, #4f8cff);
+}
+.rot-sp.sel {
+  border-color: var(--accent, #4f8cff);
+  box-shadow: inset 0 0 0 1px var(--accent, #4f8cff);
+}
+.rot-sp.off {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rot-sp-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.rot-sp-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.rot-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rot-reset {
+  background: none;
+  border: 1px solid var(--line, #2a3550);
+  border-radius: 6px;
+  color: var(--text, #dbe4f5);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
 /* Difesa: select per casella */
 .def-edit select {
   width: 100%;
@@ -3032,7 +3178,11 @@ table {
   overflow-x: auto;
 }
 .roster-tbl {
-  min-width: 100%;
+  /* Larghezza in base al CONTENUTO e tabella CENTRATA nel contenitore: niente più
+     stiramento a tutta larghezza (che creava un enorme vuoto fra nomi e stat). Se
+     con molte colonne supera il contenitore, `roster-scroll` scrolla in orizzontale. */
+  width: auto;
+  margin-inline: auto;
 }
 .roster-tbl .tag {
   margin-left: 6px;
@@ -3048,6 +3198,67 @@ table {
 .roster-tbl th {
   padding-left: 5px;
   padding-right: 5px;
+}
+
+/* Card caratteristiche (rating) COMPATTE e quasi quadrate: larghezza fissa e
+   padding orizzontale minimo, così non si allungano su desktop largo. */
+.roster-tbl .rat {
+  width: 34px;
+  min-width: 34px;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+/* Colonna nome: larghezza in base al contenuto (niente più greedy width:100% che
+   spingeva le stat a destra lasciando un enorme vuoto). Nessun troncamento. */
+.roster-tbl th.l,
+.roster-tbl td.l {
+  max-width: none;
+}
+
+/* Colonne DEDICATE (larghezza fissa, allineate verticalmente): barra OVR e
+   potenziale. Niente più info impilate nella stessa cella → zero disallineamenti. */
+.roster-tbl th.ovrbar-h,
+.roster-tbl td.ovrbar-c {
+  width: 64px;
+  min-width: 64px;
+}
+.ovr-bar {
+  position: relative;
+  display: inline-block;
+  width: 54px;
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(38, 55, 92, 0.55);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.ovr-bar-pot,
+.ovr-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+}
+.ovr-bar-pot {
+  background: rgba(147, 164, 196, 0.4); /* headroom: grigio-azzurro tenue */
+}
+/* Colonna potenziale: formato distinto dal badge OVR (niente pill piena, più
+   piccolo) per non confonderlo. Con margine = verdino + freccetta; al tetto =
+   grigio neutro (stesso numero dell'OVR). */
+.roster-tbl th.pot-h,
+.roster-tbl td.pot-c {
+  width: 42px;
+  min-width: 42px;
+}
+.pot-num {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.pot-num.up {
+  color: #78c06a;
 }
 
 /* --- Home: leader + mini-classifica + calendario a stati ------------ */
@@ -3450,3 +3661,463 @@ table {
 }
 .cl-toggle:hover { color: var(--text); border-color: var(--accent); }
 .cl-toggle.on { background: #ffcf40; color: #1a1a1a; border-color: #ffcf40; }
+
+/* =========================================================================
+   Flusso d'ingresso: splash, schermata iniziale, panoramica lega, cap.
+   ========================================================================= */
+
+/* --- Splash di boot --- */
+.boot-splash {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.splash-logo {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+/* --- Schermata iniziale --- */
+.start-app {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+}
+.start-hero {
+  text-align: center;
+  margin: 24px 0 34px;
+}
+.start-title {
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+.start-title .logo {
+  margin-right: 6px;
+}
+.start-sub {
+  color: var(--muted);
+  margin-top: 8px;
+  font-size: 15px;
+}
+.start-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+.start-card {
+  text-align: left;
+  background: linear-gradient(180deg, var(--card2), var(--card));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 18px;
+  cursor: pointer;
+  color: var(--text);
+  transition: border-color 0.15s, transform 0.1s;
+}
+.start-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.start-card.resume {
+  border-color: var(--win);
+}
+.sc-icon {
+  font-size: 26px;
+  margin-bottom: 8px;
+}
+.sc-title {
+  font-weight: 800;
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+.sc-desc {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.badge-soon {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #ffd15c;
+  border: 1px solid #ffd15c;
+  border-radius: 6px;
+  padding: 1px 6px;
+  vertical-align: middle;
+}
+.start-note {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 12px;
+}
+
+/* --- Panoramica lega --- */
+.overview-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.seed-note {
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-right: 4px;
+}
+.ov-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.cap-legend {
+  display: flex;
+  gap: 6px;
+}
+.ov-div {
+  margin-bottom: 20px;
+}
+.ov-div-title {
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--accent);
+  margin: 8px 2px;
+}
+.ov-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+.ov-card {
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  color: var(--text);
+  transition: border-color 0.15s, transform 0.1s;
+}
+.ov-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.ov-card.sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(79, 157, 255, 0.35);
+}
+.ov-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ov-name {
+  flex: 1;
+  min-width: 0;
+}
+.ov-abbrev {
+  font-weight: 800;
+  font-size: 15px;
+}
+.ov-full {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-total {
+  font-weight: 900;
+  font-size: 20px;
+  font-family: var(--mono);
+}
+.ov-cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ov-cap .cap-ind {
+  flex: 1;
+}
+
+/* --- Barre forza --- */
+.str-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.str-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.str-k {
+  width: 28px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.str-track {
+  flex: 1;
+  height: 7px;
+  background: var(--bg2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.str-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.str-v {
+  width: 22px;
+  text-align: right;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+/* --- Indicatore cap --- */
+.cap-ind {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cap-bar {
+  position: relative;
+  height: 10px;
+  background: var(--bg2);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.cap-ind.compact .cap-bar {
+  height: 8px;
+}
+.cap-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 5px;
+}
+.cap-fill.under {
+  background: var(--win);
+}
+.cap-fill.tax {
+  background: #ffd15c;
+}
+.cap-fill.over {
+  background: #ff6b6b;
+}
+.cap-mark {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+}
+.cap-mark.base {
+  background: rgba(231, 237, 247, 0.7);
+}
+.cap-mark.wall {
+  background: rgba(255, 107, 107, 0.85);
+}
+.cap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.cap-chip {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.cap-chip.under {
+  color: var(--win);
+  border: 1px solid var(--win);
+}
+.cap-chip.tax {
+  color: #ffd15c;
+  border: 1px solid #ffd15c;
+}
+.cap-chip.over {
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+}
+
+/* --- Modale dettaglio squadra --- */
+.modal.team-detail {
+  width: min(760px, 96vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.td-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.td-id {
+  flex: 1;
+}
+.td-name {
+  font-weight: 800;
+  font-size: 18px;
+}
+.btn.ghost {
+  background: transparent;
+}
+.td-strength {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.td-total {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.td-total b {
+  font-size: 22px;
+  font-family: var(--mono);
+}
+.td-strength .str-bars {
+  flex: 1;
+}
+.td-rosters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.td-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.fr-cap {
+  margin-top: 4px;
+}
+.fr-cap .cap-ind {
+  max-width: 420px;
+  margin: 8px 0;
+}
+
+@media (max-width: 640px) {
+  .td-rosters {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Hub iniziale: sezioni + lista salvataggi --- */
+.start-section {
+  margin-top: 26px;
+}
+.start-section-title {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--accent);
+  margin: 0 2px 12px;
+}
+.save-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.save-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.save-badge {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+}
+.save-info {
+  flex: 1;
+  min-width: 0;
+}
+.save-name {
+  font-weight: 800;
+  font-size: 15px;
+}
+.save-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.save-when {
+  font-size: 11px;
+  margin-top: 2px;
+}
+.save-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn.danger {
+  color: #ff6b6b;
+  border-color: transparent;
+}
+.btn.danger:hover {
+  border-color: #ff6b6b;
+}
+
+/* Rating generale numerico in card colorata (sostituisce le stelle nei roster). */
+.ovr-badge {
+  display: inline-block;
+  min-width: 30px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  color: #fff;
+  font-weight: 800;
+  font-family: var(--mono);
+  text-align: center;
+  letter-spacing: 0;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+/* Nei roster la colonna OVR non serve più larga per le stelle. */
+.roster-tbl .ovr { min-width: 52px; }
+.ratings .ovr { color: var(--text); letter-spacing: 0; }
+.pchange-ovr .ovr-badge { font-size: 12px; min-width: 26px; padding: 1px 6px; }
+
+/* Franchigia: scheda rosa completa (vista salariale). */
+.fr-roster { width: 100%; }
+.fr-roster .tier { color: var(--muted); font-size: 12px; }
+.fr-roster .sal { font-family: var(--mono); font-weight: 700; color: #ffd15c; text-align: right; }
+.type-chip {
+  display: inline-block;
+  min-width: 34px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+.type-chip.bat { color: #7fd7ff; border: 1px solid rgba(127, 215, 255, 0.55); }
+.type-chip.pit { color: #ff9d6b; border: 1px solid rgba(255, 157, 107, 0.55); }

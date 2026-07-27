@@ -21,6 +21,44 @@ l'overall spazia davvero da 2 a 4 stelle con qualche 5★, invece di incollarsi 
 3★. Il talento resta **centrato**, quindi cambia la *dispersione*, non gli
 aggregati di lega (epoca "alta offesa").
 
+### Età alla generazione (`makeAge`)
+
+L'età dei **battitori** e dei **rilievi** non è uniforme: `makeAge` usa una
+*split-normal* centrata a 27 (σ sinistra 3.0, destra 5.5) clampata a **[20, 40]**
+→ campana asimmetrica con **picco a 26**, **media ~28** (un filo sotto la MLB
+reale, "al ribasso"), coda a destra, estremi 20-21 e 38-40 **rari ma possibili**
+(~1-2%). I **partenti** invece hanno finestre d'età **per-slot** (`SP_SLOTS`): il
+back-end (#4/#5) è più giovane (prospetti da sviluppare).
+
+### Allocazione per merito (best-starts)
+
+I bias di `SP_SLOTS`/`teamTalent` **riducono** ma non **eliminano** il caso in cui
+la coda-gemma fa nascere una stella tra panca/riserve mentre un titolare debole
+parte (il "5★ tra i Disponibili"). Dopo la generazione si **garantisce** che i
+migliori siano attivi:
+- **Battitori** — generati per posizione (stesso multiset → copertura invariata),
+  il migliore di ogni posizione va in lineup, poi `alignLineupDefense` **permuta i
+  9 titolari** al miglior fit *alla posizione* (2ª posizione inclusa, DH al miglior
+  bat) e infine `autoLineup` dà l'ordine di battuta.
+- **Partenti** — generati col gradiente `SP_SLOTS`, poi i 5 migliori in rotazione
+  (n.1 = asso), i più deboli in profondità.
+- **Bullpen coerente** — non rilievi a caso: un **closer** shutdown
+  (dominio+controllo), un **setup**/candidato-closer (stessa stoffa, poca
+  resistenza), **2 long-reliever** (resistenza alta) e i **middle** fungibili (con
+  profondità, best-starts fra loro). Il `tilt` per-dote di `makePitcherRatings`
+  modella l'archetipo a somma ~0 (non sposta gli aggregati).
+
+Popolazione invariata (stessi ruoli/posizioni, stesso `teamTalent`) → **aggregati
+di lega invariati**: cambia solo *quale slot* occupa ciascuno.
+
+### Uso della rotazione nella simulazione
+
+`makeSide` (engine) fa sempre partire `rotation[0]`. Con la rotazione **ordinata**
+(n.1 = asso), senza accorgimenti ogni squadra lancerebbe l'asso in **ogni** partita
+(ambiente-punti ~3.9 R/gara). La sim di stagione (`data/season.ts`) e il test di
+realismo ruotano il partente col giorno via `withRotationStarter(team, n)`, così i
+5 SP girano equamente e l'ambiente resta in epoca (~5.4 R/gara).
+
 ## Caratteristiche del battitore (6) — `BatterRatings`
 
 Criterio: **ognuna governa UNA sola leva** del motore (zero ridondanza).
@@ -99,7 +137,15 @@ In `src/engine/ratings.ts`:
   toccarli senza rimisurare gli aggregati.
 - `deriveStamina(rating, role)` converte la Resistenza in soglia di battitori.
 - `batterOverall` / `pitcherOverall` = media pesata delle doti (40-100).
-- `salaryFromOverall` = stipendio annuale (milioni) dall'overall.
+- `salaryFromOverall(overall)` = curva base dello stipendio (milioni). La curva è
+  **calibrata** perché il payroll **medio** di squadra stia sotto il cap base
+  (vedi `docs/franchise.md` § Salary cap); non toccarla senza rimisurare i
+  monte-ingaggi con lo script di probe.
+- `salaryFor(overall, age)` = `salaryFromOverall(overall) × youthFactor(age)`: lo
+  stipendio **effettivo** usato ovunque (generatore, import, aging). `youthFactor`
+  sale da ~0.4 a 21 anni a 1.0 a ~27 (sconto gioventù *stateless*, modello
+  "B-lite" — vedi `docs/franchise.md` § Stipendi). Un neo-draftato entra vicino al
+  minimo e si apprezza mentre matura.
 
 ## Minutaggio: PA/gare non uniformi
 
@@ -156,6 +202,20 @@ In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
 - **Ritiro** automatico quando età alta + overall crollato.
 - Ogni giocatore ha un solo **potenziale** (tetto 40-100). Dopo l'evoluzione le
   statistiche vengono ri-derivate dalle nuove caratteristiche.
+- Lo **stipendio** viene ri-derivato con `salaryFor(overall, età)`: cala coi
+  veterani in declino, sale coi giovani che maturano (doppia spinta overall +
+  youthFactor).
+
+### Impiego → crescita (design Fase 4, non ancora attivo)
+
+La crescita dei **giovani** dipenderà dall'**impiego** (partite/PA giocate), così
+che panchinare un prospetto **costi** in sviluppo — l'unica leva "manageriale"
+aggiunta (allenamento e mantenimento veterani: **scartati**; il declino resta
+**età-only**). Segnale = impiego reale (squadra gestita, dai box score) o
+proiettato (`projection.ts`, 29 CPU), letto verso un carico pieno da titolare. Le
+PA proiettate dei battitori andranno **normalizzate al budget-squadra** (~6.180)
+prima di alimentare l'aging. Dettaglio in `docs/franchise.md` § Evoluzione
+pluriennale.
 
 ### Potenziale come STIMA incerta
 

@@ -121,8 +121,33 @@ talento. **ERA e W sono risultati** e devono galleggiare:
   peripherals + supporto offensivo + durata. Va supportato, non impedito.
 - Le vittorie dipenderanno dal **supporto offensivo** e dal contesto partita
   (chi è in pedana al cambio di vantaggio) → da tracciare con W/L/SV (Fase 1/4).
-- Gli scollegatori ERA-vs-talento da introdurre: **difesa dietro il lanciatore**,
-  **fattore stadio**, e **varianza di sequenza (BABIP/LOB)**.
+- Scollegatori ERA-vs-talento: **difesa dietro il lanciatore FATTA** (Fase 4, sotto);
+  **varianza di sequenza (BABIP/LOB)** emerge già dalla simulazione. Il **fattore
+  stadio** è fuori scope per scelta (non serve a questo livello di affinatezza).
+
+### Difesa dietro il lanciatore (Fase 4)
+
+La qualità del reparto difensivo sposta la **BABIP** e scollega l'ERA dal solo
+talento del lanciatore (principio **DIPS**: il lanciatore controlla K/BB/HR, il
+resto è difesa + sequenza). Tocca **solo le palle in gioco** (1B/2B/3B ⟷ out su
+palla in gioco), **mai** HR/BB/HBP/SO.
+
+- **Metrica**: `teamSynthesis().def` dei 9 schierati (fielding+braccio pesati per
+  ruolo, SS/CF/C contano di più, DH escluso) — la **stessa** difesa mostrata nella
+  UI Roster, così migliorare i difensori si vede davvero sull'ERA.
+- **Legge** (`combineRates`, guidata da `TUNING.defense`): `d = (def − 76)/10` in
+  sigma, `f = clamp(1 − d·perSigma, min, max)`; le hit su palla in gioco vengono
+  scalate per `f` e la massa spostata dentro/fuori dagli out. **Non consuma RNG**
+  (sposta solo le soglie prima del sorteggio: la struttura della Fase 0 è intatta).
+- **Neutrale alla media di lega**: `neutral = 76` è la media misurata della metrica
+  sul generatore (i ruoli difensivi hanno bonus di forma, quindi **non** 70). Una
+  difesa media è un **no-op** → gli aggregati di lega (BA, R/g, ERA di lega)
+  restano quelli di Fase 0 (drift BA misurato ~.001). Solo l'ERA del **singolo**
+  lanciatore galleggia col reparto dietro di lui.
+- **Effetto misurato** (400 gare, su 3 fasce di difesa): la difesa **ottima** (82+)
+  toglie **~0.37 ERA**, la **scarsa** (<70) ne aggiunge **~0.35**, oltre al talento
+  → uno spread di ~0.7 ERA fra i due estremi. Sensibile ma **non dominante**: il
+  lanciatore resta il fattore principale. Test in `engine/__tests__/defense.test.ts`.
 
 Curva ERA↔bravura misurata in Fase 0 (media, gare complete, lega calda): livello
 doti 50→ERA ~4.3; 60→~3.2; ~61 è la soglia del 3.00; 66→~2.4; 72→~1.8; 80→~1.4.
@@ -183,10 +208,48 @@ Monte-Carlo nello scratchpad (distribuzione del leader + % gemme), non a occhio.
 
 ## Varietà: fra squadre, fra compagni, code basse
 
-**Fra squadre** — `generateTeamFromFranchise` estrae un `teamTalent` (gauss, σ≈5)
-che sposta TUTTI i giocatori della rosa su/giù insieme: alcune franchigie sono da
-contender, altre da cantina (le stagioni non finiscono tutte sul .500). Centrato
-su 0 → la media di lega non si sposta.
+**Fra squadre (modello a stelle + profondità)** — la forza di una franchigia NON
+è più un semplice shift uniforme (dava rose tutte-scarse/tutte-forti e payroll
+fuori scala, es. $45M con tutti <70 vs $390M con 5 SP >83). Ora
+`generateTeamFromFranchise` compone:
+
+- **`teamTalent` morbido** (gauss σ≈2.5, clamp ±6): qualità della **profondità**,
+  sposta lievemente tutta la rosa. Centrato su 0 → media di lega invariata.
+- **Stelle garantite**: **ogni** squadra, anche la peggiore, ha **1-3 franchise
+  player** (bias di talento ~+19); le migliori ne hanno di più. Così nessuna rosa
+  è tutta <80 (`STAR_FLOOR`=80, con rete di sicurezza).
+- **Pavimenti realistici**: nessun **titolare** di movimento sotto 55
+  (`LINEUP_FLOOR`) né **partente** titolare sotto 52 (`ROT_FLOOR`) — via i
+  giocatori sotto-replacement e i bracci da Tripla-A dai ruoli di partenza.
+- **Assi rari**: solo ~1/3 dei team con 2+ stelle spende una stella sull'asso
+  (bias ridotto ×0.65 → un asso ~85, non un fenomeno 92), per non deprimere
+  l'offesa dell'epoca.
+
+Risultato: gap di forza fra squadre più contenuto (ogni team ha stelle + depth),
+spread del monte-ingaggi **~2.5-3× (compresso, come richiesto)**, e nessuna rosa
+irreale. I due pavimenti (lineup/rotazione) si **compensano** nel run-environment.
+
+**Payroll disaccoppiato dal talento (come MLB)** — ogni franchigia ha un
+**profilo d'età** (`ageSkew`, gauss σ≈3.2, clamp ±6): win-now vecchia (cara) vs
+rebuild giovane (a buon mercato, via `youthFactor`) — **senza toccare la forza**.
+Così nascono i **cheap-good** e gli **expensive-mediocre**: la correlazione
+payroll↔forza scende a ~0.81 (non più incollata) e **a pari forza** il payroll
+varia ~2.4×. In MLB il legame monte-ingaggi↔vittorie è debole; il motore è il
+talento giovane a costo controllato.
+
+**Rotazione (gradiente)** — i 5 slot di partente NON sono uguali: `SP_SLOTS`
+applica un bias di talento a **media ~0** (asso +5 … #5 −6) più una fascia d'età,
+così ogni rosa ha **1-2 partenti forti**, un #3 medio e **#4/#5 più deboli e più
+giovani** (back-end da sviluppare, soggetti a rotazione con le riserve SP, anch'esse
+giovani). Media ~0 → non sposta la calibrazione di lega, cambia solo la
+distribuzione dentro la rotazione (niente "5 assi" su una squadra forte).
+
+**Rotazione (gradiente)** — i 5 slot di partente NON sono uguali: `SP_SLOTS`
+applica un bias di talento a **media ~0** (asso +5 … #5 −6) più una fascia d'età,
+così ogni rosa ha **1-2 partenti forti**, un #3 medio e **#4/#5 più deboli e più
+giovani** (back-end da sviluppare, soggetti a rotazione con le riserve SP, anch'esse
+giovani). Media ~0 → non sposta la calibrazione di lega, cambia solo la
+distribuzione dentro la rotazione (niente "5 assi" su una squadra forte).
 
 **Fra compagni** — il talento individuale (σ≈7) + gli **archetipi** (`batterArchetype`:
 **slugger** HR+/media−, **contact/slap** media+/HR−−, **occhio/OBP** BB+, **velocista**

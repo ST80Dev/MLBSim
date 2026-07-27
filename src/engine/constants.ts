@@ -126,6 +126,28 @@ export const TUNING = {
   },
 
   /**
+   * Difesa dietro il lanciatore (scollegatore ERA↔talento, Fase 4). La qualita'
+   * del reparto difensivo sposta la BABIP: una gran difesa trasforma parte delle
+   * hit su palla in gioco in out, una difesa scarsa fa il contrario. Tocca SOLO
+   * le palle in gioco (1B/2B/3B <-> out su palla in gioco), MAI HR/BB/HBP/SO
+   * (principio DIPS: il lanciatore controlla i "three true outcomes", il resto e'
+   * difesa + sequenza). Non consuma RNG: sposta solo le soglie prima del sorteggio.
+   *   d = (defRating - neutral) / 10          (in sigma; defRating = teamSynthesis().def)
+   *   fattore hit-in-play = clamp(1 - d*perSigma, min, max)
+   * `neutral` = media di lega della sintesi difensiva misurata sul generatore
+   * (~76): cosi' una difesa media e' un NO-OP e gli aggregati di lega (Fase 0)
+   * restano invariati; solo l'ERD del singolo lanciatore galleggia col reparto
+   * dietro di lui. `perSigma` tarato perche' lo spread di ERA sia sensibile ma
+   * non dominante (la difesa conta, il lanciatore resta il fattore principale).
+   */
+  defense: {
+    neutral: 76,
+    perSigma: 0.075,
+    min: 0.8,
+    max: 1.2,
+  },
+
+  /**
    * Difesa avanzata "interni dentro": taglia il punto da terra col corridore in
    * terza, ma lascia piu' buchi. `hitThrough` = prob. che il rimbalzo passi per
    * un singolo (il punto segna); altrimenti battitore eliminato e corridore

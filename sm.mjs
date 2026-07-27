@@ -1,0 +1,10 @@
+import { chromium } from 'playwright-core';
+const OUT='/tmp/claude-0/-home-user-MLBSim/c8f05f16-6c57-56bc-be39-dafed76b9bea/scratchpad';
+const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args:['--no-sandbox'] });
+const p = await b.newPage({ viewport:{width:1500,height:900} });
+await p.goto('http://127.0.0.1:5199/',{waitUntil:'domcontentloaded'});
+await p.waitForFunction(()=>!/Caricamento/.test(document.body.innerText),{timeout:20000}).catch(()=>{});
+await p.waitForTimeout(1200);
+console.log('bottoni:', await p.$$eval('button', bs=>bs.slice(0,16).map(x=>x.textContent.trim()).filter(Boolean)));
+await p.screenshot({ path: `${OUT}/landing2.png` });
+await b.close();
