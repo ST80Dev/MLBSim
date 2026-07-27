@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Batter, Pitcher, Position, Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
@@ -90,6 +90,7 @@ import {
 import type { StatItem, StatsMode } from './statlines';
 import { buildCommentary, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
+import { scoreCode } from './scorecode';
 
 type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'calibrate' | 'game';
 
@@ -105,6 +106,68 @@ function applyArrangement(team: Team, arr?: MatchArrangement): Team {
   return arr ? buildManagedTeam(team, arr) : team;
 }
 type Side = 'away' | 'home';
+
+// ---------------------------------------------------------------------------
+// Mini-popup giocatore (Fase 3): scheda compatta apribile da OVUNQUE compaia un
+// nome (roster, partita, leaderboard, home). Per non passare callback attraverso
+// tutta la gerarchia, un Context espone `openPlayer`; App monta il modale una
+// volta sola con `season`/`seed` correnti. Solo UI: non tocca il motore.
+// ---------------------------------------------------------------------------
+
+interface PlayerModalRequest {
+  player: Batter | Pitcher;
+  /** Posizione difensiva "del momento" (fielder): usata per DIF alla posizione. */
+  pos?: Position;
+  /** Fascia di rosa per la proiezione "carriera/storico" (battitore). */
+  tier?: BatTier;
+}
+
+/** True se il giocatore è un battitore (ha `bats`); i lanciatori hanno `throws`. */
+function isBatter(p: Batter | Pitcher): p is Batter {
+  return 'bats' in p;
+}
+
+const PlayerModalContext = createContext<(req: PlayerModalRequest) => void>(() => {});
+
+/** Nome cliccabile che apre il mini-popup giocatore. Uno `span` (non `draggable`)
+ *  così dentro le righe trascinabili del roster il drag continua a funzionare e
+ *  il click apre la scheda. */
+function PlayerLink({
+  player,
+  pos,
+  tier,
+  className,
+  children,
+}: {
+  player: Batter | Pitcher;
+  pos?: Position;
+  tier?: BatTier;
+  className?: string;
+  children: ReactNode;
+}) {
+  const open = useContext(PlayerModalContext);
+  const fire = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    open({ player, pos, tier });
+  };
+  return (
+    <span
+      className={`player-link${className ? ` ${className}` : ''}`}
+      role="button"
+      tabIndex={0}
+      title="Apri scheda giocatore"
+      onClick={fire}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fire(e);
+        }
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
 /**
  * Calibrazione dello stadio di casa per una gara: sceglie (deterministico per
@@ -152,6 +215,9 @@ export function App() {
   const [booted, setBooted] = useState(false);
   // Metadati del salvataggio esistente (per il pulsante "Carica").
   const [saveMeta, setSaveMeta] = useState<SaveMeta | null>(null);
+  // Mini-popup giocatore: aperto da qualsiasi nome cliccabile via Context.
+  const [playerModal, setPlayerModal] = useState<PlayerModalRequest | null>(null);
+  const openPlayer = useCallback((req: PlayerModalRequest) => setPlayerModal(req), []);
 
   // Politica di cap derivata dalla sorgente (vedi leagueMode.ts).
   const leagueMode: LeagueMode = source === 'historical' ? HISTORICAL_MODE : GENERATED_MODE;
@@ -382,6 +448,7 @@ export function App() {
   }
 
   return (
+    <PlayerModalContext.Provider value={openPlayer}>
     <div className={immersive ? 'app app-game' : 'app'}>
       {immersive && backdropUrl && (
         <div
@@ -568,7 +635,17 @@ export function App() {
           onClose={() => setCalOpen(false)}
         />
       )}
+
+      {playerModal && (
+        <PlayerModal
+          req={playerModal}
+          season={season}
+          seed={leagueSeed}
+          onClose={() => setPlayerModal(null)}
+        />
+      )}
     </div>
+    </PlayerModalContext.Provider>
   );
 }
 
@@ -786,7 +863,14 @@ function TeamStatSide({
         <span className={`ts-role ${involved.kind}`}>
           {involved.kind === 'batter' ? 'ALLA BATTUTA' : 'SUL MONTE'}
         </span>
-        <span className="ts-pname">{player.name}</span>
+        <span className="ts-pname">
+          <PlayerLink
+            player={player}
+            pos={involved.kind === 'batter' ? involved.batter!.position : undefined}
+          >
+            {player.name}
+          </PlayerLink>
+        </span>
         <StatsToggle mode={mode} setMode={setMode} />
       </div>
       <div className="ts-line">
@@ -1607,6 +1691,7 @@ function LineupSide({
   const isBatting = sit.offenseSide === side && sit.status === 'live';
   const currentId = isBatting ? sit.batter.id : null;
   const batById = new Map(team.lineup.map((b) => [b.id, b]));
+  const pitById = new Map([...team.rotation, ...team.bullpen].map((p) => [p.id, p]));
   const rows = stats.batting.map((l) => ({
     line: l,
     items: batterStatLine(mode, l, batById.get(l.id)),
@@ -1639,7 +1724,15 @@ function LineupSide({
             <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
               <td className="l num">{i + 1}</td>
               <td className="l bname">
-                <span className="pos">{r.line.position}</span> {batLabels[i]}
+                <span className="pos">{r.line.position}</span>{' '}
+                {(() => {
+                  const b = batById.get(r.line.id);
+                  return b ? (
+                    <PlayerLink player={b} pos={b.position}>{batLabels[i]}</PlayerLink>
+                  ) : (
+                    batLabels[i]
+                  );
+                })()}
                 {r.line.id === currentId && <span className="atbat-dot">●</span>}
               </td>
               {r.items.map((it) => (
@@ -1652,7 +1745,13 @@ function LineupSide({
       {curP && (
         <div className="ls-pit">
           <span className="ls-pit-tag">LANC.</span>
-          <span className="ls-pit-name">{pitLabels[pitLabels.length - 1]}</span>
+          <span className="ls-pit-name">
+            {(() => {
+              const p = pitById.get(curP.id);
+              const label = pitLabels[pitLabels.length - 1];
+              return p ? <PlayerLink player={p}>{label}</PlayerLink> : label;
+            })()}
+          </span>
           <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
           <span className="ls-pit-stat">{curP.so} SO</span>
           <span className="ls-pit-stat">{curP.er} ER</span>
@@ -1943,11 +2042,19 @@ function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
               </span>
             </div>
             <ul>
-              {g.events.map((ev, i) => (
-                <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
-                  {ev.text}
-                </li>
-              ))}
+              {g.events.map((ev, i) => {
+                const sc = scoreCode(ev);
+                return (
+                  <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
+                    {sc && (
+                      <span className="cr-code" title={sc.title}>
+                        {sc.code}
+                      </span>
+                    )}
+                    {ev.text}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}
@@ -2005,6 +2112,197 @@ function Rating({ v }: { v: number }) {
     <td className="rat" style={{ background: ratingColor(v) }}>
       {v}
     </td>
+  );
+}
+
+// Colonne del mini-popup: battuta e lancio (una riga "Stagione" reale + una
+// "Carriera/Storico" derivata dai rating).
+const PM_BAT_COLS: Array<[string, (l: BatLine) => string]> = [
+  ['G', (l) => `${l.g}`],
+  ['AVG', (l) => pct3(l.avg)],
+  ['OBP', (l) => pct3(l.obp)],
+  ['SLG', (l) => pct3(l.slg)],
+  ['HR', (l) => `${l.hr}`],
+  ['RBI', (l) => `${l.rbi}`],
+  ['H', (l) => `${l.h}`],
+  ['2B', (l) => `${l.d2}`],
+  ['3B', (l) => `${l.t3}`],
+  ['BB', (l) => `${l.bb}`],
+  ['SO', (l) => `${l.so}`],
+  ['SB', (l) => `${l.sb}`],
+];
+const PM_PIT_COLS: Array<[string, (l: PitLine) => string]> = [
+  ['W', (l) => `${l.w}`],
+  ['L', (l) => `${l.l}`],
+  ['ERA', (l) => (l.ip ? l.era.toFixed(2) : '—')],
+  ['G', (l) => `${l.g}`],
+  ['GS', (l) => `${l.gs}`],
+  ['IP', (l) => ipFmt(l.ipOuts)],
+  ['H', (l) => `${l.h}`],
+  ['BB', (l) => `${l.bb}`],
+  ['K', (l) => `${l.k}`],
+  ['SV', (l) => `${l.sv}`],
+  ['WHIP', (l) => (l.ip ? l.whip.toFixed(2) : '—')],
+  ['K/9', (l) => (l.ip ? l.k9.toFixed(1) : '—')],
+];
+
+/** Stipendio annuale (milioni) come "12.5 M$". */
+function salaryFmt(m: number): string {
+  return `${m.toFixed(1)} M$`;
+}
+
+/**
+ * Mini-popup giocatore: intestazione (nome, età, ruolo/i, overall + stelle,
+ * stipendio), RATING DEL MOMENTO colorati (per il fielder la DIF è calcolata
+ * alla posizione occupata), e due righe STAT — "Stagione" REALE (season.bat/pit)
+ * e "Carriera/Storico" derivata dai rating (backstory). Chiudibile con ✕,
+ * click sul backdrop o Esc. Riusa le classi `.modal-*` esistenti.
+ */
+function PlayerModal({
+  req,
+  season,
+  seed,
+  onClose,
+}: {
+  req: PlayerModalRequest;
+  season: SeasonState;
+  seed: number;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const { player, pos, tier } = req;
+  const batter = isBatter(player) ? player : null;
+  const pitcher = isBatter(player) ? null : (player as Pitcher);
+
+  // Overall, ruolo/i e rating "del momento".
+  let overall: number;
+  let rolesLabel: string;
+  let ratingChips: Array<[string, number]>;
+  let statCols: Array<[string, (l: BatLine) => string]> | Array<[string, (l: PitLine) => string]>;
+  let seasonLine: BatLine | PitLine;
+  let careerLine: BatLine | PitLine;
+
+  if (batter) {
+    const activePos = pos ?? batter.position;
+    const rp = ratingsAtPosition(batter, activePos);
+    overall = batterOverall(batter.ratings);
+    rolesLabel = rolesOf(batter);
+    ratingChips = [
+      ['CON', batter.ratings.contact],
+      ['POT', batter.ratings.power],
+      ['OCC', batter.ratings.eye],
+      ['VEL', batter.ratings.speed],
+      ['DIF', rp.fielding],
+      ['BRA', batter.ratings.arm],
+    ];
+    statCols = PM_BAT_COLS;
+    seasonLine = seasonBatLine(season.bat[batter.id]);
+    careerLine = seasonBatLine(
+      projectBatterSeason(batter, tier ?? 'starter', {
+        seed,
+        year: season.year - 1,
+        day: SEASON_GAMES,
+      }),
+    );
+  } else {
+    const p = pitcher!;
+    overall = pitcherOverall(p.ratings);
+    rolesLabel = p.role === 'CL' ? 'RP (closer)' : p.role;
+    ratingChips = [
+      ['DOM', p.ratings.stuff],
+      ['CTR', p.ratings.control],
+      ['MOV', p.ratings.movement],
+      ['PAT', p.ratings.groundball],
+      ['RES', p.ratings.stamina],
+      ['DIF', p.ratings.fielding],
+    ];
+    statCols = PM_PIT_COLS;
+    seasonLine = seasonPitLine(season.pit[p.id]);
+    careerLine = seasonPitLine(
+      projectPitcherSeason(p, { seed, year: season.year - 1, day: SEASON_GAMES }),
+    );
+  }
+
+  const statRow = (line: BatLine | PitLine, label: string, cls?: string) => (
+    <tr className={cls}>
+      <td className="pm-row-lbl">{label}</td>
+      {batter
+        ? (statCols as Array<[string, (l: BatLine) => string]>).map(([k, f]) => (
+            <td key={k}>{f(line as BatLine)}</td>
+          ))
+        : (statCols as Array<[string, (l: PitLine) => string]>).map(([k, f]) => (
+            <td key={k}>{f(line as PitLine)}</td>
+          ))}
+    </tr>
+  );
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal player" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">{player.name}</div>
+          <button className="modal-close" onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="modal-body pm-body">
+          <div className="pm-top">
+            <div className="pm-ident">
+              <span className="pm-role">{rolesLabel}</span>
+              <span className="pm-meta">{player.age} anni · {salaryFmt(player.salary)}</span>
+            </div>
+            <div className="pm-ovr">
+              <Stars overall={overall} />
+              <span className="pm-ovr-n" style={{ color: ratingColor(overall) }}>
+                {overall}
+              </span>
+            </div>
+          </div>
+
+          <div className="pm-ratings">
+            {ratingChips.map(([k, v]) => (
+              <div className="pm-rt" key={k}>
+                <span className="pm-rt-k">{k}</span>
+                <span className="pm-rt-v" style={{ background: ratingColor(v) }}>
+                  {v}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="pm-stats">
+            <div className="roster-scroll">
+              <table className="ratings pm-stat-tbl">
+                <thead>
+                  <tr>
+                    <th className="l"></th>
+                    {(statCols as Array<[string, unknown]>).map(([k]) => (
+                      <th key={k}>{k}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {statRow(seasonLine, 'Stagione')}
+                  {statRow(careerLine, 'Carriera', 'pm-career')}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted pm-note">
+              La riga <b>Stagione</b> è reale (partite giocate). La <b>Carriera/Storico</b> è
+              una stima derivata dai rating (backstory): lo storico reale si comporrà col
+              rollover di stagione (Fase 4).
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2454,7 +2752,7 @@ function RosterPage({
     >
       <td className="n">{from === 'avail' ? '' : i + 1}</td>
       <td className="l grip">
-        ⠿ {p.name}
+        ⠿ <PlayerLink player={p}>{p.name}</PlayerLink>
         {tag && <span className="tag">{tag}</span>}
       </td>
       <td className="roles">
@@ -2652,7 +2950,9 @@ function RosterPage({
                         onDrop={() => { dropLineupRow(b.id); setOver(null); }}
                       >
                         <td className="n">{i + 1}</td>
-                        <td className="l grip">⠿ {b.name}</td>
+                        <td className="l grip">
+                          ⠿ <PlayerLink player={b} pos={arr.defense[b.id] ?? b.position} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
+                        </td>
                         <td className="roles">{rolesOf(b)}</td>
                         <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
                         <td className="age">{b.age}</td>
@@ -2693,7 +2993,9 @@ function RosterPage({
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => { dropBenchRow(b.id); setOver(null); }}
                       >
-                        <td className="l grip">⠿ {b.name}</td>
+                        <td className="l grip">
+                          ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
+                        </td>
                         <td className="roles">{rolesOf(b)}</td>
                         <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
                         <td className="age">{b.age}</td>
@@ -2754,7 +3056,9 @@ function RosterPage({
                               <span className={`pos${pos === b.position ? '' : ' moved'}`}>{pos}</span>
                               {outOfRole && ' ⚠'}
                             </td>
-                            <td className="l grip">⠿ {b.name}</td>
+                            <td className="l grip">
+                              ⠿ <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
+                            </td>
                             <td className="roles">{rolesOf(b)}</td>
                             <td className="ovr"><Stars overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
                             <td className="age">{b.age}</td>
@@ -2795,7 +3099,9 @@ function RosterPage({
                           onDragEnd={() => { setDrag(null); setOver(null); }}
                           onDragOver={(e) => e.preventDefault()}
                         >
-                          <td className="l grip">⠿ {b.name}</td>
+                          <td className="l grip">
+                            ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
+                          </td>
                           <td className="roles">{rolesOf(b)}</td>
                           <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
                           <td className="age">{b.age}</td>
@@ -2846,7 +3152,15 @@ function RosterPage({
                         }
                       >
                         <span className="fpos-lbl">{pos}</span>
-                        <span className="fpos-name">{b ? lastName(b.name) : '—'}</span>
+                        <span className="fpos-name">
+                          {b ? (
+                            <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>
+                              {lastName(b.name)}
+                            </PlayerLink>
+                          ) : (
+                            '—'
+                          )}
+                        </span>
                         {b && (
                           <span
                             className={`fpos-dif${natural ? '' : ' off'}`}
@@ -2877,7 +3191,15 @@ function RosterPage({
                         onDrop={(e) => { e.stopPropagation(); dropDefCell('DH'); setOver(null); }}
                       >
                         <span className="fpos-lbl">DH</span>
-                        <span className="fpos-name">{b ? lastName(b.name) : '—'}</span>
+                        <span className="fpos-name">
+                          {b ? (
+                            <PlayerLink player={b} pos={'DH'} tier={batTierOf.get(b.id)}>
+                              {lastName(b.name)}
+                            </PlayerLink>
+                          ) : (
+                            '—'
+                          )}
+                        </span>
                       </div>
                     );
                   })()}
@@ -3008,30 +3330,30 @@ function HomePage({
   const myPitchers = rosterPitchers(managedTeam);
   const batOf = (b: Batter) => season.bat[b.id];
   const pitOf = (p: Pitcher) => season.pit[p.id];
-  const leaders: Array<{ label: string; who?: string; val: string }> = [
+  const leaders: Array<{ label: string; who?: string; val: string; player?: Batter | Pitcher }> = [
     (() => {
       const x = topBy(myBatters, batOf, (s: SeasonBat) => s.hr);
-      return { label: 'HR', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'HR', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myBatters, batOf, (s: SeasonBat) => s.rbi);
-      return { label: 'RBI', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'RBI', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myBatters, batOf, (s: SeasonBat) => (s.ab ? s.h / s.ab : 0), 5);
-      return { label: 'AVG', who: x?.t.name, val: x ? x.v.toFixed(3).replace(/^0/, '') : '—' };
+      return { label: 'AVG', who: x?.t.name, val: x ? x.v.toFixed(3).replace(/^0/, '') : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.w);
-      return { label: 'W', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'W', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.so);
-      return { label: 'K', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'K', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.sv);
-      return { label: 'SV', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'SV', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
   ];
   const played = Object.keys(season.results).length > 0;
@@ -3099,7 +3421,18 @@ function HomePage({
               {leaders.map((l) => (
                 <div className="leader" key={l.label}>
                   <div className="lmain">
-                    <span className="lwho">{l.who ?? '—'}</span>
+                    <span className="lwho">
+                      {l.player ? (
+                        <PlayerLink
+                          player={l.player}
+                          pos={isBatter(l.player) ? l.player.position : undefined}
+                        >
+                          {l.who}
+                        </PlayerLink>
+                      ) : (
+                        (l.who ?? '—')
+                      )}
+                    </span>
                     <span className="lstat">{l.label}</span>
                   </div>
                   <span className="lval">{l.val}</span>
@@ -3354,6 +3687,7 @@ interface LbBat {
   managed: boolean;
   line: BatLine;
   pa: number;
+  player: Batter;
 }
 interface LbPit {
   id: string;
@@ -3361,6 +3695,7 @@ interface LbPit {
   team: Team;
   managed: boolean;
   line: PitLine;
+  player: Pitcher;
 }
 
 interface LbCol<R> {
@@ -3404,7 +3739,9 @@ const PIT_LB_COLS: LbCol<LbPit>[] = [
 
 const LB_LIMIT = 50;
 
-function LbTable<R extends { id: string; name: string; team: Team; managed: boolean }>({
+function LbTable<
+  R extends { id: string; name: string; team: Team; managed: boolean; player: Batter | Pitcher },
+>({
   rows,
   cols,
   defaultKey,
@@ -3461,7 +3798,14 @@ function LbTable<R extends { id: string; name: string; team: Team; managed: bool
           {sorted.map((r, i) => (
             <tr key={r.id} className={r.managed ? 'me' : undefined}>
               <td className="rank">{i + 1}</td>
-              <td className="l name">{r.name}</td>
+              <td className="l name">
+                <PlayerLink
+                  player={r.player}
+                  pos={isBatter(r.player) ? r.player.position : undefined}
+                >
+                  {r.name}
+                </PlayerLink>
+              </td>
               <td className="l">
                 <TeamBadge team={r.team} size={15} /> {r.team.abbrev}
               </td>
@@ -3521,7 +3865,7 @@ function LeaderboardPage({
           if (!sb) continue;
           const pa = sb.ab + sb.bb;
           if (pa < minPA) continue;
-          out.push({ id: b.id, name: b.name, team: t, managed, line: seasonBatLine(sb), pa });
+          out.push({ id: b.id, name: b.name, team: t, managed, line: seasonBatLine(sb), pa, player: b });
         }
       }
     }
@@ -3546,7 +3890,7 @@ function LeaderboardPage({
           sp = real ? addPit(real, fill) : fill;
         }
         if (!sp || sp.outs < minOuts) continue;
-        out.push({ id: p.id, name: p.name, team: t, managed, line: seasonPitLine(sp) });
+        out.push({ id: p.id, name: p.name, team: t, managed, line: seasonPitLine(sp), player: p });
       }
     }
     return out;

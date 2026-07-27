@@ -45,7 +45,17 @@ Regioni, dall'alto in basso:
     simulazione né l'RNG). Non interattivo (`pointer-events:none`).
   - **Cronaca laterale** (`CronacaTeam`, angoli **alti** sx/dx per ospite/casa):
     a fine turno la giocata resta **sintetizzata in una riga** (`PlayEvent.text`)
-    nella timeline della squadra in attacco.
+    nella timeline della squadra in attacco. Davanti al testo, un **chip col
+    codice da segnapunti** (`scoreCode` in `src/ui/scorecode.ts`): `6-4-3 DP`
+    (doppio gioco SS→2B→1B), `F7` (eliminato al volo, LF), `K`/`ꓘ` (strikeout),
+    `CS 2-6` (eliminato in rubata), `3U` (rimbalzo non assistito in 1ª), ecc.,
+    con tooltip esplicativo in italiano. **Il motore non simula ancora la difesa**
+    (dove va la palla / quale difensore la gioca): il codice è quindi
+    **sintetizzato in modo PLAUSIBILE e DETERMINISTICO** dal `PlayEvent.kind`
+    (hash dell'evento, come `commentary.ts`) — descrittivo, non un dato del
+    motore, **niente RNG, determinismo invariato**. Quando la difesa sarà
+    simulata (fase futura) i ruoli reali sostituiranno la sintesi senza cambiare
+    la UI. Coperto da test (`src/ui/__tests__/scorecode.test.ts`).
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
     battitore corrente evidenziato, lanciatore in pedana).
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
@@ -75,6 +85,34 @@ le righe del giocatore coinvolto e il **Recap**. Le righe sono calcolate in
 **Recap partita** (`RecapModal`): popup quasi a tutto schermo con line score e
 **box score completo** di entrambe le squadre (battuta + lancio, V/P/SV), col
 toggle stat. Chiudibile con ✕, click fuori o Esc.
+
+### Mini-popup giocatore (Fase 3, `PlayerModal`)
+
+Scheda compatta e **riusabile**, apribile da **qualsiasi nome cliccabile** in
+tutta l'interfaccia (`.player-link`). Filosofia coerente col progetto:
+manageriale/minimal, niente grafica pesante stile MLB 2K. Riusa le classi modale
+esistenti (`.modal-backdrop` / `.modal` / `.modal-head` / `.modal-close`) con una
+variante compatta `.modal.player` (max ~560px).
+
+- **Contenuto.** Intestazione (nome, ruolo/i, età, stipendio, overall + `<Stars>`
+  colorato); **RATING DEL MOMENTO** colorati (`ratingColor`) in una griglia di 6
+  chip — battitore **CON/POT/OCC/VEL/DIF/BRA** (la **DIF** è il fielding **alla
+  posizione occupata**, via `ratingsAtPosition`), lanciatore
+  **DOM/CTR/MOV/PAT/RES/DIF**; una tabellina STAT con riga **«Stagione»** REALE
+  (`season.bat[id]`/`season.pit[id]` → `seasonBatLine`/`seasonPitLine`) e riga
+  **«Carriera/Storico»** derivata dai rating (backstory, via
+  `projectBatterSeason`/`projectPitcherSeason`), con nota che lo storico reale si
+  comporrà col rollover di stagione (Fase 4). Chiudibile con ✕, backdrop o Esc.
+- **Distribuzione.** Per non passare callback attraverso tutta la gerarchia, un
+  **Context** (`PlayerModalContext`) espone `openPlayer`; `App` monta il modale
+  **una volta sola** coi `season`/`seed` correnti. Il wrapper `<PlayerLink>` è
+  uno `span` (mai `draggable`) così **dentro le righe trascinabili del roster il
+  drag continua a funzionare** e il click apre la scheda (`stopPropagation`).
+- **Dove sono cliccabili i nomi.** Roster: tabelle Lineup e Difesa (per-posizione
+  + riserve/disponibili), righe lanciatori e caselle del campo (`.fpos-name`); in
+  partita: pannelli `LineupSide` (`.bname` + lanciatore in pedana) e giocatore
+  coinvolto nella barra stat (`.ts-pname`); Leaderboard (righe); Home (card
+  Leader). Solo UI: **non tocca il motore né l'RNG** (determinismo invariato).
 
 - **Scheda "Rose & caratteristiche"**: doti 40-100 colorate per lineup e rotazione,
   con OVR a stelle e lo scambio difensivo (seconda posizione).
@@ -222,8 +260,9 @@ modifiche al codice**. Per uno stadio, se esistono più file, vale il primo tra
 
 - **Rifinitura Fase 1**: pulsanti per Hit-and-run, Pinch-hit (menu panchina) e
   difesa avanzata (interni dentro).
-- **Fase 3**: campo con etichette giocatori posizionate, card giocatore ricche,
-  pannelli in stile SBS/OOTP.
+- **Fase 3**: campo con etichette giocatori posizionate ✓, **mini-popup
+  giocatore** cliccabile ovunque ✓ (vedi «Mini-popup giocatore»). Restano card
+  giocatore più ricche e ulteriori pannelli in stile SBS/OOTP.
 
 ## Regole di stile
 

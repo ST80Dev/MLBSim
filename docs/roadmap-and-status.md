@@ -111,10 +111,15 @@
     division reali) e pagina **Leaderboard** (Batting/Pitching: numeri reali per
     la mia squadra, **proiezione** d'annata credibile per le altre 29, con
     identità statistiche rispettate — `data/projection.ts`).
+  - **FATTO (scollegatore ERA):** **difesa dietro il lanciatore** — la sintesi
+    difensiva dei 9 schierati (`teamSynthesis().def`, la stessa della UI) sposta la
+    BABIP (hit su palla in gioco ⟷ out), mai i three true outcomes. Neutrale alla
+    media di lega (aggregati di Fase 0 invariati), scollega l'ERA del singolo
+    lanciatore di ~±0.35 fra difesa scarsa ed élite. Vedi
+    `docs/engine-calibration.md` § Difesa dietro il lanciatore; `TUNING.defense`.
   - **Manca:** **playoff giocabili** (ora slot placeholder); **rollover di
-    stagione** (stagione → scorsa → carriera dai dati reali degli anni gestiti);
-    scollegatori ERA-vs-talento (**difesa dietro il lanciatore**, **fattore
-    stadio**).
+    stagione** (stagione → scorsa → carriera dai dati reali degli anni gestiti). Il
+    **fattore stadio** è **fuori scope** per scelta (non serve a questo livello).
 - **Fase 5 — Franchigia (gestione leggera)**
   - Vedi `docs/franchise.md`: stipendi annuali, salary cap rigido, scambi a
     valore, draft semplice. Fondazione modalità/cap già presente (vedi Fase 2).
