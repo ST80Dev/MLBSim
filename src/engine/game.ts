@@ -4,6 +4,7 @@ import { makeRng, clamp } from './rng';
 import { resolveAtBat } from './atbat';
 import { TUNING } from './constants';
 import { RATING_AVG } from './ratings';
+import { teamSynthesis } from './teamRatings';
 import {
   BattingLine,
   PitchingLine,
@@ -206,6 +207,18 @@ const offense = (l: LiveGame): SideState =>
 const defense = (l: LiveGame): SideState =>
   l.half === 'top' ? l.homeSide : l.awaySide;
 
+/**
+ * Difesa dietro il lanciatore, in sigma per `combineRates`: sintesi difensiva dei
+ * 9 schierati (`teamSynthesis().def`, pesata per ruolo, DH escluso) rispetto alla
+ * media di lega. >0 = reparto sopra la media (piu' out su palla in gioco). E' la
+ * STESSA difesa mostrata nella UI (Roster), cosi' migliorare i difensori si vede
+ * davvero sull'ERA. Nessun RNG: sposta solo le soglie. Vedi `TUNING.defense`.
+ */
+function fieldingSigma(def: SideState): number {
+  const entries = def.team.lineup.map((b) => ({ b, pos: b.position }));
+  return (teamSynthesis(entries).def - TUNING.defense.neutral) / 10;
+}
+
 function ensureInningSlot(s: SideState, inning: number): void {
   while (s.lineByInning.length < inning) s.lineByInning.push(0);
 }
@@ -285,7 +298,13 @@ function swingAtBat(l: LiveGame): void {
   pLine.bf += 1;
   const bLine = off.battingLines.get(batter.id)!;
 
-  const { event } = resolveAtBat(batter, pitcher, def.battersFacedByCurrent, l.rng);
+  const { event } = resolveAtBat(
+    batter,
+    pitcher,
+    def.battersFacedByCurrent,
+    l.rng,
+    fieldingSigma(def),
+  );
 
   const runsBefore = off.runs;
   const res = applyEvent(
@@ -561,7 +580,13 @@ export function hitAndRun(l: LiveGame): boolean {
   const runsBefore = off.runs;
   const bases = l.bases;
 
-  const { event } = resolveAtBat(batter, pitcher, def.battersFacedByCurrent, l.rng);
+  const { event } = resolveAtBat(
+    batter,
+    pitcher,
+    def.battersFacedByCurrent,
+    l.rng,
+    fieldingSigma(def),
+  );
   let ev = event;
   // Il battitore protegge: parte degli strikeout diventa palla in gioco.
   if (ev === 'SO') {
