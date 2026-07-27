@@ -3500,6 +3500,17 @@ table {
 .leaderboard-page .subtabs {
   margin-bottom: 10px;
 }
+/* Sotto-filtri del reparto lanciatori (Tutti/Partenti/Rilievo): riga secondaria
+   piu' compatta e staccata dai tab principali Batting/Pitching. */
+.leaderboard-page .subtabs.pit-scope {
+  margin-top: -2px;
+  margin-bottom: 12px;
+  gap: 6px;
+}
+.leaderboard-page .subtabs.pit-scope .subtab {
+  padding: 4px 12px;
+  font-size: 13px;
+}
 .lb-tbl {
   width: 100%;
   min-width: 720px;

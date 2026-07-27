@@ -1,7 +1,42 @@
-import type { Batter, Pitcher } from '../engine/types';
+import type { Batter, Pitcher, BatterRatings, PitcherRatings } from '../engine/types';
 import { deriveBatterStats, derivePitcherStats, batterOverall, pitcherOverall, RATING_AVG } from '../engine/ratings';
 import { makeRng, clamp } from '../engine/rng';
 import type { SeasonBat, SeasonPit } from './season';
+
+// ---------------------------------------------------------------------------
+// Regressione verso la media (Log5-like).
+// `deriveStats` estrapola il rating IN SOLITARIA: un power 90 fa ~2x HR, un 100
+// ~2.9x. Il MOTORE invece (combineRates/Log5) fa affrontare al fenomeno anche
+// avversari forti, quindi ogni sfida REGREDISCE verso la media di lega e i totali
+// stagionali si comprimono. Senza questo, la proiezione sforna troppi "quasi
+// fenomeni" (decine di .317/40 HR, ERA sotto 3.00) che il motore non produce.
+// Riportiamo i rating verso la media PRIMA di derivare: r' = 70 + λ·(r − 70).
+// λ per-dote, calibrato perche' la distribuzione proiettata combaci col motore
+// (stagioni simulate): ~12-16 .317+, ~10 da 40 HR, ~5-10 con 45+ SB, ~3-6 SP
+// sotto 3.00, K top ~260, leader RBI ~150. λ piu' basso = piu' compressione.
+// La velocita' si comprime meno (le SB restano una dote saliente); i lanciatori
+// di piu' (Log5 li regredisce parecchio verso la media).
+function regress(x: number, lambda: number): number {
+  return clamp(RATING_AVG + lambda * (x - RATING_AVG), 40, 100);
+}
+function regressBat(r: BatterRatings): BatterRatings {
+  return {
+    ...r,
+    contact: regress(r.contact, 0.56),
+    power: regress(r.power, 0.63),
+    eye: regress(r.eye, 0.66),
+    speed: regress(r.speed, 0.74),
+  };
+}
+function regressPit(r: PitcherRatings): PitcherRatings {
+  return {
+    ...r,
+    stuff: regress(r.stuff, 0.45),
+    control: regress(r.control, 0.48),
+    movement: regress(r.movement, 0.44),
+    groundball: regress(r.groundball, 0.46),
+  };
+}
 
 // Proiezione delle statistiche di LEGA (le 29 squadre NON gestite) per la
 // leaderboard. La squadra dell'utente usa le stat REALI accumulate dai box
@@ -67,6 +102,8 @@ interface BatProfile {
   sbMult: number;
   paMult: number;
   rbiLuck: number;
+  /** Tetto di partite giocate d'annata (riposi/acciacchi): pochi arrivano a 162. */
+  gamesCap: number;
 }
 
 // Estrazione a coda pesante: valore assoluto di una gaussiana, ma solo con
@@ -97,9 +134,15 @@ function batterProfile(seed: number, id: string, year: number): BatProfile {
   let paMult = clamp(1 + 0.03 * form + rng.gauss(0, 0.04) - 0.12 * collapse, 0.62, 1.06);
   if (rng.next() < 0.08) paMult *= clamp(rng.next() * 0.5 + 0.4, 0.35, 0.9); // infortunio
 
+  // Disponibilita' stagionale: quasi tutti i titolari saltano qualche gara
+  // (riposi programmati, acciacchi minori). Campana centrata sotto le 150; solo
+  // un raro "iron man" sfiora le 162 (nella MLB reale sono una manciata a lega).
+  let gamesCap = clamp(Math.round(143 + rng.gauss(0, 7) - 24 * collapse), 90, 162);
+  if (rng.next() < 0.04) gamesCap = clamp(Math.round(158 + rng.gauss(0, 2)), 154, 162); // raro iron-man
+
   return {
-    hrMult: clamp(level + 0.13 * power + 0.15 * powerSpike + rng.gauss(0, 0.05), 0.5, 1.62),
-    xbhMult: clamp(level + 0.1 * power + 0.09 * powerSpike + rng.gauss(0, 0.05), 0.55, 1.48),
+    hrMult: clamp(level + 0.13 * power + 0.11 * powerSpike + rng.gauss(0, 0.05), 0.5, 1.48),
+    xbhMult: clamp(level + 0.1 * power + 0.09 * powerSpike + rng.gauss(0, 0.05), 0.55, 1.42),
     // Singoli: anti-correlata alla potenza (modesta) + rara gemma di contatto.
     avgMult: clamp(level - 0.04 * power + 0.12 * contactSpike + rng.gauss(0, 0.03), 0.86, 1.3),
     bbMult: clamp(level + rng.gauss(0, 0.1), 0.7, 1.4),
@@ -108,6 +151,7 @@ function batterProfile(seed: number, id: string, year: number): BatProfile {
     sbMult: clamp(1 + rng.gauss(0, 0.18), 0.5, 1.6),
     paMult,
     rbiLuck: clamp(level + rng.gauss(0, 0.05), 0.82, 1.25),
+    gamesCap,
   };
 }
 
@@ -130,13 +174,13 @@ function pitcherProfile(seed: number, id: string, year: number): PitProfile {
   const collapse = rareTail(rng, 0.07); // ~7%: annata storta diffusa
 
   // levelBad > 1 = piu' punti concessi; il dominio raro (additivo) lo abbatte.
-  const levelBad = clamp(1 - 0.04 * form + 0.13 * collapse - 0.1 * domSpike, 0.72, 1.5);
-  const eraLuck = clamp(levelBad + rng.gauss(0, 0.08), 0.72, 1.55); // sequenze/BABIP/LOB: galleggia
+  const levelBad = clamp(1 - 0.04 * form + 0.13 * collapse - 0.07 * domSpike, 0.8, 1.5);
+  const eraLuck = clamp(levelBad + rng.gauss(0, 0.08), 0.8, 1.55); // sequenze/BABIP/LOB: galleggia
   let ipMult = clamp(1 + 0.03 * form + rng.gauss(0, 0.05) - 0.13 * collapse, 0.6, 1.08);
   if (rng.next() < 0.1) ipMult *= clamp(rng.next() * 0.5 + 0.4, 0.35, 0.9);
 
   return {
-    kMult: clamp(1 + 0.07 * form + 0.12 * kSpike + rng.gauss(0, 0.07), 0.72, 1.45),
+    kMult: clamp(1 + 0.07 * form + 0.09 * kSpike + rng.gauss(0, 0.07), 0.72, 1.35),
     bbMult: clamp((1 - 0.05 * form) * (1 + rng.gauss(0, 0.12)), 0.68, 1.5),
     hrMult: clamp(levelBad + rng.gauss(0, 0.11), 0.6, 1.6),
     hMult: clamp(levelBad + rng.gauss(0, 0.06), 0.8, 1.28),
@@ -213,7 +257,9 @@ function seasonalPA(
 }
 
 function batterFull(b: Batter, pa: number, prof: BatProfile): SeasonBat {
-  const base = deriveBatterStats(b.ratings, pa);
+  // Rating regrediti verso la media (Log5-like): la linea proiettata combacia col
+  // motore invece di estrapolare il talento in solitaria (vedi regressBat).
+  const base = deriveBatterStats(regressBat(b.ratings), pa);
   const singles0 = Math.max(0, base.h - base.double - base.triple - base.hr);
 
   // ALLOCAZIONE SUL BUDGET PA (rispetta le identita' per costruzione): ogni PA e'
@@ -249,9 +295,13 @@ function batterFull(b: Batter, pa: number, prof: BatProfile): SeasonBat {
   const sb = R(base.sb * prof.sbMult);
   const cs = R(base.cs * prof.sbMult);
   // Risultati (galleggiano): punti e RBI stimati dalla linea, con fortuna annata.
-  const r = R(((h + bb) * 0.33 + hr * 0.5) * prof.rbiLuck);
-  const rbi = R((hr * 1.65 + (h - hr) * 0.3) * prof.rbiLuck);
-  const g = Math.min(SEASON_GAMES, R(pa / 4.3)); // non si giocano piu' di 162 gare
+  // Coefficienti tarati sul motore: leader RBI ~150, non ~190. rbiLuck stretta.
+  const rbiLuck = clamp(prof.rbiLuck, 0.85, 1.15);
+  const r = R(((h + bb) * 0.295 + hr * 0.42) * rbiLuck);
+  const rbi = R((hr * 1.65 + (h - hr) * 0.32) * rbiLuck);
+  // Partite giocate: min tra la stima da PA e il tetto di disponibilita' d'annata
+  // (riposi/acciacchi). Cosi' quasi nessuno arriva a 162 (come nella realta').
+  const g = Math.min(SEASON_GAMES, R(pa / 4.3), prof.gamesCap);
   return { g, ab, r, h, rbi, bb, so, double, triple, hr, sb, cs };
 }
 
@@ -262,7 +312,9 @@ function pitcherFull(p: Pitcher, prof: PitProfile): SeasonPit {
   // lanciatori scarsi (1-2 stelle: pochi inning, rimpiazzati). ipMult = annata.
   const ageF = ageplayFactor(p.age) * ovrplayFactor(ovr);
   const bf = Math.max(1, R(load.bf * prof.ipMult * ageF));
-  const base = derivePitcherStats(p.ratings, bf);
+  // Rating regrediti verso la media (Log5-like): ERA/K proiettati come dal motore
+  // (pochi sotto 3.00, K top ~260), non estrapolando il rating (vedi regressPit).
+  const base = derivePitcherStats(regressPit(p.ratings), bf);
   const bb = R(base.bb * prof.bbMult);
   const hr = R(base.hr * prof.hrMult);
   const h = Math.max(hr, R(base.h * prof.hMult)); // le hit includono gli HR

@@ -149,10 +149,13 @@ palla in gioco), **mai** HR/BB/HBP/SO.
   → uno spread di ~0.7 ERA fra i due estremi. Sensibile ma **non dominante**: il
   lanciatore resta il fattore principale. Test in `engine/__tests__/defense.test.ts`.
 
-Curva ERA↔bravura misurata in Fase 0 (media, gare complete, lega calda): livello
-doti 50→ERA ~4.3; 60→~3.2; ~61 è la soglia del 3.00; 66→~2.4; 72→~1.8; 80→~1.4.
-Con la distribuzione generata, **~8-10 partenti sotto il 3.00 in tutta la lega** —
-è un valore desiderato, l'ERA sotto 2 resta appannaggio dei soli assi.
+Curva ERA↔bravura **del motore** (Log5, gare complete), misurata simulando una
+stagione intera con rotazione piena (R/g ~5.4): ovr ~72→ERA ~6.3; ~80→~4.3;
+~84→~3.6; ~92→~2.2. Il motore **regredisce ogni sfida verso la media di lega**
+(il fenomeno affronta anche avversari forti), quindi comprime i totali: in tutta
+la lega restano **~3-6 partenti sotto il 3.00** e l'ERA sotto 2 è appannaggio dei
+soli assi. Questo è il **bersaglio** a cui la proiezione dev'essere allineata
+(vedi "Proiezione di lega").
 
 ## Come ri-calibrare (procedura)
 
@@ -182,29 +185,47 @@ può portare a .400+ solo *di rado*.
 ## Proiezione di lega e varianza d'annata (`data/projection.ts`)
 
 La leaderboard mostra le stat REALI della squadra gestita e una **proiezione** per
-le altre 29 (senza simulare ogni loro partita). Due livelli di varianza:
+le altre 29 (senza simulare ogni loro partita).
 
-- **stagione su stagione** — un *profilo d'annata* seedato con `form` (livello
-  generale: molte stat su/giù INSIEME), asse `power`↔contatto, e **code rare**
-  (`powerSpike`/`contactSpike`/`kSpike`/`domSpike` ~5%, `collapse` ~7%) che
-  producono le **gemme** (non legate al rating tutti gli anni);
+**Regressione verso la media (Log5-like) — il cardine dell'allineamento.**
+`deriveBatterStats`/`derivePitcherStats` estrapolano il rating **in solitaria**
+(mappa esponenziale: power 90 → ~2× HR, 100 → ~2.9×). Il motore invece fa
+affrontare al fenomeno anche avversari forti, quindi **ogni sfida regredisce verso
+la media** e i totali si comprimono. Senza correzione la proiezione sfornava
+decine di "quasi-fenomeni" che il motore non produce (54 BA≥.317, 40 HR≥40, 22 SP
+sotto 3.00, leader 190 RBI, 113 in tutte le 162 gare). La proiezione perciò
+**regredisce i rating verso `RATING_AVG` prima di derivare**: `r' = 70 + λ·(r−70)`,
+con λ per-dote (`regressBat`/`regressPit` in `projection.ts`). λ più basso =
+più compressione; la **velocità** si comprime meno (le SB restano salienti), i
+**lanciatori** di più (Log5 li regredisce parecchio). Calibrato perché la
+distribuzione proiettata **combaci col motore** (stagioni simulate).
+
+Sopra alla base regredita agiscono ancora due livelli di varianza:
+
+- **stagione su stagione** — un *profilo d'annata* seedato con `form`, asse
+  `power`↔contatto, `gamesCap` (disponibilità: pochi arrivano a 162), e **code
+  rare** (`powerSpike`/`contactSpike`/`kSpike`/`domSpike`, `collapse`) per le
+  **gemme**; `eraLuck` galleggia con pavimento 0.80 (l'ERA sotto 3.00 non è a
+  comando). RBI/R sono **risultati** stimati dalla linea (coeff. tarati: leader
+  RBI ~150, non ~190);
 - **intra-stagione** — curve di forma monotone che si **riallineano** al target
-  d'annata entro la giornata 162 (tanta varianza a inizio anno, poi converge).
+  d'annata entro la giornata 162.
 
-Distribuzione del **campione di lega** (leader per annata, misurata su ~48
-lega-annate; p50 / p90 / max — gemma = coda rara "ogni tanto"):
+Aggregati di lega della proiezione (allineati al motore): **R/g ~5.4**, **HR/g
+~1.45**, BA ~.266. Code realistiche **per lega** (bersaglio, misurato su molte
+lega-annate):
 
-| | p50 | p90 | max | %gemma |
-|---|---|---|---|---|
-| HR | 55 | 60 | 65 | 60+ ≈ 13% |
-| BA | .379 | .402 | .42 | .400+ ≈ 13% |
-| K | 264 | 307 | — | 300+ ≈ 17% |
-| ERA | 2.39 | 1.96 | — | ≤2.10 ≈ 15% |
+| Metrica | Proiezione | Metrica | Proiezione |
+|---|---|---|---|
+| BA ≥ .317 | ~15 | SP ERA < 3.00 | ~5-7 |
+| HR ≥ 40 | ~10 (max ~50) | SP K ≥ 200 | ~12 (top ~260) |
+| SB ≥ 45 | ~7 | leader RBI | ~150-158 |
+| G = 162 | ~1 (raro "iron man") | RBI ≥ 120 | ~10 |
 
-Giocatore tipico (mediana titolari): **BA ~.263, ~20 HR**; ERA SP mediana ~4.78.
-Ri-tarare: gli SD di routine restano piccoli (il **max su ~600** amplifica già la
-coda ~3σ), le gemme sono termini **additivi e limitati**; misura con uno script
-Monte-Carlo nello scratchpad (distribuzione del leader + % gemme), non a occhio.
+Ri-tarare: cambia i **λ** di `regressBat`/`regressPit` (compressione delle cime,
+non tocca la media di lega perché la mappa è convessa — Jensen); misura con uno
+script Monte-Carlo nello scratchpad confrontando **sempre** col bersaglio del
+motore (stagione simulata), non a occhio.
 
 ## Varietà: fra squadre, fra compagni, code basse
 
