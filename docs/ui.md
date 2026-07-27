@@ -56,6 +56,24 @@ Regioni, dall'alto in basso:
     motore, **niente RNG, determinismo invariato**. Quando la difesa sarà
     simulata (fase futura) i ruoli reali sostituiranno la sintesi senza cambiare
     la UI. Coperto da test (`src/ui/__tests__/scorecode.test.ts`).
+    - **Coerenza cronaca ↔ codice.** Per l'out su palla in gioco (`inplayout`)
+      la categoria (rimbalzo / volata / presa) NON è più scelta due volte in
+      modo indipendente: viene da un'unica fonte, `inPlayOutShape(ev)` in
+      `commentary.ts`, usata sia dal verdetto del banner sia dal codice. Così
+      non capita più "out in prima" (rimbalzo) con un codice di volata `F8`.
+    - **Testate d'inning impilabili.** Testate (`cr-inhead`) ed eventi sono
+      figli **diretti** di `.crt-body`: ogni testata è `position: sticky` con
+      `top = --crh * indice`, così scorrendo gli inning passati collassano alla
+      loro testata e queste si **accumulano fisse** in cima (1°/2°/3°…). Se
+      restassero annidate in un box per-inning scorrerebbero via una per volta.
+  - **Marker sulle basi a rivelazione ritardata.** I marker del diamante (basi +
+    corridori) NON si spostano appena eseguito il turno: si aggiornano al
+    **verdetto** della telecronaca di quel turno (callback `onReveal` dal
+    `PlayBanner`, sincronizzata con l'ultima fase). Così non si vede il corridore
+    già in base prima di averne letto l'esito. Fuori dalla telecronaca (ripresa
+    partita, quick-sim, cambio) i marker si allineano subito. Stato in `App`
+    (`shownField`), passato a `Diamond`/`BaseDiamond`; il motore e i controlli
+    restano sullo stato reale (`sit`), solo i marker sono in ritardo.
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
     battitore corrente evidenziato, lanciatore in pedana).
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:

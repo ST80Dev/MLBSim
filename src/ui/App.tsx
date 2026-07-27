@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useReducer, useRef, useState, Fragment } from 'react';
 import type { ReactNode } from 'react';
 import type { Batter, Pitcher, Position, Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
@@ -177,6 +177,20 @@ function pickMatchCalibration(
   return getCalibrationFor(homeId, pick.image);
 }
 
+// Istantanea dei soli marker sul diamante (basi + corridori + battitore),
+// mostrata con ritardo rispetto allo stato reale finché la telecronaca del
+// turno non arriva al verdetto. Vedi `shownField` in App.
+type FieldSnap = {
+  bases: [boolean, boolean, boolean];
+  baseRunners: [string | null, string | null, string | null];
+  batterName: string | null;
+};
+const fieldSnap = (s: LiveSituation): FieldSnap => ({
+  bases: s.bases,
+  baseRunners: s.baseRunners,
+  batterName: s.batter?.name ?? null,
+});
+
 export function App() {
   const [leagueSeed, setLeagueSeed] = useState<number>(() => newRandomSeed());
   const [managedId, setManagedId] = useState<string>('');
@@ -274,6 +288,22 @@ export function App() {
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
+
+  // --- Rivelazione ritardata dei marker sulle basi -------------------------
+  // I marker (basi + corridori sul diamante) NON si spostano appena eseguito il
+  // turno: aspettano il VERDETTO della telecronaca di quel turno (PlayBanner),
+  // così non si vede il corridore già in base prima di averne letto l'esito in
+  // cronaca. Fuori dalla telecronaca (ripresa partita, quick-sim, cambio) si
+  // aggiornano subito. `live` cambia identità solo quando si ricrea la partita,
+  // non a ogni turno: l'effetto qui sotto riazzera i marker a inizio gara.
+  const [shownField, setShownField] = useState<FieldSnap>(() => fieldSnap(sit));
+  useEffect(() => {
+    setShownField(fieldSnap(situation(live)));
+  }, [live]);
+  // Passata al PlayBanner: chiamata al verdetto (o subito se non c'è cronaca).
+  const revealField = useCallback(() => {
+    setShownField(fieldSnap(situation(live)));
+  }, [live]);
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
   const inLiveGame = view === 'game' && !!activeGame && !final;
@@ -452,8 +482,10 @@ export function App() {
           editing={editing}
           cal={cal}
           onMarkerMove={moveMarker}
-          runners={sit.baseRunners}
-          batterName={sit.batter.name}
+          basesShown={shownField.bases}
+          runners={shownField.baseRunners}
+          batterName={shownField.batterName}
+          onReveal={revealField}
           controls={
             final ? (
               <FinalOverlay
@@ -567,8 +599,10 @@ function GameScreen({
   editing,
   cal,
   onMarkerMove,
+  basesShown,
   runners,
   batterName,
+  onReveal,
   controls,
 }: {
   result: GameResult;
@@ -578,20 +612,31 @@ function GameScreen({
   editing: boolean;
   cal: FieldCalibration;
   onMarkerMove: (id: string, pos: { x: number; y: number }) => void;
+  // Basi mostrate sul diamante: possono essere in ritardo rispetto a `sit.bases`
+  // (rivelate al verdetto della cronaca). Se omesse, si usa lo stato reale.
+  basesShown?: [boolean, boolean, boolean];
   runners?: (string | null)[];
   batterName?: string | null;
+  onReveal?: () => void;
   controls: ReactNode;
 }) {
+  const fieldBases = basesShown ?? sit.bases;
   return (
     <div className="game-screen">
-      <StatBar result={result} sit={sit} statsMode={statsMode} setStatsMode={setStatsMode} />
+      <StatBar
+        result={result}
+        sit={sit}
+        basesShown={fieldBases}
+        statsMode={statsMode}
+        setStatsMode={setStatsMode}
+      />
 
       <div className={editing ? 'gamefield editing' : 'gamefield'}>
         <Diamond
           home={result.home}
           away={result.away}
           background
-          bases={sit.bases}
+          bases={fieldBases}
           runners={runners}
           batterName={batterName}
           cal={cal}
@@ -599,7 +644,7 @@ function GameScreen({
           onMarkerMove={onMarkerMove}
         />
 
-        {!editing && <PlayBanner result={result} />}
+        {!editing && <PlayBanner result={result} onReveal={onReveal} />}
 
         <div className="cronaca-corner left">
           <CronacaTeam result={result} side="away" />
@@ -661,11 +706,13 @@ function involvedFor(result: GameResult, sit: LiveSituation, side: Side): Involv
 function StatBar({
   result,
   sit,
+  basesShown,
   statsMode,
   setStatsMode,
 }: {
   result: GameResult;
   sit: LiveSituation;
+  basesShown?: [boolean, boolean, boolean];
   statsMode: StatsMode;
   setStatsMode: (m: StatsMode) => void;
 }) {
@@ -690,7 +737,7 @@ function StatBar({
           <span className="sb-inning">
             {arrow} {sit.inning}° <span className="sb-half">{halfLabel}</span>
           </span>
-          <BaseDiamond bases={sit.bases} />
+          <BaseDiamond bases={basesShown ?? sit.bases} />
           <OutsDots outs={sit.outs} />
         </div>
       </div>
@@ -1838,7 +1885,7 @@ function groupPlays(result: GameResult): CronacaGroup[] {
  * piu' straordinari (fuoricampo, doppio gioco…). A fine sequenza svanisce e la
  * frase sintetica resta nella cronaca laterale (dx/sx).
  */
-function PlayBanner({ result }: { result: GameResult }) {
+function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?: () => void }) {
   const plays = result.play;
   const len = plays.length;
   // Non ri-animare le giocate gia' presenti al montaggio (partita ripresa).
@@ -1846,10 +1893,17 @@ function PlayBanner({ result }: { result: GameResult }) {
   const [state, setState] = useState<{ com: Commentary; phase: number; leaving: boolean } | null>(
     null,
   );
+  // `onReveal` cambia identita' quando cambia la partita: lo leggo da una ref
+  // cosi' i timer schedulati usano sempre l'ultima versione senza ri-eseguire
+  // l'effetto (che dipende solo da `len`).
+  const revealRef = useRef(onReveal);
+  revealRef.current = onReveal;
+  const reveal = () => revealRef.current?.();
 
   useEffect(() => {
     if (len <= seenRef.current) {
       seenRef.current = len;
+      reveal(); // nessuna telecronaca da animare: marker allineati subito.
       return;
     }
     seenRef.current = len;
@@ -1857,6 +1911,7 @@ function PlayBanner({ result }: { result: GameResult }) {
     // La sostituzione (pinch-hit) non e' una giocata: niente banner.
     if (ev.kind === 'sub') {
       setState(null);
+      reveal();
       return;
     }
     const offenseIsAway = ev.half === 'top';
@@ -1872,6 +1927,10 @@ function PlayBanner({ result }: { result: GameResult }) {
     for (let i = 1; i < com.phases.length; i++) {
       timers.push(setTimeout(() => setState((s) => (s ? { ...s, phase: i } : s)), i * PHASE_MS));
     }
+    // Al VERDETTO (ultima fase, "conquista la base"/"eliminato") sposto i marker
+    // sul diamante: e' il momento in cui l'esito viene letto in cronaca.
+    const revealAt = (com.phases.length - 1) * PHASE_MS;
+    timers.push(setTimeout(reveal, revealAt));
     const end = (com.phases.length - 1) * PHASE_MS + HOLD_MS;
     timers.push(setTimeout(() => setState((s) => (s ? { ...s, leaving: true } : s)), end));
     timers.push(setTimeout(() => setState(null), end + 420));
@@ -1934,11 +1993,20 @@ function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
         </span>
         <span className="crt-title">Cronaca {side === 'away' ? 'ospite' : 'casa'}</span>
       </div>
+      {/* Testate ed eventi sono figli DIRETTI del contenitore scrollabile (non
+          annidati in un box per-inning): così ogni testata `sticky` resta
+          agganciata all'intero corpo e le testate si IMPILANO in cima invece di
+          scorrere via una alla volta. */}
       <div className="crt-body" ref={bodyRef}>
         {groups.length === 0 && <div className="cr-empty">In attesa…</div>}
-        {groups.map((g) => (
-          <div key={g.key} className="cr-inning">
-            <div className="cr-inhead">
+        {groups.map((g, gi) => (
+          <Fragment key={g.key}>
+            <div
+              className="cr-inhead"
+              // Impilamento: ogni testata si ferma un gradino più in basso della
+              // precedente, così 1°/2°/3°… restano accumulati e fissi in cima.
+              style={{ top: `calc(var(--crh) * ${gi})`, zIndex: groups.length - gi }}
+            >
               <span>{g.header}</span>
               <span className="cr-score">
                 {g.events[g.events.length - 1].away}–{g.events[g.events.length - 1].home}
@@ -1959,7 +2027,7 @@ function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
                 );
               })}
             </ul>
-          </div>
+          </Fragment>
         ))}
       </div>
     </div>

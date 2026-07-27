@@ -60,6 +60,17 @@ function variant(ev: PlayEvent, n: number): number {
 
 const pick = (ev: PlayEvent, opts: string[]): string => opts[variant(ev, opts.length)];
 
+/** Tipo di eliminazione su palla in gioco (`inplayout`), SINTETIZZATO in modo
+ *  deterministico dall'evento. Il motore non simula la traiettoria: questa e'
+ *  l'UNICA fonte di verita' della categoria, condivisa tra la telecronaca del
+ *  banner e il codice da segnapunti (`scorecode.ts`), così non si contraddicono
+ *  (niente più "out in prima" con un codice di volata `F8`). */
+export type InPlayOutShape = 'air' | 'ground' | 'fly';
+export function inPlayOutShape(ev: PlayEvent): InPlayOutShape {
+  const v = variant(ev, 3);
+  return v === 0 ? 'air' : v === 1 ? 'ground' : 'fly';
+}
+
 /** Suffisso "e segnano N" per il verdetto quando l'azione produce punti. */
 function runsTail(scored: number): string {
   if (scored <= 0) return '';
@@ -228,16 +239,18 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
       ];
     case 'buntout':
       return [open, 'Prova la smorzata…', `Difesa pronta: ${b} eliminato.`];
-    case 'inplayout':
-      return [
-        open,
-        pick(ev, ['Palla messa in gioco…', 'Contatto, palla in campo…']),
-        pick(ev, [
-          `Presa comoda: ${b} eliminato.${t}`,
-          `Rimbalzo raccolto, out in prima.${t}`,
-          `Volata catturata: eliminato.${t}`,
-        ]),
-      ];
+    case 'inplayout': {
+      // Il verdetto deve concordare col codice da segnapunti: entrambi derivano
+      // dalla stessa `inPlayOutShape(ev)`.
+      const shape = inPlayOutShape(ev);
+      const verdict =
+        shape === 'ground'
+          ? `Rimbalzo raccolto, out in prima.${t}`
+          : shape === 'fly'
+            ? `Volata catturata: eliminato.${t}`
+            : `Presa comoda: ${b} eliminato.${t}`;
+      return [open, pick(ev, ['Palla messa in gioco…', 'Contatto, palla in campo…']), verdict];
+    }
     case 'sub':
       return [ev.text];
     case 'other':
