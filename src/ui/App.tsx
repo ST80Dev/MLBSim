@@ -38,7 +38,7 @@ import {
 } from '../engine/arrangement';
 import { saveStore } from '../data/persistence';
 import type { MatchArrangement } from '../data/persistence';
-import { formatIp } from '../engine/boxscore';
+import { formatIp, estimatedPitches } from '../engine/boxscore';
 import {
   generateLeague,
   teamById,
@@ -1826,6 +1826,16 @@ function strengthColor(v: number): string {
   return `hsl(${Math.round(t * 125)} 60% 46%)`;
 }
 
+/** Colore d'affaticamento per la stima lanci, calibrato sul ruolo (SP vs rilievo). */
+function pitchTone(pitches: number, role?: string): string | undefined {
+  const reliever = role === 'RP' || role === 'CL';
+  const amber = reliever ? 22 : 90;
+  const red = reliever ? 32 : 105;
+  if (pitches >= red) return '#ff6b6b';
+  if (pitches >= amber) return '#ffcf5c';
+  return undefined; // sotto soglia: colore normale
+}
+
 function LineupSide({
   team,
   stats,
@@ -1906,6 +1916,18 @@ function LineupSide({
             })()}
           </span>
           <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
+          {(() => {
+            const pt = estimatedPitches(curP);
+            return (
+              <span
+                className="ls-pit-stat"
+                style={{ color: pitchTone(pt, pitById.get(curP.id)?.role) }}
+                title="Lanci (stima): cresce con battitori affrontati, valide, BB e SO — rende l'affaticamento"
+              >
+                {pt} PT
+              </span>
+            );
+          })()}
           <span className="ls-pit-stat">{curP.so} SO</span>
           <span className="ls-pit-stat">{curP.er} ER</span>
           {curP.dec && <span className={`dec dec-${curP.dec}`}>{decLabel(curP.dec)}</span>}

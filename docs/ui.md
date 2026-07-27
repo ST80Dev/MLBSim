@@ -75,7 +75,12 @@ Regioni, dall'alto in basso:
     (`shownField`), passato a `Diamond`/`BaseDiamond`; il motore e i controlli
     restano sullo stato reale (`sit`), solo i marker sono in ritardo.
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
-    battitore corrente evidenziato, lanciatore in pedana).
+    battitore corrente evidenziato, lanciatore in pedana). La riga del lanciatore
+    mostra **IP / PT / SO / ER** per **entrambe** le squadre: **PT = stima lanci**
+    (`estimatedPitches`, formula di Tango `3.3·BF + 1.5·SO + 2.2·BB`) — stima
+    DETERMINISTICA (nessun RNG, nessun impatto sulla calibrazione) che cresce con
+    battitori affrontati, valide, BB e SO, così si percepisce l'affaticamento; il
+    numero vira all'ambra/rosso oltre soglie tarate sul ruolo (SP vs rilievo).
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
     in attacco Battuta / Bunt / Ruba / **Mob & corri** (hit-and-run, se corridore
     in 1ª e 2ª libera) / **Pinch-hit** / **Pinch-run** (se c'è un corridore); in

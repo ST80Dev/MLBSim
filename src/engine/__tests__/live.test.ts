@@ -25,6 +25,7 @@ import {
   pinchRun,
 } from '../game';
 import type { LiveGame } from '../game';
+import { estimatedPitches } from '../boxscore';
 import { generateMatchup } from '../../data/generator';
 import type { Batter, Pitcher } from '../types';
 
@@ -437,6 +438,28 @@ describe('difesa avanzata — interni dentro', () => {
     expect(situation(live).infieldIn).toBe(true);
     setInfieldIn(live, false);
     expect(live.infieldIn).toBe(false);
+  });
+});
+
+describe('stima lanci (affaticamento)', () => {
+  it('cresce con battitori affrontati, BB e SO (formula di Tango)', () => {
+    const base = estimatedPitches({ bf: 20, so: 5, bb: 2 });
+    expect(base).toBe(Math.round(3.3 * 20 + 1.5 * 5 + 2.2 * 2)); // 82
+    // Più battitori affrontati ⇒ più lanci; più BB/SO ⇒ più lanci.
+    expect(estimatedPitches({ bf: 30, so: 5, bb: 2 })).toBeGreaterThan(base);
+    expect(estimatedPitches({ bf: 20, so: 12, bb: 6 })).toBeGreaterThan(base);
+    expect(estimatedPitches({ bf: 0, so: 0, bb: 0 })).toBe(0);
+  });
+
+  it('coerente con la linea reale di una partita simulata', () => {
+    const { away, home } = generateMatchup(11);
+    const g = simulateGame(away, home, 123);
+    for (const st of [g.awayStats, g.homeStats]) {
+      for (const p of st.pitching) {
+        // Un lanciatore che ha affrontato battitori ha una stima > 0.
+        if (p.bf > 0) expect(estimatedPitches(p)).toBeGreaterThan(0);
+      }
+    }
   });
 });
 
