@@ -1576,6 +1576,118 @@ table {
   overflow-y: auto;
 }
 
+/* --- Mini-popup giocatore (Fase 3) ---------------------------------- */
+.modal.player {
+  width: min(560px, 96vw);
+  max-height: min(88vh, 720px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pm-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pm-ident {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pm-role {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.pm-meta {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.pm-ovr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pm-ovr-n {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 18px;
+}
+.pm-ratings {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.pm-rt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 2px;
+}
+.pm-rt-k {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+}
+.pm-rt-v {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 14px;
+  color: #06110a;
+  border-radius: 6px;
+  padding: 2px 8px;
+  min-width: 30px;
+  text-align: center;
+}
+.pm-stat-tbl {
+  width: 100%;
+}
+.pm-stat-tbl .pm-row-lbl {
+  text-align: left;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pm-stat-tbl tr.pm-career td {
+  color: var(--muted);
+}
+.pm-note {
+  font-size: 11.5px;
+  line-height: 1.4;
+  margin: 8px 0 0;
+}
+
+/* Nome cliccabile che apre il mini-popup (riusato ovunque). */
+.player-link {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.12s ease;
+}
+.player-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.player-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* Vista Rose: scroll normale */
 .roster-view {
   padding: 12px clamp(10px, 1.6vw, 20px) 40px;
@@ -1673,6 +1785,24 @@ table {
 .crt-body li.scored::before {
   content: '●';
   color: var(--win);
+}
+/* Codice segnapunti (scorekeeping) davanti alla riga di cronaca: es. 6-4-3, F7, K. */
+.cr-code {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.2px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 5px;
+  vertical-align: baseline;
+  cursor: help;
+  white-space: nowrap;
 }
 
 /* --- Banner di cronaca (alto-centro, sopra la foto stadio) ---------------- */
