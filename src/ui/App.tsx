@@ -4422,12 +4422,103 @@ function FranchisePage({ team, mode }: { team: Team; mode: LeagueMode }) {
           </p>
         </div>
       </div>
+      <RosterSalaryTable team={team} />
       <div className="card page-stub">
         <p className="muted">
           Stipendio unico annuale, cap soft, scambi a valore, draft basilare: i controlli di
-          gestione arriveranno qui.
+          gestione (rinnovi, scambi) arriveranno qui.
         </p>
       </div>
+    </div>
+  );
+}
+
+interface FrRow {
+  id: string;
+  name: string;
+  kind: 'B' | 'P';
+  role: string;
+  tier: string;
+  age: number;
+  ovr: number;
+  salary: number;
+}
+
+/** Elenco COMPLETO della rosa (battitori + lanciatori) per giudicarla sul piano
+ *  salariale: tipo, ruolo, reparto, età, rating e stipendio, ordinato per costo. */
+function RosterSalaryTable({ team }: { team: Team }) {
+  const bRow = (b: Batter, tier: string): FrRow => ({
+    id: b.id,
+    name: b.name,
+    kind: 'B',
+    role: b.position,
+    tier,
+    age: b.age,
+    ovr: batterOverall(b.ratings),
+    salary: b.salary,
+  });
+  const pRow = (p: Pitcher, tier: string): FrRow => ({
+    id: p.id,
+    name: p.name,
+    kind: 'P',
+    role: p.role,
+    tier,
+    age: p.age,
+    ovr: pitcherOverall(p.ratings),
+    salary: p.salary,
+  });
+  const rows: FrRow[] = [
+    ...team.lineup.map((b) => bRow(b, 'Titolare')),
+    ...team.bench.map((b) => bRow(b, 'Panca')),
+    ...team.reserveBatters.map((b) => bRow(b, 'Riserva')),
+    ...team.rotation.map((p) => pRow(p, 'Rotazione')),
+    ...team.bullpen.map((p) => pRow(p, 'Bullpen')),
+    ...team.reservePitchers.map((p) => pRow(p, 'Riserva')),
+  ].sort((a, b) => b.salary - a.salary);
+
+  const total = Math.round(rows.reduce((s, r) => s + r.salary, 0) * 10) / 10;
+  const avgAge = rows.length ? Math.round((rows.reduce((s, r) => s + r.age, 0) / rows.length) * 10) / 10 : 0;
+
+  return (
+    <div className="card">
+      <div className="card-title">
+        Rosa completa{' '}
+        <span className="card-sub">
+          {rows.length} giocatori · monte-ingaggi ${total.toFixed(1)}M · età media {avgAge}
+        </span>
+      </div>
+      <table className="ratings fr-roster">
+        <thead>
+          <tr>
+            <th className="l">Giocatore</th>
+            <th>Tipo</th>
+            <th>Ruolo</th>
+            <th>Reparto</th>
+            <th>Età</th>
+            <th>OVR</th>
+            <th>$M</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td className="l">{r.name}</td>
+              <td>
+                <span className={`type-chip ${r.kind === 'B' ? 'bat' : 'pit'}`}>
+                  {r.kind === 'B' ? 'Bat' : 'Lan'}
+                </span>
+              </td>
+              <td>{r.role}</td>
+              <td className="tier">{r.tier}</td>
+              <td>{r.age}</td>
+              <td className="ovr">
+                <OvrBadge overall={r.ovr} />
+              </td>
+              <td className="sal">{r.salary.toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
