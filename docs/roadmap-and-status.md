@@ -47,7 +47,8 @@
     (schema v2): ricaricare rigenera la STESSA lega (prima il seed era casuale ad
     ogni avvio → bug). Indicatore cap a due confini anche sulla **Franchigia**.
   - **Salary cap — RICALIBRATO:** curva stipendi compressa (`salaryFromOverall`:
-    payroll medio ~116M sotto il cap base 150M, spread da ~10x a ~4-5x) +
+    payroll medio ~193M sotto il cap base 250M, stelle fino a ~45M, spread da
+    ~10x a ~4-5x) +
     **`youthFactor`** (stipendio = f(overall, età), modello B-lite). Modello a due
     confini (base soft + muro esterno) con `capZone` per l'indicatore. Enforce
     (ε, riconciliazione al rollover via pool) resta design di Fase 4/5. Vedi

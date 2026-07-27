@@ -115,10 +115,10 @@ describe('evoluzione eta/potenziale', () => {
 });
 
 describe('stipendio: curva base + sconto gioventu (youthFactor)', () => {
-  it('la curva base cresce con l\'overall, con pavimento 0.5 e tetto 30', () => {
+  it('la curva base cresce con l\'overall, con pavimento 0.5 e tetto 45', () => {
     expect(salaryFromOverall(40)).toBe(0.5); // pavimento (minimo di lega)
-    expect(salaryFromOverall(100)).toBeGreaterThan(20); // stella molto pagata
-    expect(salaryFromOverall(100)).toBeLessThanOrEqual(30); // ma sotto il tetto
+    expect(salaryFromOverall(100)).toBeGreaterThan(35); // stella molto pagata
+    expect(salaryFromOverall(100)).toBeLessThanOrEqual(45); // ma sotto il tetto
     expect(salaryFromOverall(85)).toBeGreaterThan(salaryFromOverall(70));
     expect(salaryFromOverall(70)).toBeGreaterThan(salaryFromOverall(60));
   });

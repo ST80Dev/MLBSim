@@ -130,17 +130,18 @@ export function projectPotential(rng: Rng, overall: number, age: number): number
 /**
  * Curva BASE dello stipendio annuale (milioni) dall'overall 40-100.
  *
- * CALIBRAZIONE (vedi docs/franchise.md § Salary cap): l'esponente e' piu' dolce
- * della prima versione e il tetto piu' basso, cosi' il monte-ingaggi MEDIO di
- * squadra cade SOTTO il cap base (la vecchia 1.13/tetto-45 dava payroll ~2x il
- * cap: il tetto non vincolava nulla). La forma resta esponenziale (le stelle
- * costano molto piu' della media), solo compressa: lo spread fra squadre passa
- * da ~10x a ~2.5-3x. Non toccare senza rimisurare col probe (scripts sotto).
+ * CALIBRAZIONE (vedi docs/franchise.md § Salary cap): l'ESPONENTE e' piu' dolce
+ * della prima versione (1.085 invece di 1.13), cosi' lo spread del monte-ingaggi
+ * fra squadre passa da ~10x a ~4-5x e il payroll MEDIO cade sotto il cap base
+ * (prima era ~2x il cap: il tetto non vincolava nulla). Coefficiente e tetto
+ * (0.5..45) tengono la scala "MLB": media di lega ~4M, stelle fino a 45M. La
+ * forma resta esponenziale (le stelle costano molto piu' della media). Non
+ * toccare senza rimisurare col probe.
  */
 export function salaryFromOverall(ovr: number): number {
   // Riferimento "replacement level" = 10 punti sotto la media di lega.
-  const s = 1.05 * Math.pow(1.085, ovr - (RATING_AVG - 10));
-  return Math.round(clamp(s, 0.5, 30) * 10) / 10;
+  const s = 1.75 * Math.pow(1.085, ovr - (RATING_AVG - 10));
+  return Math.round(clamp(s, 0.5, 45) * 10) / 10;
 }
 
 /**

@@ -43,13 +43,14 @@ export interface LeagueMode {
 
 /**
  * Cap BASE di riferimento (milioni), CALIBRATO sulla curva stipendi di
- * `ratings.ts`: il payroll medio di lega (~116M) sta sotto (~77% del cap), cosi'
- * esiste spazio aggregato per la redistribuzione (vedi docs/franchise.md § C'e'
- * spazio aggregato). ~6 squadre/lega partono sopra il base (fascia tassa) e
- * ~2-3 oltre il muro esterno (le corazzate, riassorbite al rollover).
- * Ritararlo con lo script di probe se si tocca `salaryFromOverall`/`youthFactor`.
+ * `ratings.ts` (scala "MLB", stelle fino a ~45M): il payroll medio di lega
+ * (~193M) sta sotto (~77% del cap), cosi' esiste spazio aggregato per la
+ * redistribuzione (vedi docs/franchise.md § C'e' spazio aggregato). ~6
+ * squadre/lega partono sopra il base (fascia tassa) e ~2-3 oltre il muro esterno
+ * (le corazzate, riassorbite gradualmente al rollover). Ritararlo con lo script
+ * di probe se si tocca `salaryFromOverall`/`youthFactor`.
  */
-export const DEFAULT_CAP_AMOUNT = 150;
+export const DEFAULT_CAP_AMOUNT = 250;
 
 /**
  * Frazione di sforamento del cap base che definisce il MURO ESTERNO rigido

@@ -220,14 +220,22 @@ Conseguenze:
   da all-star — la riconciliazione le taglia l'eccedenza. La dinastia è tassata
   per **attrito** (deve lasciar partire buoni giocatori verso i deboli). È la
   valvola di parità, **automatica, senza interazione dell'utente**.
+- **Chi PARTE molto sopra il muro** (le ~2-3 corazzate generate, fino a ~1.55× il
+  muro): **non ha "margine" — ha il problema opposto**, zero spazio e obbligo di
+  cedere. Ma lo sfoltimento è **graduale**, non un azzeramento all'anno 1: ogni
+  off-season rientra di una frazione dell'eccesso, così la dinastia **si spegne
+  in 2-4 stagioni** invece di crollare di colpo. La direzione è **a senso unico
+  verso il basso**: il muro le impedisce di ri-caricare, l'aging ne erode i
+  veterani costosi, il draft inverso rifornisce le rivali. Quindi **no**, non
+  mantiene il vantaggio "per anni e anni": lo perde, in modo credibile.
 - **Niente trade AI↔AI**, di proposito: il pool ottiene lo stesso riequilibrio
   senza un motore di valutazione+ricerca su 29 squadre. Le trade a coppie restano
   una feature **solo-umana** (tu proponi, *una* AI valuta sì/no).
 
 ### C'è spazio aggregato? Sì, per costruzione
 
-La curva è calibrata così che il **payroll medio ≈ 116M ≈ 0.77 × cap base
-(150M)**: `Σ stipendi ≈ 23 unità-cap` contro `Σ tetti ≈ 30` → **avanza spazio
+La curva è calibrata così che il **payroll medio ≈ 193M ≈ 0.77 × cap base
+(250M)**: `Σ stipendi ≈ 23 unità-cap` contro `Σ tetti ≈ 30` → **avanza spazio
 aggregato**, quindi un giocatore scaricato trova sempre una destinazione a
 stipendio adeguato. L'unico che non si ricolloca è il vero *replacement-level*,
 che nella realtà sarebbe fuori dalla lega comunque (churn fisiologico). **La
