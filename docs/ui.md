@@ -78,8 +78,21 @@ Regioni, dall'alto in basso:
     battitore corrente evidenziato, lanciatore in pedana).
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
     in attacco Battuta / Bunt / Ruba / **Mob & corri** (hit-and-run, se corridore
-    in 1ª e 2ª libera) / **Pinch-hit** (menu panchina); in difesa Lancia / Base
-    int. / **Interni dentro** (se corridore in 3ª e <2 out) / Cambio lanc.
+    in 1ª e 2ª libera) / **Pinch-hit** / **Pinch-run** (se c'è un corridore); in
+    difesa Lancia / Base int. / **Interni dentro** (se corridore in 3ª e <2 out) /
+    **Cambio lanc.** / **Cambio dif.**
+  - **Sostituzioni — modale in stile roster** (`SubModal`). I vecchi menu a
+    discesa (nascosti dietro la barra) sono sostituiti da un **popup ad hoc** che
+    mostra il pool giusto con **OVR e caratteristiche** (come una mini-scheda
+    roster) e i nomi cliccabili aprono la scheda giocatore:
+    - **Pinch-hit** (`pinchHit`): panchina → battitore corrente.
+    - **Pinch-run** (`pinchRun`): scegli il corridore in base → panchina.
+    - **Cambio lanc.** (`changePitcher`): bullpen (rilievi disponibili).
+    - **Cambio dif.** (`substituteFielder`): scegli il difensore che esce →
+      panchina; il sostituto ne eredita ruolo e slot in battuta.
+    Cambio lanciatore e difensore sono disponibili **per tutta la fase difensiva**
+    (non solo appena prima del lancio). Le sostituzioni non consumano il turno.
+    Motore in `engine/game.ts`; test in `engine/__tests__/live.test.ts`.
   - A partita finita, **overlay del risultato** con Recap/Nuova partita.
 
 Il campo generato disegna **solo il terreno di gioco** (niente tribune/cielo

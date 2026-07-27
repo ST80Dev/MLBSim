@@ -13,6 +13,10 @@ import {
   intentionalWalk,
   changePitcher,
   defenseSide,
+  offenseSide,
+  availableRelievers,
+  substituteFielder,
+  pinchRun,
   autoManageDefense,
   quickSim,
   hitAndRun,
@@ -1382,7 +1386,14 @@ function ActionBar({
   sit: LiveSituation;
   act: (fn: (g: LiveGame) => void) => void;
 }) {
-  return sit.controlledBatting ? (
+  // Modale di sostituzione (popup a tutto schermo): rimpiazza i vecchi menu a
+  // discesa che restavano nascosti dietro la barra comandi.
+  const [sub, setSub] = useState<SubMode | null>(null);
+  const noBench = sit.bench.length === 0;
+  const noRelievers = availableRelievers(defenseSide(live)).length === 0;
+  const hasRunner = sit.bases.some(Boolean);
+
+  const bar = sit.controlledBatting ? (
     <div className="card actionbar compact">
       <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
       <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
@@ -1423,7 +1434,24 @@ function ActionBar({
           Mob &amp; corri
         </button>
       )}
-      <PinchHitMenu bench={sit.bench} act={act} />
+      <button
+        className="btn sm"
+        disabled={noBench}
+        onClick={() => setSub('pinchhit')}
+        title="Pinch-hit: sostituisci il battitore"
+      >
+        Pinch-hit
+      </button>
+      {hasRunner && (
+        <button
+          className="btn sm"
+          disabled={noBench}
+          onClick={() => setSub('pinchrun')}
+          title="Pinch-runner: sostituisci un corridore in base"
+        >
+          Pinch-run
+        </button>
+      )}
     </div>
   ) : (
     <div className="card actionbar compact">
@@ -1451,79 +1479,252 @@ function ActionBar({
           Interni dentro
         </button>
       )}
-      <PitcherChange live={live} act={act} />
-    </div>
-  );
-}
-
-function PinchHitMenu({
-  bench,
-  act,
-}: {
-  bench: Batter[];
-  act: (fn: (g: LiveGame) => void) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  if (bench.length === 0) return null;
-  return (
-    <div className="pchange">
-      <button className="btn sm" onClick={() => setOpen((o) => !o)} title="Sostituisci il battitore">
-        Pinch-hit ▾
+      <button
+        className="btn sm"
+        disabled={noRelievers}
+        onClick={() => setSub('pitcher')}
+        title="Cambio lanciatore: scegli un rilievo dal bullpen"
+      >
+        Cambio lanc.
       </button>
-      {open && (
-        <div className="pchange-menu">
-          {bench.map((b) => (
-            <button
-              key={b.id}
-              className="pchange-item"
-              onClick={() => {
-                act((g) => pinchHit(g, b.id));
-                setOpen(false);
-              }}
-            >
-              <span className="pos">{b.position}</span> {b.name}
-              <span className="pchange-ovr">{stars(batterOverall(b.ratings))}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      <button
+        className="btn sm"
+        disabled={noBench}
+        onClick={() => setSub('fielders')}
+        title="Sostituzione difensiva: cambia un difensore"
+      >
+        Cambio dif.
+      </button>
+    </div>
+  );
+
+  return (
+    <>
+      {bar}
+      {sub && <SubModal live={live} mode={sub} act={act} onClose={() => setSub(null)} />}
+    </>
+  );
+}
+
+// --- Sostituzioni: popup "ad hoc" in stile roster --------------------------
+// Un unico modale mostra il pool giusto (rilievi / panchina) con OVR e
+// caratteristiche, come una mini-scheda roster. Per i cambi difensivi e i
+// pinch-runner c'è un primo passo (chi esce), poi la scelta di chi entra.
+type SubMode = 'pitcher' | 'fielders' | 'pinchhit' | 'pinchrun';
+
+const SUB_TITLE: Record<SubMode, string> = {
+  pitcher: 'Cambio lanciatore',
+  fielders: 'Sostituzione difensiva',
+  pinchhit: 'Pinch-hit',
+  pinchrun: 'Pinch-runner',
+};
+
+const BASE_LABEL = ['1ª', '2ª', '3ª'];
+
+/** Caratteristiche fondamentali per la riga sostituto (come nel roster). */
+function subRatingChips(p: Batter | Pitcher): Array<[string, number]> {
+  if (isBatter(p)) {
+    return [
+      ['CON', p.ratings.contact],
+      ['POT', p.ratings.power],
+      ['OCC', p.ratings.eye],
+      ['VEL', p.ratings.speed],
+      ['DIF', p.ratings.fielding],
+      ['BRA', p.ratings.arm],
+    ];
+  }
+  const r = (p as Pitcher).ratings;
+  return [
+    ['DOM', r.stuff],
+    ['CTR', r.control],
+    ['MOV', r.movement],
+    ['RES', r.stamina],
+    ['DIF', r.fielding],
+  ];
+}
+
+/** Riga sostituto: OVR, nome (apre la scheda), sottotitolo, caratteristiche, «Scegli». */
+function SubRow({
+  player,
+  subtitle,
+  onPick,
+}: {
+  player: Batter | Pitcher;
+  subtitle: string;
+  onPick: () => void;
+}) {
+  const ovr = isBatter(player)
+    ? batterOverall(player.ratings)
+    : pitcherOverall((player as Pitcher).ratings);
+  return (
+    <div className="subrow">
+      <span className="subrow-ovr" style={{ background: ratingColor(ovr) }}>
+        {ovr}
+      </span>
+      <span className="subrow-id">
+        <PlayerLink player={player} className="subrow-name">
+          {player.name}
+        </PlayerLink>
+        <span className="subrow-sub">{subtitle}</span>
+      </span>
+      <span className="subrow-chips">
+        {subRatingChips(player).map(([k, v]) => (
+          <span key={k} className="subrow-chip">
+            <i>{k}</i>
+            <b style={{ color: ratingColor(v) }}>{v}</b>
+          </span>
+        ))}
+      </span>
+      <button className="btn sm primary subrow-pick" onClick={onPick}>
+        Scegli ▸
+      </button>
     </div>
   );
 }
 
-function PitcherChange({
+function SubModal({
   live,
+  mode,
   act,
+  onClose,
 }: {
   live: LiveGame;
+  mode: SubMode;
   act: (fn: (g: LiveGame) => void) => void;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [outId, setOutId] = useState<string | null>(null); // titolare che esce (fielders)
+  const [outBase, setOutBase] = useState<number | null>(null); // corridore (pinchrun)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const off = offenseSide(live);
   const def = defenseSide(live);
-  const relievers = def.pitchers.slice(def.pitcherIdx + 1);
-  if (relievers.length === 0) return null;
-  return (
-    <div className="pchange">
-      <button className="btn sm" onClick={() => setOpen((o) => !o)}>
-        Cambio lanc. ▾
-      </button>
-      {open && (
-        <div className="pchange-menu">
-          {relievers.map((p) => (
-            <button
-              key={p.id}
-              className="pchange-item"
-              onClick={() => {
-                act((g) => changePitcher(g, defenseSide(g), p.id));
-                setOpen(false);
-              }}
-            >
-              <span className="pos">{p.role}</span> {p.name}
-              <span className="pchange-ovr">{stars(pitcherOverall(p.ratings))}</span>
+
+  let hint = '';
+  let targets: ReactNode = null; // primo passo (chi esce), quando serve
+  let incoming: Array<{ id: string; player: Batter | Pitcher; subtitle: string; onPick: () => void }> = [];
+  let emptyMsg = 'Nessun giocatore disponibile.';
+
+  if (mode === 'pitcher') {
+    hint = 'Scegli il rilievo da mandare sul monte.';
+    emptyMsg = 'Nessun rilievo disponibile in bullpen.';
+    incoming = availableRelievers(def).map((p) => ({
+      id: p.id,
+      player: p,
+      subtitle: p.role === 'CL' ? 'RP (closer)' : p.role,
+      onPick: () => {
+        act((g) => changePitcher(g, defenseSide(g), p.id));
+        onClose();
+      },
+    }));
+  } else if (mode === 'pinchhit') {
+    const cur = off.team.lineup[off.battingIndex];
+    hint = `Sostituisci ${cur.name} in battuta.`;
+    emptyMsg = 'Nessun giocatore in panchina.';
+    incoming = off.team.bench.map((b) => ({
+      id: b.id,
+      player: b,
+      subtitle: `panchina · ${b.position}`,
+      onPick: () => {
+        act((g) => pinchHit(g, b.id));
+        onClose();
+      },
+    }));
+  } else if (mode === 'fielders') {
+    emptyMsg = 'Nessun giocatore in panchina.';
+    if (outId == null) {
+      hint = 'Chi esce dalla difesa?';
+      targets = (
+        <div className="sub-targets">
+          {def.team.lineup.map((b) => (
+            <button key={b.id} className="sub-target" onClick={() => setOutId(b.id)}>
+              <span className="pos">{b.position}</span>
+              <span className="nm">{b.name}</span>
+              <span className="ov" style={{ color: ratingColor(batterOverall(b.ratings)) }}>
+                {batterOverall(b.ratings)}
+              </span>
             </button>
           ))}
         </div>
-      )}
+      );
+    } else {
+      const out = def.team.lineup.find((b) => b.id === outId)!;
+      hint = `Chi entra per ${out.name} (${out.position})?`;
+      incoming = def.team.bench.map((b) => ({
+        id: b.id,
+        player: b,
+        subtitle: `entra in ${out.position}`,
+        onPick: () => {
+          act((g) => substituteFielder(g, defenseSide(g), outId, b.id));
+          onClose();
+        },
+      }));
+    }
+  } else {
+    // pinchrun
+    emptyMsg = 'Nessun giocatore in panchina.';
+    const occupied = [0, 1, 2].filter((i) => live.bases[i]);
+    if (outBase == null) {
+      hint = 'Quale corridore sostituire?';
+      targets = (
+        <div className="sub-targets">
+          {occupied.map((i) => {
+            const r = live.bases[i]!.batter;
+            return (
+              <button key={i} className="sub-target" onClick={() => setOutBase(i)}>
+                <span className="pos">{BASE_LABEL[i]}</span>
+                <span className="nm">{r.name}</span>
+                <span className="ov" style={{ color: ratingColor(batterOverall(r.ratings)) }}>
+                  {batterOverall(r.ratings)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      );
+    } else {
+      const r = live.bases[outBase]!.batter;
+      hint = `Chi corre per ${r.name} (${BASE_LABEL[outBase]})?`;
+      incoming = off.team.bench.map((b) => ({
+        id: b.id,
+        player: b,
+        subtitle: `panchina · VEL ${b.ratings.speed}`,
+        onPick: () => {
+          act((g) => pinchRun(g, offenseSide(g), outBase, b.id));
+          onClose();
+        },
+      }));
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal submodal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">{SUB_TITLE[mode]}</div>
+          <button className="modal-close" style={{ marginLeft: 'auto' }} onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="sub-hint">{hint}</div>
+        {targets ?? (
+          <div className="sub-list">
+            {incoming.length === 0 ? (
+              <div className="sub-empty">{emptyMsg}</div>
+            ) : (
+              incoming.map((it) => (
+                <SubRow key={it.id} player={it.player} subtitle={it.subtitle} onPick={it.onPick} />
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

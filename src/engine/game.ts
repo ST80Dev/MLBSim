@@ -712,6 +712,75 @@ export function pinchHit(l: LiveGame, benchId: string): boolean {
   return true;
 }
 
+/**
+ * Sostituzione difensiva: un giocatore di panchina entra al posto di un titolare
+ * (in difesa), ereditandone slot in battuta e ruolo. Disponibile in qualsiasi
+ * momento (anche fuori dal proprio turno d'attacco). `s` è di norma la squadra
+ * in difesa, ma la funzione lavora su qualunque SideState della partita.
+ */
+export function substituteFielder(
+  l: LiveGame,
+  s: SideState,
+  outId: string,
+  inId: string,
+): boolean {
+  if (l.status !== 'live') return false;
+  const idx = s.team.lineup.findIndex((b) => b.id === outId);
+  const bi = s.team.bench.findIndex((b) => b.id === inId);
+  if (idx < 0 || bi < 0) return false;
+  const outP = s.team.lineup[idx];
+  const sub = s.team.bench[bi];
+  sub.position = outP.position; // eredita il ruolo difensivo dello slot
+  s.team.lineup[idx] = sub;
+  s.team.bench.splice(bi, 1);
+  if (!s.battingLines.has(sub.id)) {
+    s.battingLines.set(sub.id, newBattingLine(sub));
+    s.battingOrder.push(sub.id);
+  }
+  pushPlay(
+    l,
+    `${shortName(sub.name)} entra in difesa (${sub.position}) per ${shortName(outP.name)}`,
+    0,
+    'sub',
+    shortName(sub.name),
+  );
+  return true;
+}
+
+/**
+ * Pinch-runner: un giocatore di panchina rileva un corridore già in base
+ * (`base`: 0=1ª, 1=2ª, 2=3ª), ereditandone slot in battuta e ruolo. `s` è la
+ * squadra in attacco (proprietaria dei corridori).
+ */
+export function pinchRun(l: LiveGame, s: SideState, base: number, inId: string): boolean {
+  if (l.status !== 'live') return false;
+  const runner = l.bases[base];
+  if (!runner) return false;
+  const outP = runner.batter;
+  const bi = s.team.bench.findIndex((b) => b.id === inId);
+  if (bi < 0) return false;
+  const sub = s.team.bench[bi];
+  const idx = s.team.lineup.findIndex((b) => b.id === outP.id);
+  if (idx >= 0) {
+    sub.position = outP.position;
+    s.team.lineup[idx] = sub;
+  }
+  s.team.bench.splice(bi, 1);
+  if (!s.battingLines.has(sub.id)) {
+    s.battingLines.set(sub.id, newBattingLine(sub));
+    s.battingOrder.push(sub.id);
+  }
+  l.bases[base] = { batter: sub, pitcherId: runner.pitcherId };
+  pushPlay(
+    l,
+    `${shortName(sub.name)} entra come pinch-runner per ${shortName(outP.name)}`,
+    0,
+    'sub',
+    shortName(sub.name),
+  );
+  return true;
+}
+
 /** Attiva/disattiva la difesa avanzata "interni dentro" per il turno. */
 export function setInfieldIn(l: LiveGame, on: boolean): void {
   if (l.status === 'live') l.infieldIn = on;

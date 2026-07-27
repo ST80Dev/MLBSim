@@ -690,45 +690,135 @@ table {
 }
 
 /* Menu cambio lanciatore */
-.pchange {
-  position: relative;
+/* --- Modale sostituzioni (pinch-hit / pinch-run / cambio lanc./difensore) --- */
+.modal.submodal {
+  width: min(620px, 96vw);
+  max-height: min(88vh, 760px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.pchange-menu {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 4px);
-  left: 0;
-  background: var(--card2);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 6px;
-  min-width: 220px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  max-height: 260px;
+.sub-hint {
+  padding: 10px 16px 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sub-list {
+  padding: 8px 12px 14px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.pchange-item {
+.sub-empty {
+  padding: 22px;
+  text-align: center;
+  color: var(--muted);
+}
+/* Riga sostituto in stile roster. */
+.subrow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  padding: 7px 8px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card2);
+}
+.subrow-ovr {
+  flex: 0 0 auto;
+  min-width: 30px;
+  text-align: center;
+  font-weight: 800;
   font-size: 13px;
+  color: #06121a;
+  border-radius: 7px;
+  padding: 3px 5px;
+}
+.subrow-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 118px;
+}
+.subrow-name {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.subrow-sub {
+  color: var(--muted);
+  font-size: 11px;
+}
+.subrow-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-left: auto;
+}
+.subrow-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 11px;
+}
+.subrow-chip i {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.3px;
+}
+.subrow-chip b {
+  font-weight: 800;
+  font-size: 12.5px;
+}
+.subrow-pick {
+  flex: 0 0 auto;
+}
+/* Primo passo: chi esce (difensore / corridore). */
+.sub-targets {
+  padding: 8px 12px 14px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+.sub-target {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card2);
+  color: var(--text);
   cursor: pointer;
   text-align: left;
 }
-.pchange-item:hover {
+.sub-target:hover {
+  border-color: var(--accent);
   background: var(--card);
 }
-.pchange-ovr {
+.sub-target .pos {
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--accent);
+  min-width: 24px;
+}
+.sub-target .nm {
+  font-weight: 700;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sub-target .ov {
   margin-left: auto;
-  color: #ffd15c;
-  letter-spacing: -1px;
-  font-size: 12px;
+  font-weight: 800;
+  font-size: 13px;
 }
 
 /* Banner finale */

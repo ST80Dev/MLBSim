@@ -21,6 +21,8 @@ import {
   playOffense,
   prePitchEvent,
   offenseSide,
+  substituteFielder,
+  pinchRun,
 } from '../game';
 import type { LiveGame } from '../game';
 import { generateMatchup } from '../../data/generator';
@@ -460,6 +462,33 @@ describe('logica di campo sugli out (avanzamenti reali oltre il motore lineare)'
     // difensive (comportamenti nuovi del motore).
     expect(advanced).toBeGreaterThan(0);
     expect(fc).toBeGreaterThan(0);
+  });
+
+  it('sostituzione difensiva: un panchinaro entra al posto di un titolare', () => {
+    const { away, home } = generateMatchup(3);
+    const live = createLiveGame(away, home, 3);
+    const def = defenseSide(live);
+    const out = def.team.lineup[4];
+    const inc = def.team.bench[0];
+    const benchBefore = def.team.bench.length;
+    expect(substituteFielder(live, def, out.id, inc.id)).toBe(true);
+    expect(def.team.lineup[4].id).toBe(inc.id);
+    expect(inc.position).toBe(out.position); // eredita il ruolo
+    expect(def.team.bench.length).toBe(benchBefore - 1);
+    expect(live.play[live.play.length - 1].kind).toBe('sub');
+  });
+
+  it('pinch-runner: un panchinaro rileva il corridore in base', () => {
+    const { away, home } = generateMatchup(4);
+    const live = createLiveGame(away, home, 4);
+    const off = offenseSide(live);
+    putRunner(live, 0, 6); // corridore in 1ª (lineup[6])
+    const outId = live.bases[0]!.batter.id;
+    const inc = off.team.bench[0];
+    expect(pinchRun(live, off, 0, inc.id)).toBe(true);
+    expect(live.bases[0]!.batter.id).toBe(inc.id);
+    expect(live.bases[0]!.batter.id).not.toBe(outId);
+    expect(off.team.bench.find((b) => b.id === inc.id)).toBeUndefined();
   });
 
   it('scelta difensiva: con corridore in 2ª (1ª e 3ª libere) a volte il battitore resta salvo in prima', () => {
