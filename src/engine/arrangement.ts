@@ -22,6 +22,14 @@ export interface MatchArrangement {
   /** Bullpen: id rilievi nell'ordine d'uso. */
   bullpen: string[];
   /**
+   * Ordine PREFERITO delle riserve battitori (i non-titolari), per tenere in
+   * cima i backup che il manager considera primari. E' solo di presentazione:
+   * il motore non lo usa (i titolari sono `order`/`defense`). Opzionale e
+   * auto-riconciliato con l'insieme corrente delle riserve, quindi i salvataggi
+   * senza questo campo restano validi.
+   */
+  benchOrder?: string[];
+  /**
    * Closer designato: il rilievo che CHIUDE (usato per ultimo), mostrato come CL.
    * Il ruolo NON e' rigido: qualsiasi rilievo puo' essere nominato closer per la
    * stagione. Se assente, chiude semplicemente l'ultimo del bullpen.

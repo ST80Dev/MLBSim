@@ -2576,6 +2576,27 @@ function DefenseFieldSVG() {
   );
 }
 
+/**
+ * Ordina `pool` secondo la lista di id preferiti `pref` (quelli noti nell'ordine
+ * indicato, poi il resto nell'ordine originale). Usato per le riserve battitori:
+ * l'ordine scelto dal manager e' stabile e i nuovi arrivi finiscono in coda.
+ */
+function orderByPref<T extends { id: string }>(pool: T[], pref?: string[]): T[] {
+  if (!pref || pref.length === 0) return pool;
+  const byId = new Map(pool.map((x) => [x.id, x]));
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const id of pref) {
+    const x = byId.get(id);
+    if (x && !seen.has(id)) {
+      out.push(x);
+      seen.add(id);
+    }
+  }
+  for (const x of pool) if (!seen.has(x.id)) out.push(x);
+  return out;
+}
+
 function RosterPage({
   team,
   seed,
@@ -2609,7 +2630,11 @@ function RosterPage({
   const pById = new Map(pitchers.map((p) => [p.id, p]));
   const lineup = arr.order.map((id) => bById.get(id)).filter(Boolean) as Batter[];
   const starterIds = new Set(arr.order);
-  const bench = batters.filter((b) => !starterIds.has(b.id));
+  // Riserve = non-titolari, ORDINATE secondo la preferenza salvata (benchOrder):
+  // gli id noti in quell'ordine, poi eventuali nuovi (es. un titolare appena
+  // scaricato) in coda. Cosi' l'ordine scelto dal manager e' stabile e persistente.
+  const benchPool = batters.filter((b) => !starterIds.has(b.id));
+  const bench = orderByPref(benchPool, arr.benchOrder);
   const check = validateArrangement(team, arr);
   const ratingsMode = statMode === 'ratings';
 
@@ -2667,17 +2692,16 @@ function RosterPage({
     }
     update({ defense, order: reconcileOrder(arr.order, Object.keys(defense)) });
   };
+  // Riordino dell'ordine di battuta come SWAP: i due slot si SCAMBIANO e tutti
+  // gli altri restano fermi (niente inserimento a scorrimento). La difesa, che e'
+  // indipendente dall'ordine di battuta, non viene toccata.
   const reorderBatting = (targetId: string, draggedId: string) => {
     if (draggedId === targetId) return;
-    const cur = arr.order;
-    const fromI = cur.indexOf(draggedId);
-    const toI = cur.indexOf(targetId);
+    const order = [...arr.order];
+    const fromI = order.indexOf(draggedId);
+    const toI = order.indexOf(targetId);
     if (fromI < 0 || toI < 0) return;
-    const order = cur.filter((id) => id !== draggedId);
-    // Scendendo si inserisce DOPO il target, salendo PRIMA: cosi' il riordino
-    // funziona in entrambe le direzioni (prima scendeva "una posizione corta").
-    const at = order.indexOf(targetId) + (fromI < toI ? 1 : 0);
-    order.splice(at, 0, draggedId);
+    [order[fromI], order[toI]] = [order[toI], order[fromI]];
     update({ order });
   };
   const substitute = (starterId: string, benchId: string) => {
@@ -2707,8 +2731,25 @@ function RosterPage({
     }
     setDrag(null);
   };
+  // Riordino delle riserve come SWAP: le due riserve si scambiano di posto nella
+  // preferenza (benchOrder), le altre restano ferme. Si parte dall'ordine mostrato.
+  const reorderBench = (targetId: string, draggedId: string) => {
+    if (draggedId === targetId) return;
+    const ids = bench.map((b) => b.id);
+    const fromI = ids.indexOf(draggedId);
+    const toI = ids.indexOf(targetId);
+    if (fromI < 0 || toI < 0) return;
+    [ids[fromI], ids[toI]] = [ids[toI], ids[fromI]];
+    update({ benchOrder: ids });
+  };
+  // Drop su una riga riserva: un TITOLARE trascinato qui (dalla lista battuta o
+  // dalla difesa) fa lo swap e scende; una RISERVA trascinata su un'altra riserva
+  // riordina la lista dei backup.
   const dropBenchRow = (benchId: string) => {
-    if (drag && drag.from === 'lineup') substitute(drag.id, benchId);
+    if (drag && drag.id !== benchId) {
+      if (arr.order.includes(drag.id)) substitute(drag.id, benchId);
+      else reorderBench(benchId, drag.id);
+    }
     setDrag(null);
   };
 
@@ -2718,6 +2759,22 @@ function RosterPage({
   const placePitcher = (toList: 'rotation' | 'bullpen' | 'avail', targetId?: string) => {
     if (!drag) return;
     const id = drag.id;
+    // Riordino DENTRO la stessa lista (rotazione o bullpen) = SWAP: i due si
+    // scambiano di posto, gli altri restano fermi. Cross-lista resta uno spostamento
+    // (il numero di lanciatori per lista e' variabile, non c'e' una casella fissa).
+    if (drag.from === toList && targetId && id !== targetId && toList !== 'avail') {
+      const swap = (list: string[]) => {
+        const a = list.indexOf(id);
+        const b = list.indexOf(targetId);
+        if (a < 0 || b < 0) return list;
+        const next = [...list];
+        [next[a], next[b]] = [next[b], next[a]];
+        return next;
+      };
+      update(toList === 'rotation' ? { rotation: swap(arr.rotation) } : { bullpen: swap(arr.bullpen) });
+      setDrag(null);
+      return;
+    }
     let rotation = arr.rotation.filter((x) => x !== id);
     let bullpen = arr.bullpen.filter((x) => x !== id);
     const insert = (list: string[]) => {
@@ -3000,7 +3057,7 @@ function RosterPage({
               <div className="card-title">
                 Ordine di battuta{' '}
                 <span className="card-sub">
-                  trascina per riordinare (su e giù); un disponibile su un titolare = sostituzione
+                  trascina un titolare su un altro per scambiarli; un disponibile su un titolare = sostituzione
                 </span>
               </div>
               <div className="roster-scroll">
@@ -3046,7 +3103,7 @@ function RosterPage({
             <div className="card" onDragOver={(e) => e.preventDefault()}>
               <div className="card-title">
                 Disponibili ({bench.length}){' '}
-                <span className="card-sub">trascina su un titolare per sostituire</span>
+                <span className="card-sub">trascina un titolare qui per scaricarlo · o riordina le riserve fra loro</span>
               </div>
               <div className="roster-scroll">
                 <table className="ratings roster-tbl">
@@ -3065,11 +3122,11 @@ function RosterPage({
                     {bench.map((b) => (
                       <tr
                         key={b.id}
-                        className={`drow${drag?.id === b.id ? ' dragging' : ''}`}
+                        className={`drow${drag?.id === b.id ? ' dragging' : ''}${over === b.id && drag?.id !== b.id ? ' over' : ''}`}
                         draggable
                         onDragStart={() => setDrag({ id: b.id, from: 'bench' })}
                         onDragEnd={() => { setDrag(null); setOver(null); }}
-                        onDragOver={(e) => e.preventDefault()}
+                        onDragOver={(e) => { e.preventDefault(); setOver(b.id); }}
                         onDrop={() => { dropBenchRow(b.id); setOver(null); }}
                       >
                         <td className="l grip">
@@ -3153,7 +3210,7 @@ function RosterPage({
               <div className="card">
                 <div className="card-title">
                   Riserve ({bench.length}){' '}
-                  <span className="card-sub">trascina su una casella del campo per schierarle</span>
+                  <span className="card-sub">trascina su una casella per schierarle · un titolare qui lo scarica · fra riserve = riordina</span>
                 </div>
                 <div className="roster-scroll">
                   <table className="ratings roster-tbl">
@@ -3172,11 +3229,12 @@ function RosterPage({
                       {bench.map((b) => (
                         <tr
                           key={b.id}
-                          className={`drow${drag?.id === b.id ? ' dragging' : ''}`}
+                          className={`drow${drag?.id === b.id ? ' dragging' : ''}${over === b.id && drag?.id !== b.id ? ' over' : ''}`}
                           draggable
                           onDragStart={() => setDrag({ id: b.id, from: 'bench' })}
                           onDragEnd={() => { setDrag(null); setOver(null); }}
-                          onDragOver={(e) => e.preventDefault()}
+                          onDragOver={(e) => { e.preventDefault(); setOver(b.id); }}
+                          onDrop={() => { dropBenchRow(b.id); setOver(null); }}
                         >
                           <td className="l grip">
                             ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>

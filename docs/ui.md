@@ -117,6 +117,28 @@ variante compatta `.modal.player` (max ~560px).
 - **Scheda "Rose & caratteristiche"**: doti 40-100 colorate per lineup e rotazione,
   con OVR a stelle e lo scambio difensivo (seconda posizione).
 
+### Editor schieramento — drag&drop (Roster)
+
+Regola unica: **muovere dentro la stessa ripartizione è uno SWAP** (i due si
+scambiano di posto, gli altri restano fermi — mai inserimento a scorrimento);
+**passare fra ripartizioni è una sostituzione/spostamento**.
+
+- **Battuta / Difesa titolari.** Trascinare un titolare su un altro **scambia**
+  i due slot: nell'ordine di battuta scambia i numeri (la difesa resta), nella
+  vista difesa scambia le caselle (`setSlot`). Un **titolare trascinato su una
+  riserva** lo **scarica** (swap titolare↔riserva, tiene la casella;
+  `substitute`), valido sia dalla lista battuta sia dalla difesa
+  (`dropBenchRow` accetta qualunque id attualmente in `arr.order`).
+- **Riserve.** Una **riserva su un'altra riserva** le **riordina**: l'ordine
+  scelto è persistito in `MatchArrangement.benchOrder` (id preferiti in testa,
+  gli altri in coda via `orderByPref`). Campo **opzionale**, ignorato dal motore
+  (`buildManagedTeam`/`validateArrangement` non lo usano) e retrocompatibile coi
+  salvataggi che ne sono privi; un titolare appena scaricato finisce in coda.
+- **Lanciatori.** Riordino dentro Rotazione o Bullpen = **swap**; il drop fra
+  Rotazione / Bullpen / Disponibili resta uno **spostamento** (il numero per
+  lista è variabile: nessuna casella fissa), `placePitcher` distingue i due casi
+  da `drag.from` vs lista di destinazione.
+
 La partita interattiva (`LiveGame`) è **mutabile** e vive tra i render: `App`
 la tiene in un `useRef` con chiave `teamSeed|gara|squadra`, ricreandola solo al
 cambio di quei parametri, e forza il re-render dopo ogni azione.
