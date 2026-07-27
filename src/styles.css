@@ -692,8 +692,8 @@ table {
 /* Menu cambio lanciatore */
 /* --- Modale sostituzioni (pinch-hit / pinch-run / cambio lanc./difensore) --- */
 .modal.submodal {
-  width: min(620px, 96vw);
-  max-height: min(88vh, 760px);
+  width: min(760px, 96vw);
+  max-height: min(88vh, 820px);
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -702,9 +702,9 @@ table {
   overflow: hidden;
 }
 .sub-hint {
-  padding: 10px 16px 4px;
+  padding: 12px 18px 6px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 .sub-list {
@@ -716,20 +716,21 @@ table {
   text-align: center;
   color: var(--muted);
 }
-/* Elenco sostituti come tabella del Roster: colonne dote allineate. */
+/* Elenco sostituti come tabella del Roster: colonne dote allineate, più grandi
+   e con le card-dote colorate a font bianco (come il Roster) per leggibilità. */
 .sub-tbl {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 0 6px;
+  border-spacing: 0 8px;
 }
 .sub-tbl thead th {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.4px;
   color: var(--muted);
   text-transform: uppercase;
   text-align: center;
-  padding: 0 8px 2px;
+  padding: 0 10px 4px;
   white-space: nowrap;
 }
 .sub-tbl thead th.l {
@@ -739,18 +740,22 @@ table {
   background: var(--card2);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  padding: 8px 8px;
+  padding: 11px 10px;
   vertical-align: middle;
 }
 .subrow > td:first-child {
   border-left: 1px solid var(--line);
-  border-top-left-radius: 10px;
-  border-bottom-left-radius: 10px;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
 }
 .subrow > td:last-child {
   border-right: 1px solid var(--line);
-  border-top-right-radius: 10px;
-  border-bottom-right-radius: 10px;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+.subrow:hover > td {
+  background: var(--card);
+  border-color: var(--accent);
 }
 .subrow-ovr-c {
   text-align: center;
@@ -758,33 +763,39 @@ table {
 }
 .subrow-ovr {
   display: inline-block;
-  min-width: 30px;
+  min-width: 38px;
   text-align: center;
   font-weight: 800;
-  font-size: 13px;
-  color: #06121a;
-  border-radius: 7px;
-  padding: 3px 5px;
+  font-size: 16px;
+  color: #fff;
+  border-radius: 8px;
+  padding: 5px 7px;
 }
 .subrow-id {
   white-space: nowrap;
 }
 .subrow-name {
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 16px;
 }
 .subrow-sub {
   color: var(--muted);
-  font-size: 11px;
-  margin-left: 8px;
+  font-size: 13px;
+  margin-left: 9px;
 }
 .subrow-stat {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.subrow-stat b {
+/* Card-dote colorata a font bianco, come le celle rating del Roster. */
+.subrow-rat {
+  display: inline-block;
+  min-width: 34px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: #fff;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 15px;
 }
 .subrow-pick-c {
   text-align: right;
@@ -793,6 +804,8 @@ table {
 .subrow-pick {
   flex: 0 0 auto;
   white-space: nowrap;
+  font-size: 14px;
+  padding: 7px 16px;
 }
 /* Primo passo: chi esce (difensore / corridore). */
 .sub-targets {
@@ -1093,20 +1106,32 @@ table {
   font-size: 9px;
   vertical-align: middle;
 }
+/* Elenco lanciatori usati (partente + rilievi): ogni cambio una riga. */
+.ls-pits {
+  border-top: 1px solid var(--line);
+  flex: 0 0 auto;
+  overflow-y: auto;
+}
 .ls-pit {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 8px 10px;
-  border-top: 1px solid var(--line);
+  padding: 6px 10px;
   font-family: var(--mono);
   font-size: 13px;
+}
+.ls-pit + .ls-pit {
+  border-top: 1px solid rgba(38, 55, 92, 0.4);
+}
+.ls-pit.cur {
+  background: rgba(79, 157, 255, 0.14);
 }
 .ls-pit-tag {
   font-weight: 800;
   color: var(--muted);
   letter-spacing: 0.5px;
+  min-width: 32px;
 }
 .ls-pit-name {
   font-weight: 800;
@@ -1551,7 +1576,7 @@ table {
 .lineup-corner {
   position: absolute;
   bottom: 8px;
-  width: min(330px, 27%);
+  width: min(380px, 31%);
   z-index: 3;
   max-height: 62%;
   overflow: hidden;
@@ -1567,6 +1592,19 @@ table {
   backdrop-filter: blur(3px);
   border: 1px solid var(--line);
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  overflow: hidden;
+}
+/* Battitori scrollabili; la lista lanciatori resta agganciata sotto. */
+.lineup-corner .ls-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.lineup-corner .ls-pits {
+  max-height: 42%;
 }
 .lineup-corner .ls-table {
   font-size: 12px;
@@ -2192,7 +2230,7 @@ table {
 /* Lineup negli angoli in basso (cronaca ora occupa gli angoli in alto) */
 .lineup-corner {
   bottom: 8px;
-  max-height: 46%;
+  max-height: 56%;
 }
 
 /* --- Scoreboard piu' grande e info giocatore coinvolto a tutta larghezza --- */

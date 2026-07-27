@@ -233,11 +233,13 @@ function pickMatchCalibration(
 type FieldSnap = {
   bases: [boolean, boolean, boolean];
   baseRunners: [string | null, string | null, string | null];
+  baseRunnerSpeeds: [number | null, number | null, number | null];
   batterName: string | null;
 };
 const fieldSnap = (s: LiveSituation): FieldSnap => ({
   bases: s.bases,
   baseRunners: s.baseRunners,
+  baseRunnerSpeeds: s.baseRunnerSpeeds,
   batterName: s.batter?.name ?? null,
 });
 
@@ -708,6 +710,7 @@ export function App() {
           onMarkerMove={moveMarker}
           basesShown={shownField.bases}
           runners={shownField.baseRunners}
+          runnerSpeeds={shownField.baseRunnerSpeeds}
           batterName={shownField.batterName}
           shownPlays={shownPlays}
           onReveal={revealField}
@@ -840,6 +843,7 @@ function GameScreen({
   onMarkerMove,
   basesShown,
   runners,
+  runnerSpeeds,
   batterName,
   shownPlays,
   onReveal,
@@ -856,6 +860,7 @@ function GameScreen({
   // (rivelate al verdetto della cronaca). Se omesse, si usa lo stato reale.
   basesShown?: [boolean, boolean, boolean];
   runners?: (string | null)[];
+  runnerSpeeds?: (number | null)[];
   batterName?: string | null;
   // Numero di giocate già "lette" al centro: le cronache laterali si fermano qui
   // per non anticipare l'esito. Se omesso, si mostra tutto.
@@ -881,6 +886,7 @@ function GameScreen({
           background
           bases={fieldBases}
           runners={runners}
+          runnerSpeeds={runnerSpeeds}
           batterName={batterName}
           defenseTeam={sit.offenseSide === 'away' ? result.home : result.away}
           pitcherName={sit.pitcher.name}
@@ -1815,7 +1821,9 @@ function SubRow({
       </td>
       {subRatingChips(player).map(([k, v]) => (
         <td key={k} className="subrow-stat">
-          <b style={{ color: ratingColor(v) }}>{v}</b>
+          <span className="subrow-rat" style={{ background: ratingColor(v) }}>
+            {v}
+          </span>
         </td>
       ))}
       <td className="subrow-pick-c">
@@ -2124,8 +2132,9 @@ function LineupSide({
   const head = rows[0]?.items.map((i) => i.k) ?? [];
   // Cognomi disambiguati per i battitori mostrati (es. R. Alomar / S. Alomar).
   const batLabels = disambiguateLastNames(rows.map((r) => r.line.name));
-  // Lanciatore attualmente in pedana per questa squadra (ultima riga usata).
-  const curP = stats.pitching[stats.pitching.length - 1];
+  // TUTTI i lanciatori usati da questa squadra (partente + rilievi entrati), non
+  // solo quello in pedana: così il box tiene traccia dei 3/5/7 cambi.
+  const lastPitIdx = stats.pitching.length - 1;
   const pitLabels = disambiguateLastNames(stats.pitching.map((p) => p.name));
   return (
     <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>
@@ -2134,65 +2143,68 @@ function LineupSide({
         <span className="ls-name">{team.name}</span>
         <StatsToggle mode={mode} setMode={setMode} />
       </div>
-      <table className="ls-table">
-        <thead>
-          <tr>
-            <th className="l">#</th>
-            <th className="l">Battitore</th>
-            {head.map((k) => (
-              <th key={k}>{k}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
-              <td className="l num">{i + 1}</td>
-              <td className="l bname">
-                <span className="pos">{r.line.position}</span>{' '}
-                {(() => {
-                  const b = batById.get(r.line.id);
-                  return b ? (
-                    <PlayerLink player={b} pos={b.position}>{batLabels[i]}</PlayerLink>
-                  ) : (
-                    upperLast(batLabels[i])
-                  );
-                })()}
-                {r.line.id === currentId && <span className="atbat-dot">●</span>}
-              </td>
-              {r.items.map((it) => (
-                <td key={it.k}>{it.v}</td>
+      <div className="ls-scroll">
+        <table className="ls-table">
+          <thead>
+            <tr>
+              <th className="l">#</th>
+              <th className="l">Battitore</th>
+              {head.map((k) => (
+                <th key={k}>{k}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {curP && (
-        <div className="ls-pit">
-          <span className="ls-pit-tag">LANC.</span>
-          <span className="ls-pit-name">
-            {(() => {
-              const p = pitById.get(curP.id);
-              const label = pitLabels[pitLabels.length - 1];
-              return p ? <PlayerLink player={p}>{label}</PlayerLink> : upperLast(label);
-            })()}
-          </span>
-          <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
-          {(() => {
-            const pt = estimatedPitches(curP);
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
+                <td className="l num">{i + 1}</td>
+                <td className="l bname">
+                  <span className="pos">{r.line.position}</span>{' '}
+                  {(() => {
+                    const b = batById.get(r.line.id);
+                    return b ? (
+                      <PlayerLink player={b} pos={b.position}>{batLabels[i]}</PlayerLink>
+                    ) : (
+                      upperLast(batLabels[i])
+                    );
+                  })()}
+                  {r.line.id === currentId && <span className="atbat-dot">●</span>}
+                </td>
+                {r.items.map((it) => (
+                  <td key={it.k}>{it.v}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {stats.pitching.length > 0 && (
+        <div className="ls-pits">
+          {stats.pitching.map((pl, idx) => {
+            const p = pitById.get(pl.id);
+            const label = pitLabels[idx];
+            const isCur = idx === lastPitIdx && sit.status === 'live';
+            const pt = estimatedPitches(pl);
             return (
-              <span
-                className="ls-pit-stat"
-                style={{ color: pitchTone(pt, pitById.get(curP.id)?.role) }}
-                title="Lanci (stima): cresce con battitori affrontati, valide, BB e SO — rende l'affaticamento"
-              >
-                {pt} PT
-              </span>
+              <div className={`ls-pit${isCur ? ' cur' : ''}`} key={pl.id}>
+                <span className="ls-pit-tag">{idx === 0 ? 'LANC.' : '↳'}</span>
+                <span className="ls-pit-name">
+                  {p ? <PlayerLink player={p}>{label}</PlayerLink> : upperLast(label)}
+                </span>
+                <span className="ls-pit-stat">{formatIp(pl.outs)} IP</span>
+                <span
+                  className="ls-pit-stat"
+                  style={{ color: pitchTone(pt, p?.role) }}
+                  title="Lanci (stima): cresce con battitori affrontati, valide, BB e SO — rende l'affaticamento"
+                >
+                  {pt} PT
+                </span>
+                <span className="ls-pit-stat">{pl.so} SO</span>
+                <span className="ls-pit-stat">{pl.er} ER</span>
+                {pl.dec && <span className={`dec dec-${pl.dec}`}>{decLabel(pl.dec)}</span>}
+              </div>
             );
-          })()}
-          <span className="ls-pit-stat">{curP.so} SO</span>
-          <span className="ls-pit-stat">{curP.er} ER</span>
-          {curP.dec && <span className={`dec dec-${curP.dec}`}>{decLabel(curP.dec)}</span>}
+          })}
         </div>
       )}
     </div>
