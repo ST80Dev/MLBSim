@@ -4633,6 +4633,9 @@ function LeaderboardPage({
   managedId: string;
 }) {
   const [tab, setTab] = useState<'batting' | 'pitching'>('batting');
+  // Filtro settoriale del reparto lanciatori: partenti (>=10 aperture), rilievo
+  // (<10), o tutti. Soglia robusta anche in proiezione (un SP proietta ~32 GS).
+  const [pitScope, setPitScope] = useState<'all' | 'sp' | 'rp'>('all');
   const day = season.day;
   const preseason = day === 0;
   const projDay = preseason ? SEASON_GAMES : day;
@@ -4695,6 +4698,11 @@ function LeaderboardPage({
     return out;
   }, [league, season, seed, managedId, day, preseason, projDay]);
 
+  const pitShown = useMemo<LbPit[]>(() => {
+    if (pitScope === 'all') return pitRows;
+    return pitRows.filter((r) => (pitScope === 'sp' ? r.line.gs >= 10 : r.line.gs < 10));
+  }, [pitRows, pitScope]);
+
   return (
     <div className="page leaderboard-page">
       <div className="card">
@@ -4721,10 +4729,33 @@ function LeaderboardPage({
           </button>
         </div>
 
+        {tab === 'pitching' && (
+          <div className="subtabs pit-scope">
+            {([
+              ['all', 'Tutti'],
+              ['sp', 'Partenti'],
+              ['rp', 'Rilievo'],
+            ] as const).map(([k, lbl]) => (
+              <button
+                key={k}
+                className={pitScope === k ? 'subtab active' : 'subtab'}
+                onClick={() => setPitScope(k)}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+        )}
+
         {tab === 'batting' ? (
           <LbTable key="bat" rows={batRows} cols={BAT_LB_COLS} defaultKey="hr" />
         ) : (
-          <LbTable key="pit" rows={pitRows} cols={PIT_LB_COLS} defaultKey="era" />
+          <LbTable
+            key={`pit-${pitScope}`}
+            rows={pitShown}
+            cols={PIT_LB_COLS}
+            defaultKey={pitScope === 'rp' ? 'sv' : 'era'}
+          />
         )}
 
         <p className="muted lb-note">
