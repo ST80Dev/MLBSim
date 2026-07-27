@@ -76,6 +76,34 @@ le righe del giocatore coinvolto e il **Recap**. Le righe sono calcolate in
 **box score completo** di entrambe le squadre (battuta + lancio, V/P/SV), col
 toggle stat. Chiudibile con ✕, click fuori o Esc.
 
+### Mini-popup giocatore (Fase 3, `PlayerModal`)
+
+Scheda compatta e **riusabile**, apribile da **qualsiasi nome cliccabile** in
+tutta l'interfaccia (`.player-link`). Filosofia coerente col progetto:
+manageriale/minimal, niente grafica pesante stile MLB 2K. Riusa le classi modale
+esistenti (`.modal-backdrop` / `.modal` / `.modal-head` / `.modal-close`) con una
+variante compatta `.modal.player` (max ~560px).
+
+- **Contenuto.** Intestazione (nome, ruolo/i, età, stipendio, overall + `<Stars>`
+  colorato); **RATING DEL MOMENTO** colorati (`ratingColor`) in una griglia di 6
+  chip — battitore **CON/POT/OCC/VEL/DIF/BRA** (la **DIF** è il fielding **alla
+  posizione occupata**, via `ratingsAtPosition`), lanciatore
+  **DOM/CTR/MOV/PAT/RES/DIF**; una tabellina STAT con riga **«Stagione»** REALE
+  (`season.bat[id]`/`season.pit[id]` → `seasonBatLine`/`seasonPitLine`) e riga
+  **«Carriera/Storico»** derivata dai rating (backstory, via
+  `projectBatterSeason`/`projectPitcherSeason`), con nota che lo storico reale si
+  comporrà col rollover di stagione (Fase 4). Chiudibile con ✕, backdrop o Esc.
+- **Distribuzione.** Per non passare callback attraverso tutta la gerarchia, un
+  **Context** (`PlayerModalContext`) espone `openPlayer`; `App` monta il modale
+  **una volta sola** coi `season`/`seed` correnti. Il wrapper `<PlayerLink>` è
+  uno `span` (mai `draggable`) così **dentro le righe trascinabili del roster il
+  drag continua a funzionare** e il click apre la scheda (`stopPropagation`).
+- **Dove sono cliccabili i nomi.** Roster: tabelle Lineup e Difesa (per-posizione
+  + riserve/disponibili), righe lanciatori e caselle del campo (`.fpos-name`); in
+  partita: pannelli `LineupSide` (`.bname` + lanciatore in pedana) e giocatore
+  coinvolto nella barra stat (`.ts-pname`); Leaderboard (righe); Home (card
+  Leader). Solo UI: **non tocca il motore né l'RNG** (determinismo invariato).
+
 - **Scheda "Rose & caratteristiche"**: doti 40-100 colorate per lineup e rotazione,
   con OVR a stelle e lo scambio difensivo (seconda posizione).
 
@@ -222,8 +250,9 @@ modifiche al codice**. Per uno stadio, se esistono più file, vale il primo tra
 
 - **Rifinitura Fase 1**: pulsanti per Hit-and-run, Pinch-hit (menu panchina) e
   difesa avanzata (interni dentro).
-- **Fase 3**: campo con etichette giocatori posizionate, card giocatore ricche,
-  pannelli in stile SBS/OOTP.
+- **Fase 3**: campo con etichette giocatori posizionate ✓, **mini-popup
+  giocatore** cliccabile ovunque ✓ (vedi «Mini-popup giocatore»). Restano card
+  giocatore più ricche e ulteriori pannelli in stile SBS/OOTP.
 
 ## Regole di stile
 
