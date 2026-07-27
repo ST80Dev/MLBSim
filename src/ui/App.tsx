@@ -33,7 +33,17 @@ import {
   rosterPitchers,
 } from '../engine/arrangement';
 import { saveStore } from '../data/persistence';
-import type { MatchArrangement } from '../data/persistence';
+import type { MatchArrangement, SaveMeta } from '../data/persistence';
+import {
+  teamPayroll,
+  capZone,
+  outerWall,
+  GENERATED_MODE,
+  HISTORICAL_MODE,
+} from '../data/leagueMode';
+import type { LeagueMode, LeagueSource, CapZone } from '../data/leagueMode';
+import { teamStrength } from '../engine/strength';
+import type { TeamStrength } from '../engine/strength';
 import { formatIp } from '../engine/boxscore';
 import {
   generateLeague,
@@ -195,9 +205,22 @@ export function App() {
   // Stato di stagione: giorno corrente, record di lega reali, statistiche reali
   // accumulate dalle partite giocate. Idratato dal salvataggio all'avvio.
   const [season, setSeason] = useState<SeasonState>(() => createSeason());
+  // Sorgente della lega (generata/storica) → politica di cap. Persistita nel save.
+  const [source, setSource] = useState<LeagueSource>('generated');
+  // Fase del flusso d'ingresso: schermata iniziale → panoramica lega/scelta
+  // squadra → gioco (dashboard). Sotto 'play' vive la navigazione `view`.
+  const [stage, setStage] = useState<'start' | 'league' | 'play'>('start');
+  // Idratazione conclusa? Evita di lampeggiare la schermata iniziale prima di
+  // sapere se esiste un salvataggio da riprendere.
+  const [booted, setBooted] = useState(false);
+  // Metadati del salvataggio esistente (per il pulsante "Carica").
+  const [saveMeta, setSaveMeta] = useState<SaveMeta | null>(null);
   // Mini-popup giocatore: aperto da qualsiasi nome cliccabile via Context.
   const [playerModal, setPlayerModal] = useState<PlayerModalRequest | null>(null);
   const openPlayer = useCallback((req: PlayerModalRequest) => setPlayerModal(req), []);
+
+  // Politica di cap derivata dalla sorgente (vedi leagueMode.ts).
+  const leagueMode: LeagueMode = source === 'historical' ? HISTORICAL_MODE : GENERATED_MODE;
 
   // La lega (30 squadre) e' generata da un seed unico: calendario, classifiche e
   // leaderboard leggono tutti QUESTA stessa lega. La squadra gestita e' una
@@ -222,19 +245,31 @@ export function App() {
       : { away: applied, home: opponent };
   }, [managedTeam, opponent, controlled, arrangement]);
 
-  // Idrata squadra gestita e assetti salvati (una volta).
+  // Idrata dal salvataggio (una volta). Se c'e' una carriera con squadra gestita
+  // si RIPRENDE (stage 'play'); altrimenti si mostra la schermata iniziale.
   useEffect(() => {
     let alive = true;
     saveStore
       .load(SAVE_SLOT)
       .then((rec) => {
-        if (!alive || !rec) return;
-        if (rec.payload.managedTeamId) setManagedId(rec.payload.managedTeamId);
-        if (rec.payload.lineups) setArrangements(rec.payload.lineups);
-        if (rec.payload.season) setSeason(rec.payload.season);
+        if (!alive) return;
+        if (rec) {
+          setSaveMeta({ slot: rec.slot, schemaVersion: rec.schemaVersion, updatedAt: rec.updatedAt });
+          if (typeof rec.payload.seed === 'number') setLeagueSeed(rec.payload.seed);
+          if (rec.payload.source) setSource(rec.payload.source);
+          if (rec.payload.lineups) setArrangements(rec.payload.lineups);
+          if (rec.payload.season) setSeason(rec.payload.season);
+          if (rec.payload.managedTeamId) {
+            setManagedId(rec.payload.managedTeamId);
+            setStage('play'); // carriera in corso: riprendi
+          }
+        }
       })
       .catch(() => {
-        /* offline o slot assente: si parte dai default. */
+        /* offline o slot assente: si parte dalla schermata iniziale. */
+      })
+      .finally(() => {
+        if (alive) setBooted(true);
       });
     return () => {
       alive = false;
@@ -310,17 +345,38 @@ export function App() {
 
   const persist = (arrs: Record<string, MatchArrangement>, seas: SeasonState) => {
     saveStore
-      .save(SAVE_SLOT, { managedTeamId: myId, lineups: arrs, season: seas })
+      .save(SAVE_SLOT, { seed: leagueSeed, source, managedTeamId: myId, lineups: arrs, season: seas })
       .catch(() => {
         /* offline: si continua, si risalvera' piu' tardi. */
       });
   };
 
-  const newLeague = () => {
+  // Dalla schermata iniziale: avvia una NUOVA lega con la sorgente scelta e
+  // vai alla panoramica per scegliere la squadra da gestire.
+  const startNewLeague = (src: LeagueSource) => {
+    setSource(src);
     setLeagueSeed(newRandomSeed());
     setManagedId('');
+    setArrangements({});
     setActiveGame(null);
     setSeason(createSeason());
+    setStage('league');
+  };
+
+  // Dalla panoramica: conferma la squadra gestita, salva e passa alla dashboard.
+  const pickManagedTeam = (id: string) => {
+    setManagedId(id);
+    setActiveGame(null);
+    setStage('play');
+    setView('home');
+    saveStore
+      .save(SAVE_SLOT, { seed: leagueSeed, source, managedTeamId: id, lineups: arrangements, season })
+      .then(() =>
+        setSaveMeta({ slot: SAVE_SLOT, schemaVersion: 2, updatedAt: new Date().toISOString() }),
+      )
+      .catch(() => {
+        /* offline: si continua. */
+      });
   };
 
   // Dal calendario: scegli la gara. "Gioca" apre la preparazione (Roster), da
@@ -348,8 +404,48 @@ export function App() {
   const saveManaged = async (arr: MatchArrangement) => {
     const next = { ...arrangements, [myId]: arr };
     setArrangements(next);
-    await saveStore.save(SAVE_SLOT, { managedTeamId: myId, lineups: next, season });
+    await saveStore.save(SAVE_SLOT, {
+      seed: leagueSeed,
+      source,
+      managedTeamId: myId,
+      lineups: next,
+      season,
+    });
   };
+
+  // --- Flusso d'ingresso: prima della dashboard ---
+  if (!booted) {
+    return (
+      <div className="app boot-splash">
+        <div className="splash-logo">⚾ MLBSim</div>
+        <div className="muted">Caricamento…</div>
+      </div>
+    );
+  }
+  if (stage === 'start') {
+    return (
+      <StartScreen
+        hasSave={!!managedId}
+        saveMeta={saveMeta}
+        onNewGenerated={() => startNewLeague('generated')}
+        onNewHistorical={() => startNewLeague('historical')}
+        onResume={() => {
+          if (managedId) setStage('play');
+        }}
+      />
+    );
+  }
+  if (stage === 'league') {
+    return (
+      <LeagueOverview
+        league={league}
+        seed={leagueSeed}
+        mode={leagueMode}
+        onPick={pickManagedTeam}
+        onBack={() => setStage('start')}
+      />
+    );
+  }
 
   return (
     <PlayerModalContext.Provider value={openPlayer}>
@@ -488,7 +584,8 @@ export function App() {
             setManagedId(id);
             setActiveGame(null);
           }}
-          onNewLeague={newLeague}
+          onOverview={() => setStage('league')}
+          onNewLeague={() => setStage('start')}
         />
       )}
 
@@ -510,7 +607,7 @@ export function App() {
         <LeaderboardPage league={league} season={season} seed={leagueSeed} managedId={myId} />
       )}
       {view === 'standings' && <StandingsPage league={league} season={season} managedId={myId} />}
-      {view === 'franchise' && <FranchisePage team={managedTeam} />}
+      {view === 'franchise' && <FranchisePage team={managedTeam} mode={leagueMode} />}
       {view === 'calibrate' && (
         <CalibrationScreen
           league={league}
@@ -3211,6 +3308,7 @@ function HomePage({
   season,
   onPlay,
   onManagedChange,
+  onOverview,
   onNewLeague,
 }: {
   league: Team[];
@@ -3219,6 +3317,7 @@ function HomePage({
   season: SeasonState;
   onPlay: (g: ScheduleGame) => void;
   onManagedChange: (id: string) => void;
+  onOverview: () => void;
   onNewLeague: () => void;
 }) {
   const day = season.day;
@@ -3301,8 +3400,11 @@ function HomePage({
               ))}
             </select>
           </label>
-          <button className="btn" onClick={onNewLeague} title="Rigenera l'intera lega da un nuovo seed">
-            🔄 Nuova lega
+          <button className="btn" onClick={onOverview} title="Vedi tutte le squadre della lega">
+            📋 Panoramica lega
+          </button>
+          <button className="btn" onClick={onNewLeague} title="Torna alla schermata iniziale (nuova partita)">
+            🔄 Nuova partita
           </button>
         </div>
       </div>
@@ -3837,18 +3939,365 @@ function LeaderboardPage({
   );
 }
 
-function FranchisePage({ team }: { team: Team }) {
+// ---------------------------------------------------------------------------
+// Cap: indicatore payroll-vs-cap (modello a due confini), forza squadra, e il
+// flusso d'ingresso (schermata iniziale + panoramica lega + scelta squadra).
+// ---------------------------------------------------------------------------
+
+const CAP_ZONE: Record<CapZone, { label: string; cls: string }> = {
+  under: { label: 'Sotto cap', cls: 'under' },
+  tax: { label: 'Fascia tassa', cls: 'tax' },
+  over: { label: 'Oltre il muro', cls: 'over' },
+};
+
+/** Barra monte-ingaggi con tacche cap base e muro esterno; zona colorata. */
+function CapIndicator({
+  payroll,
+  mode,
+  compact,
+}: {
+  payroll: number;
+  mode: LeagueMode;
+  compact?: boolean;
+}) {
+  const base = mode.cap.amount;
+  const wall = outerWall(base);
+  const z = CAP_ZONE[capZone(payroll, mode)];
+  const scale = wall * 1.12; // margine oltre il muro, così la tacca resta visibile
+  const pct = (v: number) => `${Math.max(0, Math.min(100, (v / scale) * 100))}%`;
+  return (
+    <div className={`cap-ind${compact ? ' compact' : ''}`}>
+      <div
+        className="cap-bar"
+        title={`Monte-ingaggi $${payroll.toFixed(0)}M · cap base $${base}M · muro $${wall.toFixed(0)}M`}
+      >
+        <div className={`cap-fill ${z.cls}`} style={{ width: pct(payroll) }} />
+        <div className="cap-mark base" style={{ left: pct(base) }} title={`Cap base $${base}M`} />
+        <div className="cap-mark wall" style={{ left: pct(wall) }} title={`Muro $${wall.toFixed(0)}M`} />
+      </div>
+      {!compact && (
+        <div className="cap-row">
+          <span className={`cap-chip ${z.cls}`}>{z.label}</span>
+          <span className="muted">
+            ${payroll.toFixed(0)}M / cap ${base}M · muro ${wall.toFixed(0)}M
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tre barrette Attacco/Difesa/Lancio (scala 40-100). */
+function StrengthBars({ s }: { s: TeamStrength }) {
+  const rows: Array<[string, number]> = [
+    ['ATT', s.attack],
+    ['DIF', s.defense],
+    ['LAN', s.pitching],
+  ];
+  return (
+    <div className="str-bars">
+      {rows.map(([k, v]) => (
+        <div className="str-row" key={k}>
+          <span className="str-k">{k}</span>
+          <span className="str-track">
+            <span
+              className="str-fill"
+              style={{ width: `${((v - 40) / 60) * 100}%`, background: ratingColor(v) }}
+            />
+          </span>
+          <span className="str-v">{v.toFixed(0)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Schermata iniziale: nuova partita (generata/storica) o riprendi salvataggio. */
+function StartScreen({
+  hasSave,
+  saveMeta,
+  onNewGenerated,
+  onNewHistorical,
+  onResume,
+}: {
+  hasSave: boolean;
+  saveMeta: SaveMeta | null;
+  onNewGenerated: () => void;
+  onNewHistorical: () => void;
+  onResume: () => void;
+}) {
+  return (
+    <div className="app start-app">
+      <div className="start-hero">
+        <div className="start-title">
+          <span className="logo">⚾</span> MLBSim
+        </div>
+        <div className="start-sub">
+          Simulatore di baseball testuale · epoca alta offesa anni '90/2000
+        </div>
+      </div>
+      <div className="start-cards">
+        {hasSave && (
+          <button className="start-card resume" onClick={onResume}>
+            <div className="sc-icon">▶</div>
+            <div className="sc-title">Riprendi carriera</div>
+            <div className="sc-desc">
+              {saveMeta
+                ? `Ultimo salvataggio: ${new Date(saveMeta.updatedAt).toLocaleString('it-IT')}`
+                : 'Continua la partita salvata'}
+            </div>
+          </button>
+        )}
+        <button className="start-card" onClick={onNewGenerated}>
+          <div className="sc-icon">🎲</div>
+          <div className="sc-title">Nuova lega generata</div>
+          <div className="sc-desc">
+            30 franchigie con rose procedurali da un seed casuale. Cap a due confini, parità
+            morbida.
+          </div>
+        </button>
+        <button className="start-card" onClick={onNewHistorical}>
+          <div className="sc-icon">📜</div>
+          <div className="sc-title">
+            Stagione storica <span className="badge-soon">anteprima</span>
+          </div>
+          <div className="sc-desc">
+            Seed d'archivio da un'annata reale (rose sbilanciate, cap morbido). Dataset ancora
+            limitato: pipeline completa in arrivo.
+          </div>
+        </button>
+      </div>
+      {hasSave && (
+        <p className="muted start-note">
+          Avviando una nuova partita il salvataggio corrente verrà sovrascritto quando sceglierai
+          la squadra.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Dettaglio rosa di una squadra nella panoramica (modale). */
+function TeamDetailModal({
+  team,
+  mode,
+  onClose,
+  onPick,
+}: {
+  team: Team;
+  mode: LeagueMode;
+  onClose: () => void;
+  onPick: () => void;
+}) {
+  const s = teamStrength(team);
+  const pay = teamPayroll(team);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal team-detail" onClick={(e) => e.stopPropagation()}>
+        <div className="td-head">
+          <TeamBadge team={team} size={40} />
+          <div className="td-id">
+            <div className="td-name">{team.name}</div>
+            <div className="muted">
+              {LEAGUE_LABEL[team.league]} · {DIVISION_LABEL[team.division]}
+            </div>
+          </div>
+          <button className="btn ghost" onClick={onClose} title="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="td-strength">
+          <div className="td-total">
+            Forza <b style={{ color: ratingColor(s.total) }}>{s.total.toFixed(0)}</b>
+          </div>
+          <StrengthBars s={s} />
+        </div>
+        <CapIndicator payroll={pay} mode={mode} />
+        <div className="td-rosters">
+          <div className="td-col">
+            <div className="card-title">Lineup</div>
+            <table className="ratings">
+              <thead>
+                <tr>
+                  <th className="l">Giocatore</th>
+                  <th>Pos</th>
+                  <th>Età</th>
+                  <th>OVR</th>
+                  <th>$M</th>
+                </tr>
+              </thead>
+              <tbody>
+                {team.lineup.map((b) => {
+                  const o = batterOverall(b.ratings);
+                  return (
+                    <tr key={b.id}>
+                      <td className="l">{b.name}</td>
+                      <td>{b.position}</td>
+                      <td>{b.age}</td>
+                      <td style={{ color: ratingColor(o) }}>{o.toFixed(0)}</td>
+                      <td>{b.salary.toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="td-col">
+            <div className="card-title">Rotazione</div>
+            <table className="ratings">
+              <thead>
+                <tr>
+                  <th className="l">Lanciatore</th>
+                  <th>Ruolo</th>
+                  <th>Età</th>
+                  <th>OVR</th>
+                  <th>$M</th>
+                </tr>
+              </thead>
+              <tbody>
+                {team.rotation.map((p) => {
+                  const o = pitcherOverall(p.ratings);
+                  return (
+                    <tr key={p.id}>
+                      <td className="l">{p.name}</td>
+                      <td>{p.role}</td>
+                      <td>{p.age}</td>
+                      <td style={{ color: ratingColor(o) }}>{o.toFixed(0)}</td>
+                      <td>{p.salary.toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="td-foot">
+          <span className="muted">Monte-ingaggi ${pay.toFixed(0)}M</span>
+          <button className="btn primary" onClick={onPick}>
+            Gestisci questa squadra ▸
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Panoramica lega: 30 squadre per division con forza e cap; scelta squadra. */
+function LeagueOverview({
+  league,
+  seed,
+  mode,
+  onPick,
+  onBack,
+}: {
+  league: Team[];
+  seed: number;
+  mode: LeagueMode;
+  onPick: (id: string) => void;
+  onBack: () => void;
+}) {
+  const [selId, setSelId] = useState<string>('');
+  const groups = byDivision(league);
+  const sel = selId ? teamById(league, selId) : undefined;
+  return (
+    <div className="app overview-app">
+      <header className="topbar">
+        <div className="brand">
+          <span className="logo">⚾</span> MLBSim <span className="phase">Panoramica lega</span>
+        </div>
+        <div className="actions">
+          <span className="muted seed-note">seed {seed}</span>
+          <button className="btn" onClick={onBack}>
+            ← Indietro
+          </button>
+        </div>
+      </header>
+      <div className="page overview-page">
+        <div className="ov-legend">
+          <span>
+            Scegli la squadra da gestire. Forza 40-100 · monte-ingaggi vs cap ${mode.cap.amount}M
+            (muro ${outerWall(mode.cap.amount).toFixed(0)}M).
+          </span>
+          <span className="cap-legend">
+            <span className="cap-chip under">Sotto</span>
+            <span className="cap-chip tax">Tassa</span>
+            <span className="cap-chip over">Oltre muro</span>
+          </span>
+        </div>
+        {groups.map((g) => (
+          <div className="ov-div" key={`${g.league}-${g.division}`}>
+            <div className="ov-div-title">
+              {LEAGUE_LABEL[g.league]} · {DIVISION_LABEL[g.division]}
+            </div>
+            <div className="ov-grid">
+              {g.teams.map((t) => {
+                const s = teamStrength(t);
+                const pay = teamPayroll(t);
+                const zone = capZone(pay, mode);
+                return (
+                  <button
+                    key={t.id}
+                    className={`ov-card${selId === t.id ? ' sel' : ''}`}
+                    onClick={() => setSelId(t.id)}
+                  >
+                    <div className="ov-head">
+                      <TeamBadge team={t} size={30} />
+                      <div className="ov-name">
+                        <div className="ov-abbrev">{t.abbrev}</div>
+                        <div className="ov-full">{t.name}</div>
+                      </div>
+                      <div className="ov-total" style={{ color: ratingColor(s.total) }}>
+                        {s.total.toFixed(0)}
+                      </div>
+                    </div>
+                    <StrengthBars s={s} />
+                    <div className="ov-cap">
+                      <CapIndicator payroll={pay} mode={mode} compact />
+                      <span className={`cap-chip ${zone}`}>${pay.toFixed(0)}M</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      {sel && (
+        <TeamDetailModal
+          team={sel}
+          mode={mode}
+          onClose={() => setSelId('')}
+          onPick={() => onPick(sel.id)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FranchisePage({ team, mode }: { team: Team; mode: LeagueMode }) {
+  const pay = teamPayroll(team);
   return (
     <div className="page">
-      <div className="card page-stub">
+      <div className="card">
         <div className="card-title">
           <TeamBadge team={team} size={22} /> Franchigia — {team.name}
         </div>
-        <p>
-          Il layer manageriale: stipendio unico annuale, salary cap rigido, scambi a valore,
-          draft basilare. Da ampliare nei passi successivi.
+        <div className="fr-cap">
+          <div className="card-sub">Monte-ingaggi vs salary cap</div>
+          <CapIndicator payroll={pay} mode={mode} />
+          <p className="muted">
+            Cap a <b>due confini</b> (base + muro esterno): oggi è solo un <b>indicatore</b>.
+            L'enforce (riconciliazione al rollover via pool, margine di sforamento per-squadra,
+            scambi/rinnovi che rispettano il cap) arriva col layer gestionale. Vedi
+            docs/franchise.md § Salary cap.
+          </p>
+        </div>
+      </div>
+      <div className="card page-stub">
+        <p className="muted">
+          Stipendio unico annuale, cap soft, scambi a valore, draft basilare: i controlli di
+          gestione arriveranno qui.
         </p>
-        <p className="muted">Impalcatura: i controlli di gestione arriveranno qui.</p>
       </div>
     </div>
   );

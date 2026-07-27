@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   teamPayroll,
   capReport,
+  capZone,
+  outerWall,
   GENERATED_MODE,
   HISTORICAL_MODE,
   type LeagueMode,
@@ -43,8 +45,21 @@ describe('leagueMode / salary cap', () => {
     expect(rep.allowed).toBe(true);
   });
 
-  it('le costanti riflettono la decisione di design', () => {
-    expect(GENERATED_MODE.cap.mode).toBe('hard');
+  it('le costanti riflettono la decisione di design (cap a due confini)', () => {
+    // Modello rivisto: la lega generata ha un cap BASE soft (norma) + muro
+    // esterno, non piu' un cap rigido unico. Vedi docs/franchise.md § Salary cap.
+    expect(GENERATED_MODE.cap.mode).toBe('soft');
     expect(HISTORICAL_MODE.cap.mode).toBe('soft');
+  });
+
+  it('capZone: under / tax / over rispetto al muro esterno', () => {
+    const base = GENERATED_MODE.cap.amount;
+    const wall = outerWall(base);
+    expect(capZone(base - 1, GENERATED_MODE)).toBe('under');
+    expect(capZone(base + 1, GENERATED_MODE)).toBe('tax');
+    expect(capZone(wall + 1, GENERATED_MODE)).toBe('over');
+    // Cap off: sempre under.
+    const off: LeagueMode = { source: 'historical', cap: { mode: 'off', amount: 1 } };
+    expect(capZone(9999, off)).toBe('under');
   });
 });

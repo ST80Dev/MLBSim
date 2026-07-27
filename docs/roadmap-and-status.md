@@ -39,8 +39,23 @@
     **import storico** end-to-end (inversione stat→rating, prova 1999) e
     **fondazione modalità lega + salary cap**. In più, anticipati dalla Fase 4:
     **calendario**, **classifiche**, **Leaderboard** e accumulo stat reali.
+  - **Flusso d'ingresso — FATTO:** schermata iniziale (`StartScreen`: nuova lega
+    **generata** / **storica** in anteprima / riprendi salvataggio) → **panoramica
+    lega** (`LeagueOverview`: 30 squadre per division con forza `teamStrength` e
+    indicatore payroll-vs-cap; dettaglio rosa in modale) → scelta squadra gestita
+    → dashboard. Il **seed e la sorgente** sono ora **persistiti** nel `GameSave`
+    (schema v2): ricaricare rigenera la STESSA lega (prima il seed era casuale ad
+    ogni avvio → bug). Indicatore cap a due confini anche sulla **Franchigia**.
+  - **Salary cap — RICALIBRATO:** curva stipendi compressa (`salaryFromOverall`:
+    payroll medio ~193M sotto il cap base 250M, stelle fino a ~45M, spread da
+    ~10x a ~4-5x) +
+    **`youthFactor`** (stipendio = f(overall, età), modello B-lite). Modello a due
+    confini (base soft + muro esterno) con `capZone` per l'indicatore. Enforce
+    (ε, riconciliazione al rollover via pool) resta design di Fase 4/5. Vedi
+    `docs/franchise.md`.
   - **Manca per chiudere la fase:** pipeline Lahman completa (30 squadre ×
-    annata) + UI di selezione stagione/sorgente. Dettaglio sotto.
+    annata) per rendere davvero giocabile la modalità storica (oggi solo dataset
+    1999 di prova, esposta come **anteprima**). Dettaglio sotto.
 
 ## Roadmap
 - **Fase 2 — Costruzione squadra & import storico** *(quasi completa)*
