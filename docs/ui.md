@@ -75,12 +75,13 @@ Regioni, dall'alto in basso:
     (`shownField`), passato a `Diamond`/`BaseDiamond`; il motore e i controlli
     restano sullo stato reale (`sit`), solo i marker sono in ritardo.
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
-    battitore corrente evidenziato, lanciatore in pedana). La riga del lanciatore
-    mostra **IP / PT / BF / SO / ER** per **entrambe** le squadre: **PT = stima
+    battitore corrente evidenziato, lanciatori usati in pedana). Il riquadro
+    lanciatori elenca **ogni lanciatore impiegato** (il partente con tag `LANC.`,
+    i rilievi con `↳`), ciascuno con **IP / PT / BF / SO / ER**: **PT = stima
     lanci** (`estimatedPitches`, formula di Tango `3.3·BF + 1.5·SO + 2.2·BB`) —
     stima DETERMINISTICA (nessun RNG, nessun impatto sulla calibrazione) che cresce
     con battitori affrontati, valide, BB e SO, così si percepisce l'affaticamento.
-    **BF = battitori affrontati / Resistenza** (`curP.bf` / `pitcher.stamina`): è il
+    **BF = battitori affrontati / Resistenza** (`pl.bf` / `pitcher.stamina`): è il
     **raffronto esplicito** sulla durata sul monte, ancorato alla *vera* meccanica
     del motore (l'affaticamento va a battitori, non a lanci). Sia PT sia BF virano
     all'**ambra** quando i battitori si avvicinano/superano la soglia di Resistenza

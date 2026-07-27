@@ -233,11 +233,13 @@ function pickMatchCalibration(
 type FieldSnap = {
   bases: [boolean, boolean, boolean];
   baseRunners: [string | null, string | null, string | null];
+  baseRunnerSpeeds: [number | null, number | null, number | null];
   batterName: string | null;
 };
 const fieldSnap = (s: LiveSituation): FieldSnap => ({
   bases: s.bases,
   baseRunners: s.baseRunners,
+  baseRunnerSpeeds: s.baseRunnerSpeeds,
   batterName: s.batter?.name ?? null,
 });
 
@@ -419,12 +421,31 @@ export function App() {
   // aggiornano subito. `live` cambia identità solo quando si ricrea la partita,
   // non a ogni turno: l'effetto qui sotto riazzera i marker a inizio gara.
   const [shownField, setShownField] = useState<FieldSnap>(() => fieldSnap(sit));
+  // Quante giocate sono già "lette": le cronache laterali NON anticipano l'esito
+  // scritto al centro (PlayBanner), che resta la prima fonte del turno. Cresce
+  // solo al verdetto della telecronaca, in sync coi marker sul diamante.
+  const [shownPlays, setShownPlays] = useState<number>(() => result.play.length);
+  // Anche lo SCOREBOARD in alto (punteggi, linescore, inning/out, giocatore
+  // coinvolto) non anticipa l'esito: aggiorna solo al verdetto della telecronaca,
+  // con la stessa istantanea di `result`/`sit` usata dal resto della plancia.
+  const [shownScore, setShownScore] = useState<{ result: GameResult; sit: LiveSituation }>(() => ({
+    result,
+    sit,
+  }));
   useEffect(() => {
-    setShownField(fieldSnap(situation(live)));
+    const s = situation(live);
+    const r = toGameResult(live);
+    setShownField(fieldSnap(s));
+    setShownPlays(r.play.length);
+    setShownScore({ result: r, sit: s });
   }, [live]);
   // Passata al PlayBanner: chiamata al verdetto (o subito se non c'è cronaca).
   const revealField = useCallback(() => {
-    setShownField(fieldSnap(situation(live)));
+    const s = situation(live);
+    const r = toGameResult(live);
+    setShownField(fieldSnap(s));
+    setShownPlays(r.play.length);
+    setShownScore({ result: r, sit: s });
   }, [live]);
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
@@ -695,6 +716,8 @@ export function App() {
         <GameScreen
           result={result}
           sit={sit}
+          displayResult={shownScore.result}
+          displaySit={shownScore.sit}
           statsMode={statsMode}
           setStatsMode={setStatsMode}
           editing={editing}
@@ -702,7 +725,9 @@ export function App() {
           onMarkerMove={moveMarker}
           basesShown={shownField.bases}
           runners={shownField.baseRunners}
+          runnerSpeeds={shownField.baseRunnerSpeeds}
           batterName={shownField.batterName}
+          shownPlays={shownPlays}
           onReveal={revealField}
           controls={
             final ? (
@@ -826,6 +851,8 @@ export function App() {
 function GameScreen({
   result,
   sit,
+  displayResult,
+  displaySit,
   statsMode,
   setStatsMode,
   editing,
@@ -833,12 +860,21 @@ function GameScreen({
   onMarkerMove,
   basesShown,
   runners,
+  runnerSpeeds,
   batterName,
+  shownPlays,
   onReveal,
   controls,
 }: {
   result: GameResult;
   sit: LiveSituation;
+  // Istantanea RITARDATA di result/sit: la plancia (scoreboard, difensori e
+  // lanciatore sul campo, boxscore) mostra questa, che avanza solo al verdetto
+  // della telecronaca. Il PlayBanner invece riceve il `result` REALE (deve
+  // vedere subito la nuova giocata per animarla e poi far scattare il reveal).
+  // Se omesse si usano result/sit reali (schermata calibrazione).
+  displayResult?: GameResult;
+  displaySit?: LiveSituation;
   statsMode: StatsMode;
   setStatsMode: (m: StatsMode) => void;
   editing: boolean;
@@ -848,16 +884,22 @@ function GameScreen({
   // (rivelate al verdetto della cronaca). Se omesse, si usa lo stato reale.
   basesShown?: [boolean, boolean, boolean];
   runners?: (string | null)[];
+  runnerSpeeds?: (number | null)[];
   batterName?: string | null;
+  // Numero di giocate già "lette" al centro: le cronache laterali si fermano qui
+  // per non anticipare l'esito. Se omesso, si mostra tutto.
+  shownPlays?: number;
   onReveal?: () => void;
   controls: ReactNode;
 }) {
-  const fieldBases = basesShown ?? sit.bases;
+  const dResult = displayResult ?? result;
+  const dSit = displaySit ?? sit;
+  const fieldBases = basesShown ?? dSit.bases;
   return (
     <div className="game-screen">
       <StatBar
-        result={result}
-        sit={sit}
+        result={dResult}
+        sit={dSit}
         basesShown={fieldBases}
         statsMode={statsMode}
         setStatsMode={setStatsMode}
@@ -865,14 +907,15 @@ function GameScreen({
 
       <div className={editing ? 'gamefield editing' : 'gamefield'}>
         <Diamond
-          home={result.home}
-          away={result.away}
+          home={dResult.home}
+          away={dResult.away}
           background
           bases={fieldBases}
           runners={runners}
+          runnerSpeeds={runnerSpeeds}
           batterName={batterName}
-          defenseTeam={sit.offenseSide === 'away' ? result.home : result.away}
-          pitcherName={sit.pitcher.name}
+          defenseTeam={dSit.offenseSide === 'away' ? dResult.home : dResult.away}
+          pitcherName={dSit.pitcher.name}
           cal={cal}
           editable={editing}
           onMarkerMove={onMarkerMove}
@@ -881,18 +924,18 @@ function GameScreen({
         {!editing && <PlayBanner result={result} onReveal={onReveal} />}
 
         <div className="cronaca-corner left">
-          <CronacaTeam result={result} side="away" />
+          <CronacaTeam result={result} side="away" shownPlays={shownPlays} />
         </div>
         <div className="cronaca-corner right">
-          <CronacaTeam result={result} side="home" />
+          <CronacaTeam result={result} side="home" shownPlays={shownPlays} />
         </div>
 
         <div className="lineup-corner left">
           <LineupSide
             side="away"
-            team={result.away}
-            stats={result.awayStats}
-            sit={sit}
+            team={dResult.away}
+            stats={dResult.awayStats}
+            sit={dSit}
             mode={statsMode}
             setMode={setStatsMode}
           />
@@ -900,9 +943,9 @@ function GameScreen({
         <div className="lineup-corner right">
           <LineupSide
             side="home"
-            team={result.home}
-            stats={result.homeStats}
-            sit={sit}
+            team={dResult.home}
+            stats={dResult.homeStats}
+            sit={dSit}
             mode={statsMode}
             setMode={setStatsMode}
           />
@@ -1804,7 +1847,9 @@ function SubRow({
       </td>
       {subRatingChips(player).map(([k, v]) => (
         <td key={k} className="subrow-stat">
-          <b style={{ color: ratingColor(v) }}>{v}</b>
+          <span className="subrow-rat" style={{ background: ratingColor(v) }}>
+            {v}
+          </span>
         </td>
       ))}
       <td className="subrow-pick-c">
@@ -2124,8 +2169,9 @@ function LineupSide({
   const head = rows[0]?.items.map((i) => i.k) ?? [];
   // Cognomi disambiguati per i battitori mostrati (es. R. Alomar / S. Alomar).
   const batLabels = disambiguateLastNames(rows.map((r) => r.line.name));
-  // Lanciatore attualmente in pedana per questa squadra (ultima riga usata).
-  const curP = stats.pitching[stats.pitching.length - 1];
+  // TUTTI i lanciatori usati da questa squadra (partente + rilievi entrati), non
+  // solo quello in pedana: così il box tiene traccia dei 3/5/7 cambi.
+  const lastPitIdx = stats.pitching.length - 1;
   const pitLabels = disambiguateLastNames(stats.pitching.map((p) => p.name));
   return (
     <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>
@@ -2134,58 +2180,58 @@ function LineupSide({
         <span className="ls-name">{team.name}</span>
         <StatsToggle mode={mode} setMode={setMode} />
       </div>
-      <table className="ls-table">
-        <thead>
-          <tr>
-            <th className="l">#</th>
-            <th className="l">Battitore</th>
-            {head.map((k) => (
-              <th key={k}>{k}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
-              <td className="l num">{i + 1}</td>
-              <td className="l bname">
-                <span className="pos">{r.line.position}</span>{' '}
-                {(() => {
-                  const b = batById.get(r.line.id);
-                  return b ? (
-                    <PlayerLink player={b} pos={b.position}>{batLabels[i]}</PlayerLink>
-                  ) : (
-                    upperLast(batLabels[i])
-                  );
-                })()}
-                {r.line.id === currentId && <span className="atbat-dot">●</span>}
-              </td>
-              {r.items.map((it) => (
-                <td key={it.k}>{it.v}</td>
+      <div className="ls-scroll">
+        <table className="ls-table">
+          <thead>
+            <tr>
+              <th className="l">#</th>
+              <th className="l">Battitore</th>
+              {head.map((k) => (
+                <th key={k}>{k}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {curP && (
-        <div className="ls-pit">
-          <span className="ls-pit-tag">LANC.</span>
-          <span className="ls-pit-name">
-            {(() => {
-              const p = pitById.get(curP.id);
-              const label = pitLabels[pitLabels.length - 1];
-              return p ? <PlayerLink player={p}>{label}</PlayerLink> : upperLast(label);
-            })()}
-          </span>
-          <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
-          {(() => {
-            const p = pitById.get(curP.id);
-            const pt = estimatedPitches(curP);
-            const fat = p ? pitcherFatigue(p.role, p.stamina, curP.bf) : undefined;
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
+                <td className="l num">{i + 1}</td>
+                <td className="l bname">
+                  <span className="pos">{r.line.position}</span>{' '}
+                  {(() => {
+                    const b = batById.get(r.line.id);
+                    return b ? (
+                      <PlayerLink player={b} pos={b.position}>{batLabels[i]}</PlayerLink>
+                    ) : (
+                      upperLast(batLabels[i])
+                    );
+                  })()}
+                  {r.line.id === currentId && <span className="atbat-dot">●</span>}
+                </td>
+                {r.items.map((it) => (
+                  <td key={it.k}>{it.v}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {stats.pitching.length > 0 && (
+        <div className="ls-pits">
+          {stats.pitching.map((pl, idx) => {
+            const p = pitById.get(pl.id);
+            const label = pitLabels[idx];
+            const isCur = idx === lastPitIdx && sit.status === 'live';
+            const pt = estimatedPitches(pl);
+            const fat = p ? pitcherFatigue(p.role, p.stamina, pl.bf) : undefined;
             const stateWord =
               fat?.state === 'spent' ? 'esausto' : fat?.state === 'tiring' ? 'in calo' : 'fresco';
             return (
-              <>
+              <div className={`ls-pit${isCur ? ' cur' : ''}`} key={pl.id}>
+                <span className="ls-pit-tag">{idx === 0 ? 'LANC.' : '↳'}</span>
+                <span className="ls-pit-name">
+                  {p ? <PlayerLink player={p}>{label}</PlayerLink> : upperLast(label)}
+                </span>
+                <span className="ls-pit-stat">{formatIp(pl.outs)} IP</span>
                 <span
                   className="ls-pit-stat"
                   style={{ color: fat?.tone }}
@@ -2199,15 +2245,15 @@ function LineupSide({
                     style={{ color: fat?.tone }}
                     title={`Battitori affrontati / Resistenza (${stateWord}). La Resistenza è la soglia oltre la quale scatta l'affaticamento (peggiora BB/valide/HR, cala negli SO); superata di ${p.role === 'SP' ? 4 : 2} il lanciatore verrebbe cambiato d'ufficio.`}
                   >
-                    {curP.bf}/{p.stamina} BF
+                    {pl.bf}/{p.stamina} BF
                   </span>
                 )}
-              </>
+                <span className="ls-pit-stat">{pl.so} SO</span>
+                <span className="ls-pit-stat">{pl.er} ER</span>
+                {pl.dec && <span className={`dec dec-${pl.dec}`}>{decLabel(pl.dec)}</span>}
+              </div>
             );
-          })()}
-          <span className="ls-pit-stat">{curP.so} SO</span>
-          <span className="ls-pit-stat">{curP.er} ER</span>
-          {curP.dec && <span className={`dec dec-${curP.dec}`}>{decLabel(curP.dec)}</span>}
+          })}
         </div>
       )}
     </div>
@@ -2478,14 +2524,26 @@ function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?: () =>
 
 /** Cronaca di UNA squadra (ospite = mezzi alti; casa = mezzi bassi). Sempre
  *  visibile, scorre verso l'ultimo evento. */
-function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
+function CronacaTeam({
+  result,
+  side,
+  shownPlays,
+}: {
+  result: GameResult;
+  side: Side;
+  shownPlays?: number;
+}) {
   const half = side === 'away' ? 'top' : 'bottom';
-  const groups = groupPlays(result).filter((g) => g.key.endsWith(half));
+  // Le cronache laterali non anticipano l'esito scritto al centro: si fermano
+  // alle giocate già "lette" (shownPlays). Se omesso, si mostra tutto.
+  const shownLen = shownPlays ?? result.play.length;
+  const shown = shownLen >= result.play.length ? result : { ...result, play: result.play.slice(0, shownLen) };
+  const groups = groupPlays(shown).filter((g) => g.key.endsWith(half));
   const team = side === 'away' ? result.away : result.home;
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-  }, [result.play.length]);
+  }, [shownLen]);
 
   return (
     <div className="cronaca-team" style={{ ['--tc' as string]: team.primaryColor }}>
