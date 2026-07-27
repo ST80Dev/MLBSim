@@ -44,19 +44,6 @@ const BENCH_POSITIONS: Position[] = ['C', 'CF', 'SS', '3B', 'RF'];
 // Profondita' (depth) oltre i 25 attivi: riserve per gestione/scambi.
 const DEPTH_BATTER_POSITIONS: Position[] = ['C', '1B', '2B', 'LF', '3B', 'CF'];
 
-// Gradiente per i 5 slot di rotazione: bias di talento (a MEDIA ~0 → non sposta
-// la calibrazione di lega) + fascia d'eta'. Gli assi (SP1/2) sono forti e maturi,
-// il #3 medio, il #4/#5 piu' deboli e piu' GIOVANI (back-end da sviluppare).
-const SP_SLOTS: Array<{ bias: number; age: [number, number] }> = [
-  { bias: 5, age: [25, 36] }, // #1 asso
-  { bias: 3, age: [25, 36] }, // #2
-  { bias: 1, age: [23, 35] }, // #3 medio
-  { bias: -3, age: [22, 30] }, // #4 sotto media
-  { bias: -6, age: [21, 27] }, // #5 giovane back-end
-];
-// Riserve SP (depth): back-end/prospetti giovani, piu' deboli dei titolari.
-const DEPTH_SP: { bias: number; age: [number, number] } = { bias: -5, age: [21, 27] };
-
 // Pavimenti realistici. ROT_FLOOR: un partente titolare, anche il #5 di una
 // squadra scarsa, e' sotto media ma di livello MLB (mai un braccio da Tripla-A
 // in rotazione). STAR_FLOOR: ogni squadra ha almeno una stella.
@@ -261,7 +248,6 @@ function pitcherArchetype(rng: Rng): PitchArchetype {
 
 function makePitcherRatings(
   rng: Rng,
-  role: PitcherRole,
   teamTalent = 0,
   specBonus = 0,
   tilt: PitchTilt = {},
@@ -270,25 +256,46 @@ function makePitcherRatings(
   // dote dall'archetipo (`tilt` strutturale del ruolo — es. closer power — si somma).
   const gem = rng.next() < 0.04 ? Math.abs(rng.gauss(0, 1)) * 9 + 6 : 0;
   const spec = gem + specBonus;
-  const base = teamTalent + rng.gauss(0, 7.5);
+  // Centro leggermente sotto la media: in partita si affrontano soprattutto i
+  // MIGLIORI bracci (i 5 partenti selezionati), quindi un livello base un filo più
+  // basso mantiene l'epoca "alta offesa" senza rendere i partenti dominanti.
+  const base = teamTalent + rng.gauss(0, 7.5) - 1.5;
   const a = pitcherArchetype(rng);
   const skill = (dote: PSkill, sd: number, extra = 0) =>
     clampRating(
       RATING_AVG + base + extra + (a.tilt[dote] ?? 0) + (tilt[dote] ?? 0) + spec * (a.w[dote] ?? 0.6) + rng.gauss(0, sd),
     );
-  const staminaBase = role === 'SP' ? RATING_AVG + 2 : role === 'CL' ? RATING_AVG - 20 : RATING_AVG - 12;
   return {
-    stuff: skill('stuff', 8, role === 'SP' ? 0 : 4),
+    stuff: skill('stuff', 8),
     control: skill('control', 8),
     movement: skill('movement', 8),
     groundball: skill('groundball', 9),
-    // RESISTENZA INDIPENDENTE dalla bravura: base di ruolo + varianza AMPIA (sd 11).
-    // Così un partente forte di stoffa può avere resistenza da long-reliever, e uno
-    // scarso reggere tanti inning. Il talento NON "compra" resistenza.
-    stamina: clampRating(staminaBase + (tilt.stamina ?? 0) + rng.gauss(0, 11)),
-    // Difesa del lanciatore: leggermente legata al livello, molto rumore.
-    fielding: clampRating(RATING_AVG + base * 0.4 + rng.gauss(0, 9)),
+    // RESISTENZA come RATING intrinseco, INDIPENDENTE da bravura E ruolo: centrata
+    // sulla media con varianza AMPIA (sd 14) → si va dai bracci da 1 ripresa
+    // (~45) ai cavalli da 220 inning (~95). Il RUOLO (SP/RP) e la soglia effettiva
+    // di battitori vengono assegnati DOPO, dallo slot (allocazione + deriveStamina),
+    // così i migliori bracci CON resistenza fanno i partenti — non i reliever forti.
+    stamina: clampRating(RATING_AVG + (tilt.stamina ?? 0) + rng.gauss(0, 14)),
+    // Difesa del lanciatore: un lanciatore NON difende come un interno di ruolo.
+    // Centro ben SOTTO la media (~57) con coda a destra: i più sono difensori
+    // modesti, qualcuno (tipo Maddux) è ottimo. Pesa 0.05 nell'overall.
+    fielding: clampRating(RATING_AVG - 13 + rng.gauss(0, 9)),
   };
+}
+
+/** Assegna il ruolo effettivo e ricalcola la soglia battitori dal RATING di
+ *  Resistenza per quel ruolo (stessa logica di `asRole` in arrangement.ts, ma per
+ *  la generazione). */
+function setPitcherRole(p: Pitcher, role: PitcherRole): Pitcher {
+  return { ...p, role, stamina: deriveStamina(p.ratings.stamina, role) };
+}
+
+// Un braccio è SWINGMAN (doppio ruolo SP/RP) quando ha resistenza da PARTENZA e
+// insieme qualità/predisposizione da rilievo: può fare entrambi. Sotto la soglia di
+// resistenza è solo rilievo; il cavallo puro o l'asso restano SP. Serve al giocatore
+// per sapere chi può spostare tra rotazione e bullpen.
+export function swingCapable(r: PitcherRatings): boolean {
+  return r.stamina >= 60 && r.stamina <= 82 && pitcherOverall(r) >= 52;
 }
 
 function pickSecondary(rng: Rng, primary: Position): Position | undefined {
@@ -370,7 +377,7 @@ function makePitcher(
   tilt: PitchTilt = {},
 ): Pitcher {
   // Il bias-stella (asso) entra come bonus di SPECIALIZZAZIONE, pesato per dote.
-  const ratings = makePitcherRatings(rng, role, teamTalent, talentBias, tilt);
+  const ratings = makePitcherRatings(rng, teamTalent, talentBias, tilt);
   const stats = derivePitcherStats(ratings);
   // Finestra d'età di slot presente (partenti SP_SLOTS/depth) → uniforme nella
   // finestra voluta; altrimenti (rilievi) → distribuzione realistica makeAge.
@@ -540,55 +547,38 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   }
   const lineup = autoLineup(alignLineupDefense(lineupRaw));
 
-  // --- Lanciatori: gradiente SP_SLOTS (+ bonus asso se stella), poi pool-sort
-  // best-starts: i 5 migliori in rotazione (n.1 = asso), i più deboli in profondità. ---
-  const spPool = [
-    ...SP_SLOTS.map((s, i) =>
-      makePitcher(
-        rng,
-        names,
-        `${f.abbrev}-SP${i}`,
-        'SP',
-        teamTalent,
-        s.bias + (aceStar && i === 0 ? starBias() * 0.65 : 0),
-        s.age,
-        ageSkew,
-      ),
+  // --- Lanciatori: un solo POOL di bracci (resistenza = rating intrinseco ampio).
+  // I migliori CON resistenza fanno i PARTENTI (ruolo/endurance dallo slot), così
+  // non nascono reliever più forti dei titolari e la rotazione ha varianza vera di
+  // resistenza (cavalli e partenti corti). Chi ha stoffa ma non regge → bullpen.
+  // L'eventuale asso-stella entra nel pool col bonus di specializzazione. ---
+  const arms = Array.from({ length: 15 }, (_, i) =>
+    makePitcher(
+      rng,
+      names,
+      `${f.abbrev}-P${i}`,
+      'SP',
+      teamTalent,
+      aceStar && i === 0 ? starBias() * 0.65 : 0,
+      undefined,
+      ageSkew,
     ),
-    ...Array.from({ length: 2 }, (_, i) =>
-      makePitcher(rng, names, `${f.abbrev}-DSP${i}`, 'SP', teamTalent, DEPTH_SP.bias, DEPTH_SP.age, ageSkew),
-    ),
-  ];
-  spPool.sort((a, b) => pitcherOverall(b.ratings) - pitcherOverall(a.ratings));
-  const rotation = spPool.slice(0, 5);
-  const reserveSP = spPool.slice(5);
-
-  // BULLPEN COERENTE (archetipi): closer shutdown (dominio+controllo), un
-  // setup/candidato-closer (stessa stoffa, poca resistenza), 2 long-reliever
-  // (resistenza alta) e i middle-reliever fungibili (best-starts fra loro). ageSkew
-  // su tutti. Tilt per-dote a somma ~0 (non sposta gli aggregati).
-  const closer = makePitcher(rng, names, `${f.abbrev}-CL`, 'CL', teamTalent, 0, undefined, ageSkew, {
-    stuff: 6,
-    control: 3,
-  });
-  const setup = makePitcher(rng, names, `${f.abbrev}-SU`, 'RP', teamTalent, 0, undefined, ageSkew, {
-    stuff: 5,
-    control: 2,
-    stamina: -4,
-  });
-  const longRelievers = Array.from({ length: 2 }, (_, i) =>
-    makePitcher(rng, names, `${f.abbrev}-LR${i}`, 'RP', teamTalent, 0, undefined, ageSkew, {
-      stamina: 14,
-      stuff: -3,
-      control: 2,
-    }),
   );
-  const middlePool = Array.from({ length: 4 }, (_, i) =>
-    makePitcher(rng, names, `${f.abbrev}-MR${i}`, 'RP', teamTalent, 0, undefined, ageSkew),
-  );
-  middlePool.sort((a, b) => pitcherOverall(b.ratings) - pitcherOverall(a.ratings));
-  const bullpen: Pitcher[] = [setup, ...longRelievers, ...middlePool.slice(0, 2), closer];
-  const reservePitchers: Pitcher[] = [...reserveSP, ...middlePool.slice(2)];
+  // Attitudine a PARTIRE = qualità + RESISTENZA con peso alto (chi non regge non
+  // parte; i bracci top-stoffa ma corti finiscono in bullpen, dove esplodono).
+  const startScore = (p: Pitcher) => pitcherOverall(p.ratings) + 0.9 * (p.ratings.stamina - RATING_AVG);
+  const byStart = [...arms].sort((a, b) => startScore(b) - startScore(a));
+  const rotation = byStart
+    .slice(0, 5)
+    .map((p) => setPitcherRole(p, 'SP'))
+    .sort((a, b) => pitcherOverall(b.ratings) - pitcherOverall(a.ratings)); // n.1 = asso
+  const rest = byStart.slice(5);
+  // Closer: il miglior braccio rimasto orientato al DOMINIO (esplode in 1 ripresa).
+  const closerScore = (p: Pitcher) => pitcherOverall(p.ratings) + 0.4 * (p.ratings.stuff - RATING_AVG);
+  const restByCloser = [...rest].sort((a, b) => closerScore(b) - closerScore(a));
+  const closer = setPitcherRole(restByCloser[0], 'CL');
+  const bullpen: Pitcher[] = [...restByCloser.slice(1, 6).map((p) => setPitcherRole(p, 'RP')), closer];
+  const reservePitchers: Pitcher[] = restByCloser.slice(6).map((p) => setPitcherRole(p, 'RP'));
 
   // Pavimenti realistici: nessun partente titolare sotto ROT_FLOOR (via i bracci
   // da Tripla-A), e almeno una stella 80+ in lineup (rete di sicurezza se le

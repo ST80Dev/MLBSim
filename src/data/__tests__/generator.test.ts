@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateLeague } from '../league';
-import { withRotationStarter } from '../generator';
-import { batterOverall, pitcherOverall } from '../../engine/ratings';
+import { withRotationStarter, swingCapable } from '../generator';
+import { batterOverall, pitcherOverall, RATING_AVG } from '../../engine/ratings';
 import { canOccupy } from '../../engine/positions';
 import type { Team } from '../../engine/types';
 
@@ -178,5 +178,43 @@ describe('realismo delle doti: gli elite sono SPECIALISTI', () => {
       }),
     );
     expect(spread).toBeGreaterThan(15);
+  });
+
+  it('la difesa dei lanciatori NON è da fielder (centrata sotto media)', () => {
+    const f = pits.map((p) => p.ratings.fielding);
+    expect(avg(f)).toBeLessThan(64); // ~57, non ~70
+    expect(f.filter((x) => x >= 80).length / f.length).toBeLessThan(0.03); // rari i "Maddux"
+  });
+});
+
+describe('allocazione lanciatori: i migliori CON resistenza partono', () => {
+  const pits = teams.flatMap((t) => [...t.rotation, ...t.bullpen, ...t.reservePitchers]);
+  const startScore = (p: { ratings: { stamina: number } }, ovr: number) =>
+    ovr + 0.9 * (p.ratings.stamina - RATING_AVG);
+
+  it('nessun braccio da bullpen ha attitudine-a-partire sopra un titolare', () => {
+    // Invariante dell'allocazione: la rotazione è il top-5 per "starter value"
+    // (qualità + resistenza), quindi nessun rilievo la supera — non conviene
+    // spostarlo. (I RP con overall alto ma poca resistenza sono correttamente lì.)
+    for (const t of teams) {
+      const rotMin = Math.min(...t.rotation.map((p) => startScore(p, pitcherOverall(p.ratings))));
+      const bpMax = Math.max(...t.bullpen.map((p) => startScore(p, pitcherOverall(p.ratings))));
+      expect(rotMin).toBeGreaterThanOrEqual(bpMax - 0.001);
+    }
+  });
+
+  it('la rotazione ha varianza VERA di resistenza (cavalli e partenti corti)', () => {
+    const spread = avg(
+      teams.map((t) => {
+        const s = t.rotation.map((p) => p.ratings.stamina);
+        return Math.max(...s) - Math.min(...s);
+      }),
+    );
+    expect(spread).toBeGreaterThan(15);
+  });
+
+  it('esistono swingman (SP/RP) segnalabili al giocatore', () => {
+    const swing = pits.filter((p) => swingCapable(p.ratings)).length;
+    expect(swing).toBeGreaterThan(pits.length * 0.2);
   });
 });
