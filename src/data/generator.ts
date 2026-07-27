@@ -23,6 +23,7 @@ import {
 import type { Rng } from '../engine/rng';
 import { makeRng } from '../engine/rng';
 import { SECONDARY_OPTIONS } from '../engine/positions';
+import { autoLineup } from '../engine/lineup';
 import { NAME_ORIGINS } from './names';
 import { FRANCHISES, Franchise } from './franchises';
 
@@ -279,12 +280,14 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   // non finiscono tutte sul filo del .500). Centrato su 0 (la media di lega resta),
   // sigma CONTENUTA e clamp: niente cantine/corazzate irreali (payroll fuori scala).
   const teamTalent = Math.max(-8, Math.min(8, rng.gauss(0, 3.8)));
-  const lineup = LINEUP_POSITIONS.map((pos, i) =>
-    makeBatter(rng, names, `${f.abbrev}-B${i}`, pos, teamTalent),
+  // Ordine di battuta REALISTICO (basi standard) guidato dai rating via
+  // `autoLineup`: leadoff OBP+velocita', cleanup potenza, ecc. Vale per OGNI
+  // squadra — la mia (via defaultArrangement, che legge l'ordine di team.lineup)
+  // e le 29 CPU — così nessuno batte lo slugger in prima come faceva il vecchio
+  // ordinamento per solo overall.
+  const lineup = autoLineup(
+    LINEUP_POSITIONS.map((pos, i) => makeBatter(rng, names, `${f.abbrev}-B${i}`, pos, teamTalent)),
   );
-  // Ordine di battuta semplice: i migliori bastoni piu' in alto.
-  // (L'ottimizzazione realistica del lineup arrivera' in Fase 2.)
-  lineup.sort((a, b) => batterOverall(b.ratings) - batterOverall(a.ratings));
 
   const bench = BENCH_POSITIONS.map((pos, i) =>
     makeBatter(rng, names, `${f.abbrev}-BN${i}`, pos, teamTalent),
