@@ -100,7 +100,15 @@ import { buildCommentary, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
 import { scoreCode } from './scorecode';
 
-type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'calibrate' | 'game';
+type View =
+  | 'home'
+  | 'roster'
+  | 'overview'
+  | 'leaderboard'
+  | 'standings'
+  | 'franchise'
+  | 'calibrate'
+  | 'game';
 
 // Nota: le prime build usavano un unico slot 'principale'; quei salvataggi
 // compaiono comunque nell'hub via `saveStore.list()` (retro-compatibili). Le
@@ -614,6 +622,7 @@ export function App() {
             [
               ['home', 'Home'],
               ['roster', 'Roster'],
+              ['overview', 'Lega'],
               ['leaderboard', 'Leaderboard'],
               ['standings', 'Classifiche'],
               ['franchise', 'Franchigia'],
@@ -727,7 +736,7 @@ export function App() {
             setManagedId(id);
             setActiveGame(null);
           }}
-          onOverview={() => setStage('league')}
+          onOverview={() => setView('overview')}
           onNewLeague={() => setStage('start')}
         />
       )}
@@ -746,6 +755,20 @@ export function App() {
           onApply={applyManaged}
           onSave={saveManaged}
           onStart={() => setView('game')}
+        />
+      )}
+
+      {view === 'overview' && (
+        <LeagueOverview
+          league={league}
+          seed={leagueSeed}
+          mode={leagueMode}
+          embedded
+          onPick={(id) => {
+            setManagedId(id);
+            setActiveGame(null);
+            setView('home');
+          }}
         />
       )}
 
@@ -3188,12 +3211,22 @@ function RosterPage({
     (a, b) => posRank(arr.defense[a.id] ?? a.position) - posRank(arr.defense[b.id] ?? b.position),
   );
   // Sintesi di squadra dello schieramento CORRENTE: si aggiorna a ogni mossa,
-  // cosi' si vede subito se una sostituzione migliora o peggiora.
-  const synth = teamSynthesis(lineup.map((b) => ({ b, pos: arr.defense[b.id] ?? b.position })));
-  const staff = staffSynthesis(
-    arr.rotation.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
-    arr.bullpen.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
-  );
+  // così si vede subito se una sostituzione migliora o peggiora. USA la STESSA
+  // `teamStrength` della Panoramica lega (che include il LANCIO nell'OVR), così il
+  // totale del Roster coincide con la "Forza" mostrata alla scelta squadra —
+  // niente più OVR 82 nel Roster e 77 in panoramica.
+  const built = buildManagedTeam(team, arr);
+  // Panchina ORIGINALE (5 attivi), non quella di buildManagedTeam (che vi accorpa
+  // anche le riserve profonde e diluirebbe la media): così il totale coincide
+  // ESATTAMENTE con la "Forza" della Panoramica per l'assetto di default.
+  const str = teamStrength({
+    ...team,
+    lineup: built.lineup,
+    rotation: built.rotation,
+    bullpen: built.bullpen,
+  });
+  const synth = { off: str.attack, def: str.defense, ovr: str.total };
+  const staff = str.pitching;
 
   const update = (patch: Partial<MatchArrangement>) => {
     setArr((a) => ({ ...a, ...patch }));
@@ -4999,34 +5032,40 @@ function LeagueOverview({
   mode,
   onPick,
   onBack,
+  embedded = false,
 }: {
   league: Team[];
   seed: number;
   mode: LeagueMode;
   onPick: (id: string) => void;
-  onBack: () => void;
+  onBack?: () => void;
+  /** Incorporata come pagina DENTRO la partita (usa la header di gioco): niente
+   *  topbar né "Indietro" propri, così non si esce dal flusso di gioco. */
+  embedded?: boolean;
 }) {
   const [selId, setSelId] = useState<string>('');
   const groups = byDivision(league);
   const sel = selId ? teamById(league, selId) : undefined;
   return (
-    <div className="app overview-app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="logo">⚾</span> MLBSim <span className="phase">Panoramica lega</span>
-        </div>
-        <div className="actions">
-          <span className="muted seed-note">seed {seed}</span>
-          <button className="btn" onClick={onBack}>
-            ← Indietro
-          </button>
-        </div>
-      </header>
+    <div className={embedded ? 'overview-embed' : 'app overview-app'}>
+      {!embedded && (
+        <header className="topbar">
+          <div className="brand">
+            <span className="logo">⚾</span> MLBSim <span className="phase">Panoramica lega</span>
+          </div>
+          <div className="actions">
+            <span className="muted seed-note">seed {seed}</span>
+            <button className="btn" onClick={onBack}>
+              ← Indietro
+            </button>
+          </div>
+        </header>
+      )}
       <div className="page overview-page">
         <div className="ov-legend">
           <span>
-            Scegli la squadra da gestire. Forza 40-100 · monte-ingaggi vs cap ${mode.cap.amount}M
-            (muro ${outerWall(mode.cap.amount).toFixed(0)}M).
+            {embedded ? 'Panoramica della lega' : 'Scegli la squadra da gestire'}. Forza 40-100 ·
+            monte-ingaggi vs cap ${mode.cap.amount}M (muro ${outerWall(mode.cap.amount).toFixed(0)}M).
           </span>
           <span className="cap-legend">
             <span className="cap-chip under">Sotto</span>
