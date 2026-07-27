@@ -1062,6 +1062,9 @@ export interface LiveSituation {
   /** Nomi dei corridori in base (1B, 2B, 3B) o null se libera. Serve alla UI
    *  per mostrare l'etichetta col nome accanto al marker della base. */
   baseRunners: [string | null, string | null, string | null];
+  /** Velocità (VEL) dei corridori in base, allineata a `baseRunners`: la UI la
+   *  mostra come card-dote accanto al nome per riconoscere il tipo di corridore. */
+  baseRunnerSpeeds: [number | null, number | null, number | null];
   offenseSide: 'away' | 'home';
   battingTeam: Team;
   fieldingTeam: Team;
@@ -1092,6 +1095,11 @@ export function situation(l: LiveGame): LiveSituation {
       l.bases[0]?.batter.name ?? null,
       l.bases[1]?.batter.name ?? null,
       l.bases[2]?.batter.name ?? null,
+    ],
+    baseRunnerSpeeds: [
+      l.bases[0]?.batter.ratings.speed ?? null,
+      l.bases[1]?.batter.ratings.speed ?? null,
+      l.bases[2]?.batter.ratings.speed ?? null,
     ],
     offenseSide: l.half === 'top' ? 'away' : 'home',
     battingTeam: off.team,
