@@ -3077,7 +3077,11 @@ table {
   overflow-x: auto;
 }
 .roster-tbl {
-  min-width: 100%;
+  /* Larghezza in base al CONTENUTO e tabella CENTRATA nel contenitore: niente più
+     stiramento a tutta larghezza (che creava un enorme vuoto fra nomi e stat). Se
+     con molte colonne supera il contenitore, `roster-scroll` scrolla in orizzontale. */
+  width: auto;
+  margin-inline: auto;
 }
 .roster-tbl .tag {
   margin-left: 6px;
@@ -3096,18 +3100,17 @@ table {
 }
 
 /* Card caratteristiche (rating) COMPATTE e quasi quadrate: larghezza fissa e
-   padding orizzontale minimo, così non si allungano su desktop largo. Lo spazio
-   orizzontale in eccesso lo assorbe la colonna "Giocatore" (width:100%), che
-   lascia libero il resto della riga per aggiunte future. */
+   padding orizzontale minimo, così non si allungano su desktop largo. */
 .roster-tbl .rat {
   width: 34px;
   min-width: 34px;
   padding-left: 3px;
   padding-right: 3px;
 }
+/* Colonna nome: larghezza in base al contenuto (niente più greedy width:100% che
+   spingeva le stat a destra lasciando un enorme vuoto). Nessun troncamento. */
 .roster-tbl th.l,
 .roster-tbl td.l {
-  width: 100%;
   max-width: none;
 }
 
