@@ -909,7 +909,7 @@ table {
    ========================================================================= */
 
 .app {
-  max-width: 1680px;
+  max-width: 1900px;
   padding: 10px clamp(10px, 1.6vw, 20px) 40px;
 }
 .topbar {
@@ -3000,7 +3000,7 @@ table {
 .page {
   padding: 14px clamp(10px, 1.6vw, 22px) 48px;
   overflow-y: auto;
-  max-width: 1400px;
+  max-width: 1820px;
   margin: 0 auto;
   width: 100%;
 }
