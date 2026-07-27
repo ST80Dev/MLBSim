@@ -99,8 +99,33 @@ talento. **ERA e W sono risultati** e devono galleggiare:
   peripherals + supporto offensivo + durata. Va supportato, non impedito.
 - Le vittorie dipenderanno dal **supporto offensivo** e dal contesto partita
   (chi è in pedana al cambio di vantaggio) → da tracciare con W/L/SV (Fase 1/4).
-- Gli scollegatori ERA-vs-talento da introdurre: **difesa dietro il lanciatore**,
-  **fattore stadio**, e **varianza di sequenza (BABIP/LOB)**.
+- Scollegatori ERA-vs-talento: **difesa dietro il lanciatore FATTA** (Fase 4, sotto);
+  **varianza di sequenza (BABIP/LOB)** emerge già dalla simulazione. Il **fattore
+  stadio** è fuori scope per scelta (non serve a questo livello di affinatezza).
+
+### Difesa dietro il lanciatore (Fase 4)
+
+La qualità del reparto difensivo sposta la **BABIP** e scollega l'ERA dal solo
+talento del lanciatore (principio **DIPS**: il lanciatore controlla K/BB/HR, il
+resto è difesa + sequenza). Tocca **solo le palle in gioco** (1B/2B/3B ⟷ out su
+palla in gioco), **mai** HR/BB/HBP/SO.
+
+- **Metrica**: `teamSynthesis().def` dei 9 schierati (fielding+braccio pesati per
+  ruolo, SS/CF/C contano di più, DH escluso) — la **stessa** difesa mostrata nella
+  UI Roster, così migliorare i difensori si vede davvero sull'ERA.
+- **Legge** (`combineRates`, guidata da `TUNING.defense`): `d = (def − 76)/10` in
+  sigma, `f = clamp(1 − d·perSigma, min, max)`; le hit su palla in gioco vengono
+  scalate per `f` e la massa spostata dentro/fuori dagli out. **Non consuma RNG**
+  (sposta solo le soglie prima del sorteggio: la struttura della Fase 0 è intatta).
+- **Neutrale alla media di lega**: `neutral = 76` è la media misurata della metrica
+  sul generatore (i ruoli difensivi hanno bonus di forma, quindi **non** 70). Una
+  difesa media è un **no-op** → gli aggregati di lega (BA, R/g, ERA di lega)
+  restano quelli di Fase 0 (drift BA misurato ~.001). Solo l'ERA del **singolo**
+  lanciatore galleggia col reparto dietro di lui.
+- **Effetto misurato** (400 gare, su 3 fasce di difesa): la difesa **ottima** (82+)
+  toglie **~0.37 ERA**, la **scarsa** (<70) ne aggiunge **~0.35**, oltre al talento
+  → uno spread di ~0.7 ERA fra i due estremi. Sensibile ma **non dominante**: il
+  lanciatore resta il fattore principale. Test in `engine/__tests__/defense.test.ts`.
 
 Curva ERA↔bravura misurata in Fase 0 (media, gare complete, lega calda): livello
 doti 50→ERA ~4.3; 60→~3.2; ~61 è la soglia del 3.00; 66→~2.4; 72→~1.8; 80→~1.4.

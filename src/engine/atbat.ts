@@ -26,12 +26,14 @@ export function resolveAtBat(
   pitcher: Pitcher,
   battersFaced: number,
   rng: Rng,
+  fieldingSigma = 0,
 ): { event: RawEvent; rates: PaRates } {
   const adv = platoonAdvantage(batter, pitcher);
   const rates = combineRates(batterRates(batter.stats), pitcherRates(pitcher.stats), {
     platoonAdvantage: adv,
     platoonDisadvantage: batter.bats !== 'S' && !adv,
     fatigue: clamp(fatigueFactor(pitcher, battersFaced), 1, 2.2),
+    fieldingSigma,
   });
 
   const roll = rng.next();

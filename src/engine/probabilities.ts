@@ -55,6 +55,13 @@ export interface MatchupContext {
   platoonDisadvantage: boolean;
   /** Fattore di affaticamento del lanciatore (>=1 quando stanco). */
   fatigue: number;
+  /**
+   * Difesa dietro il lanciatore, in sigma: `(defRating - neutral) / 10`. >0 =
+   * reparto sopra la media (piu' hit su palla in gioco diventano out), <0 =
+   * difesa scarsa (piu' buchi). Assente/0 = neutro (nessuno spostamento). Tocca
+   * solo le palle in gioco: mai HR/BB/HBP/SO. Vedi `TUNING.defense`.
+   */
+  fieldingSigma?: number;
 }
 
 /**
@@ -107,5 +114,20 @@ export function combineRates(
     sum = cap;
   }
   out.outInPlay = clamp(1 - sum, 0.03, 1);
+
+  // Difesa dietro il lanciatore (scollegatore ERA↔talento): sposta massa fra le
+  // hit su palla in gioco (1B/2B/3B) e gli out su palla in gioco, conservando la
+  // somma. HR/BB/HBP/SO restano intatti (principio DIPS). Neutro (0) = no-op.
+  const d = ctx.fieldingSigma ?? 0;
+  if (d !== 0) {
+    const T = TUNING.defense;
+    const f = clamp(1 - d * T.perSigma, T.min, T.max);
+    const bipHits = out.single + out.double + out.triple;
+    const delta = bipHits * (1 - f); // >0 con buona difesa: hit -> out
+    out.single *= f;
+    out.double *= f;
+    out.triple *= f;
+    out.outInPlay = clamp(out.outInPlay + delta, 0.01, 1);
+  }
   return out;
 }
