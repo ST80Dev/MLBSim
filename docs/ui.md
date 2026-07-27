@@ -45,7 +45,17 @@ Regioni, dall'alto in basso:
     simulazione né l'RNG). Non interattivo (`pointer-events:none`).
   - **Cronaca laterale** (`CronacaTeam`, angoli **alti** sx/dx per ospite/casa):
     a fine turno la giocata resta **sintetizzata in una riga** (`PlayEvent.text`)
-    nella timeline della squadra in attacco.
+    nella timeline della squadra in attacco. Davanti al testo, un **chip col
+    codice da segnapunti** (`scoreCode` in `src/ui/scorecode.ts`): `6-4-3 DP`
+    (doppio gioco SS→2B→1B), `F7` (eliminato al volo, LF), `K`/`ꓘ` (strikeout),
+    `CS 2-6` (eliminato in rubata), `3U` (rimbalzo non assistito in 1ª), ecc.,
+    con tooltip esplicativo in italiano. **Il motore non simula ancora la difesa**
+    (dove va la palla / quale difensore la gioca): il codice è quindi
+    **sintetizzato in modo PLAUSIBILE e DETERMINISTICO** dal `PlayEvent.kind`
+    (hash dell'evento, come `commentary.ts`) — descrittivo, non un dato del
+    motore, **niente RNG, determinismo invariato**. Quando la difesa sarà
+    simulata (fase futura) i ruoli reali sostituiranno la sintesi senza cambiare
+    la UI. Coperto da test (`src/ui/__tests__/scorecode.test.ts`).
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
     battitore corrente evidenziato, lanciatore in pedana).
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:

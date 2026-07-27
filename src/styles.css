@@ -1786,6 +1786,24 @@ table {
   content: '●';
   color: var(--win);
 }
+/* Codice segnapunti (scorekeeping) davanti alla riga di cronaca: es. 6-4-3, F7, K. */
+.cr-code {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.2px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 5px;
+  vertical-align: baseline;
+  cursor: help;
+  white-space: nowrap;
+}
 
 /* --- Banner di cronaca (alto-centro, sopra la foto stadio) ---------------- */
 /* Mostra la telecronaca dell'ultima giocata in 2-3 fasi con intensita'

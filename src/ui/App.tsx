@@ -80,6 +80,7 @@ import {
 import type { StatItem, StatsMode } from './statlines';
 import { buildCommentary, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
+import { scoreCode } from './scorecode';
 
 type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'calibrate' | 'game';
 
@@ -1944,11 +1945,19 @@ function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
               </span>
             </div>
             <ul>
-              {g.events.map((ev, i) => (
-                <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
-                  {ev.text}
-                </li>
-              ))}
+              {g.events.map((ev, i) => {
+                const sc = scoreCode(ev);
+                return (
+                  <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
+                    {sc && (
+                      <span className="cr-code" title={sc.title}>
+                        {sc.code}
+                      </span>
+                    )}
+                    {ev.text}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}
