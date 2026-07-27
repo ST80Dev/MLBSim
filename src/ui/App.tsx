@@ -639,6 +639,8 @@ function GameScreen({
           bases={fieldBases}
           runners={runners}
           batterName={batterName}
+          defenseTeam={sit.offenseSide === 'away' ? result.home : result.away}
+          pitcherName={sit.pitcher.name}
           cal={cal}
           editable={editing}
           onMarkerMove={onMarkerMove}

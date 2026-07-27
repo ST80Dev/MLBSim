@@ -196,6 +196,8 @@ export function Diamond({
   bases,
   runners,
   batterName,
+  defenseTeam,
+  pitcherName,
   cal = DEFAULT_CALIBRATION,
   editable,
   onMarkerMove,
@@ -210,10 +212,18 @@ export function Diamond({
   runners?: (string | null)[];
   /** Nome del battitore a casa base (etichetta accanto al marker battitore). */
   batterName?: string | null;
+  /** Squadra attualmente IN DIFESA: i difensori sul campo sono i SUOI giocatori.
+   *  Cambia a ogni mezzo inning; se assente si ripiega sulla squadra di casa. */
+  defenseTeam?: Team;
+  /** Nome del lanciatore ATTUALMENTE sul monte (non il partente di rotazione). */
+  pitcherName?: string;
   cal?: FieldCalibration;
   editable?: boolean;
   onMarkerMove?: (id: string, pos: { x: number; y: number }) => void;
 }) {
+  // I difensori disegnati sono quelli della squadra in difesa (che si alterna),
+  // NON per forza la squadra di casa proprietaria dello stadio.
+  const fielders = defenseTeam ?? home;
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
   // Foto scelta in calibrazione (variante) oppure la principale dello stadio.
@@ -413,7 +423,7 @@ export function Diamond({
             x={p.x}
             y={p.y}
             pos={pos}
-            name={playerAt(home, pos)}
+            name={pos === 'P' && pitcherName ? pitcherName : playerAt(fielders, pos)}
             below={pos === 'P' || pos === 'C'}
           />,
         );
