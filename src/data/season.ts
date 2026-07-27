@@ -2,6 +2,7 @@ import type { Team } from '../engine/types';
 import type { GameResult, TeamGameStats } from '../engine/game';
 import { createLiveGame, quickSim, toGameResult } from '../engine/game';
 import { makeRng } from '../engine/rng';
+import { withRotationStarter } from './generator';
 
 // Stato di STAGIONE: il cuore del principio "gli anni gestiti dall'utente hanno
 // statistiche REALI, non derivate dai rating". Qui vivono:
@@ -186,7 +187,11 @@ export function advanceWithResult(
   // Resto della lega: quick-sim per una classifica reale.
   const busy = new Set([result.home.id, result.away.id]);
   for (const [a, b] of otherPairings(teams, busy, seed, season.day)) {
-    const g = createLiveGame(a, b, (seed ^ Math.imul(season.day + 1, a.id.length + 7)) >>> 0);
+    // Ruota il partente col giorno: senza, ogni squadra lancerebbe l'asso ogni
+    // partita (rotazione ordinata). Così i 5 SP girano lungo la stagione.
+    const aS = withRotationStarter(a, season.day);
+    const bS = withRotationStarter(b, season.day);
+    const g = createLiveGame(aS, bS, (seed ^ Math.imul(season.day + 1, a.id.length + 7)) >>> 0);
     quickSim(g);
     const r = toGameResult(g);
     const wId = r.winner === 'home' ? b.id : a.id;

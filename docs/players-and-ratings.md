@@ -21,6 +21,44 @@ l'overall spazia davvero da 2 a 4 stelle con qualche 5★, invece di incollarsi 
 3★. Il talento resta **centrato**, quindi cambia la *dispersione*, non gli
 aggregati di lega (epoca "alta offesa").
 
+### Età alla generazione (`makeAge`)
+
+L'età dei **battitori** e dei **rilievi** non è uniforme: `makeAge` usa una
+*split-normal* centrata a 27 (σ sinistra 3.0, destra 5.5) clampata a **[20, 40]**
+→ campana asimmetrica con **picco a 26**, **media ~28** (un filo sotto la MLB
+reale, "al ribasso"), coda a destra, estremi 20-21 e 38-40 **rari ma possibili**
+(~1-2%). I **partenti** invece hanno finestre d'età **per-slot** (`SP_SLOTS`): il
+back-end (#4/#5) è più giovane (prospetti da sviluppare).
+
+### Allocazione per merito (best-starts)
+
+I bias di `SP_SLOTS`/`teamTalent` **riducono** ma non **eliminano** il caso in cui
+la coda-gemma fa nascere una stella tra panca/riserve mentre un titolare debole
+parte (il "5★ tra i Disponibili"). Dopo la generazione si **garantisce** che i
+migliori siano attivi:
+- **Battitori** — generati per posizione (stesso multiset → copertura invariata),
+  il migliore di ogni posizione va in lineup, poi `alignLineupDefense` **permuta i
+  9 titolari** al miglior fit *alla posizione* (2ª posizione inclusa, DH al miglior
+  bat) e infine `autoLineup` dà l'ordine di battuta.
+- **Partenti** — generati col gradiente `SP_SLOTS`, poi i 5 migliori in rotazione
+  (n.1 = asso), i più deboli in profondità.
+- **Bullpen coerente** — non rilievi a caso: un **closer** shutdown
+  (dominio+controllo), un **setup**/candidato-closer (stessa stoffa, poca
+  resistenza), **2 long-reliever** (resistenza alta) e i **middle** fungibili (con
+  profondità, best-starts fra loro). Il `tilt` per-dote di `makePitcherRatings`
+  modella l'archetipo a somma ~0 (non sposta gli aggregati).
+
+Popolazione invariata (stessi ruoli/posizioni, stesso `teamTalent`) → **aggregati
+di lega invariati**: cambia solo *quale slot* occupa ciascuno.
+
+### Uso della rotazione nella simulazione
+
+`makeSide` (engine) fa sempre partire `rotation[0]`. Con la rotazione **ordinata**
+(n.1 = asso), senza accorgimenti ogni squadra lancerebbe l'asso in **ogni** partita
+(ambiente-punti ~3.9 R/gara). La sim di stagione (`data/season.ts`) e il test di
+realismo ruotano il partente col giorno via `withRotationStarter(team, n)`, così i
+5 SP girano equamente e l'ambiente resta in epoca (~5.4 R/gara).
+
 ## Caratteristiche del battitore (6) — `BatterRatings`
 
 Criterio: **ognuna governa UNA sola leva** del motore (zero ridondanza).
