@@ -1673,6 +1673,86 @@ table {
   margin: 8px 0 0;
 }
 
+/* --- Icona "i" + legenda sigle ------------------------------------- */
+.info-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.info-dot:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.modal.legend {
+  width: min(620px, 96vw);
+  max-height: min(88vh, 760px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.legend-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.legend-block-title {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.legend-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.legend-row {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+.legend-abbr {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 12px;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+}
+.legend-abbr.rating {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.legend-def {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.legend-def b {
+  color: var(--text);
+}
+
 /* Nome cliccabile che apre il mini-popup (riusato ovunque). */
 .player-link {
   cursor: pointer;

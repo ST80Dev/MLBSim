@@ -139,6 +139,19 @@ scambiano di posto, gli altri restano fermi — mai inserimento a scorrimento);
   lista è variabile: nessuna casella fissa), `placePitcher` distingue i due casi
   da `drag.from` vs lista di destinazione.
 
+### Legenda sigle (icona «i»)
+
+A fianco della testata di ogni tabella del roster c'è un'iconcina **`i`**
+(`InfoDot`) che apre un modale-legenda (`StatLegend`) con la spiegazione delle
+sigle **di quella sezione**: attacco (`bat`), difesa (`def`) o lancio (`pit`).
+Fonte unica `GLOSSARY` (in `App.tsx`): per ogni voce distingue **doti** (rating
+40-100, descrizione = *su cosa influiscono* nel motore, allineata a
+`docs/players-and-ratings.md`) e **statistiche** (descrizione = cosa
+rappresentano). Copre sia la modalità *Ratings* sia le modalità statistiche,
+così una sola «i» per sezione basta a chiarire tutte le colonne visibili.
+Chiudibile con ✕, backdrop o Esc, come gli altri modali. Se aggiungi/rinomini
+una colonna (`*_COLS`), aggiorna la voce corrispondente in `GLOSSARY`.
+
 La partita interattiva (`LiveGame`) è **mutabile** e vive tra i render: `App`
 la tiene in un `useRef` con chiave `teamSeed|gara|squadra`, ricreandola solo al
 cambio di quei parametri, e forza il re-render dopo ogni azione.
