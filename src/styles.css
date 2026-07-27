@@ -2517,6 +2517,72 @@ table {
   color: var(--muted);
   margin-left: 6px;
 }
+
+/* Pannello "Rotazione del giorno": scelta 4/5 uomini + partente del giorno. */
+.rotation-day .rot-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+.rotation-day .rot-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.rot-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rot-sp {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--line, #2a3550);
+  border-radius: 8px;
+  background: var(--panel, #131c30);
+  color: var(--text, #dbe4f5);
+  cursor: pointer;
+  min-width: 92px;
+}
+.rot-sp:hover:not(:disabled) {
+  border-color: var(--accent, #4f8cff);
+}
+.rot-sp.sel {
+  border-color: var(--accent, #4f8cff);
+  box-shadow: inset 0 0 0 1px var(--accent, #4f8cff);
+}
+.rot-sp.off {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rot-sp-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.rot-sp-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.rot-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rot-reset {
+  background: none;
+  border: 1px solid var(--line, #2a3550);
+  border-radius: 6px;
+  color: var(--text, #dbe4f5);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
 /* Difesa: select per casella */
 .def-edit select {
   width: 100%;

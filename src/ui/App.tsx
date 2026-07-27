@@ -57,6 +57,7 @@ import { generateSchedule } from '../data/schedule';
 import type { ScheduleGame, Schedule } from '../data/schedule';
 import {
   createSeason,
+  ensureSeason,
   advanceWithResult,
   recordOf,
   winPct,
@@ -66,6 +67,9 @@ import {
   addPit,
 } from '../data/season';
 import type { SeasonState, SeasonBat, SeasonPit, WLRecord } from '../data/season';
+import { suggestedStarter, withStarterId, setSize, starterOptions } from '../data/rotation';
+import type { RotationSize } from '../data/rotation';
+import { withRotationStarter } from '../data/generator';
 import { projectBatterSeason, projectPitcherSeason, SEASON_GAMES } from '../data/projection';
 import type { BatTier } from '../data/projection';
 import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
@@ -263,12 +267,26 @@ export function App() {
   // La squadra gestita gioca in casa/trasferta secondo il calendario.
   const controlled: Side = activeGame && activeGame.home === false ? 'away' : 'home';
   const arrangement = arrangements[myId];
+  // Partente scelto per OGGI dalla UI (override); null = usa il consigliato dal
+  // ciclo di rotazione (rispetta il riposo). Si azzera al cambio gara/giorno.
+  const [todayStarter, setTodayStarter] = useState<string | null>(null);
+  const isRegularGame = !activeGame || activeGame.phase === 'regular';
   const teams = useMemo(() => {
-    const applied = applyArrangement(managedTeam, arrangement);
+    const base = applyArrangement(managedTeam, arrangement);
+    // In regular season la rotazione GIRA col riposo: partente = scelta di oggi
+    // o il consigliato dal ciclo. Prestagione/playoff: parte l'asso (rotation[0]).
+    const rotIds = base.rotation.map((p) => p.id);
+    const starterId = isRegularGame
+      ? todayStarter ?? suggestedStarter(season.rotation, rotIds, season.day)
+      : base.rotation[0]?.id;
+    const applied = starterId ? withStarterId(base, starterId) : base;
+    // L'avversario ruota anch'esso il partente (come il resto della lega).
+    const oppDay = isRegularGame ? season.day : activeGame?.day ?? 0;
+    const opp = withRotationStarter(opponent, oppDay);
     return controlled === 'home'
-      ? { away: opponent, home: applied }
-      : { away: applied, home: opponent };
-  }, [managedTeam, opponent, controlled, arrangement]);
+      ? { away: opp, home: applied }
+      : { away: applied, home: opp };
+  }, [managedTeam, opponent, controlled, arrangement, isRegularGame, todayStarter, season.rotation, season.day, activeGame]);
 
   // Ricarica l'elenco delle partite salvate (multi-slot), arricchendo ogni slot
   // con squadra/anno/giornata/record letti dal payload per l'hub di caricamento.
@@ -281,7 +299,7 @@ export function App() {
           const managedTeamId = rec?.payload.managedTeamId;
           if (!rec || !managedTeamId) return null;
           const pl = rec.payload;
-          const seas = pl.season ?? createSeason();
+          const seas = ensureSeason(pl.season);
           const team =
             typeof pl.seed === 'number'
               ? teamById(generateLeague(pl.seed), managedTeamId)
@@ -316,6 +334,20 @@ export function App() {
       alive = false;
     };
   }, [refreshSaves]);
+
+  // Il partente scelto vale per un solo giorno/gara: azzera al cambiare.
+  useEffect(() => {
+    setTodayStarter(null);
+  }, [season.day, activeGame]);
+
+  // Cambia il numero di uomini della rotazione (4/5) e persiste.
+  const changeRotationSize = (size: RotationSize) => {
+    setSeason((s) => {
+      const ns = { ...s, rotation: setSize(s.rotation, size) };
+      persist(arrangements, ns);
+      return ns;
+    });
+  };
 
   // Seme di gara deterministico dalla partita di calendario scelta.
   const gnum = activeGame
@@ -432,7 +464,7 @@ export function App() {
       if (typeof pl.seed === 'number') setLeagueSeed(pl.seed);
       setSource(pl.source ?? 'generated');
       setArrangements(pl.lineups ?? {});
-      setSeason(pl.season ?? createSeason());
+      setSeason(ensureSeason(pl.season));
       setManagedId(pl.managedTeamId ?? '');
       setCurrentSlot(game.slot);
       setActiveGame(null);
@@ -672,6 +704,9 @@ export function App() {
           initial={arrangement}
           activeGame={!!activeGame}
           season={season}
+          todayStarter={todayStarter}
+          onPickStarter={setTodayStarter}
+          onRotationSize={changeRotationSize}
           onApply={applyManaged}
           onSave={saveManaged}
           onStart={() => setView('game')}
@@ -2582,6 +2617,9 @@ function RosterPage({
   initial,
   activeGame,
   season,
+  todayStarter,
+  onPickStarter,
+  onRotationSize,
   onApply,
   onSave,
   onStart,
@@ -2591,6 +2629,9 @@ function RosterPage({
   initial?: MatchArrangement;
   activeGame: boolean;
   season: SeasonState;
+  todayStarter: string | null;
+  onPickStarter: (id: string | null) => void;
+  onRotationSize: (size: RotationSize) => void;
   onApply: (arr: MatchArrangement) => void;
   onSave: (arr: MatchArrangement) => Promise<void>;
   onStart: () => void;
@@ -3289,6 +3330,76 @@ function RosterPage({
         )
       ) : (
         <>
+          {(() => {
+            const rotIds = arr.rotation.map((id) => id);
+            const opts = starterOptions(season.rotation, rotIds, season.day);
+            const effective =
+              todayStarter && rotIds.includes(todayStarter)
+                ? todayStarter
+                : suggestedStarter(season.rotation, rotIds, season.day);
+            return (
+              <div className="card rotation-day">
+                <div className="card-title">
+                  Rotazione del giorno{' '}
+                  <span className="card-sub">
+                    riposo obbligatorio 3 giornate · giornata {season.day}
+                  </span>
+                </div>
+                <div className="rot-controls">
+                  <span className="rot-label">Uomini:</span>
+                  <div className="seg">
+                    {([4, 5] as RotationSize[]).map((sz) => (
+                      <button
+                        key={sz}
+                        className={`seg-btn${season.rotation.size === sz ? ' active' : ''}`}
+                        onClick={() => onRotationSize(sz)}
+                        title={sz === 4 ? 'Ciclo stretto: l’asso parte ogni 4 partite' : 'L’asso riposa un giorno in più'}
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="rot-starters">
+                  {opts.map((o) => {
+                    const p = pById.get(o.id);
+                    if (!p) return null;
+                    const rest = o.restDays === Infinity ? 'pronto' : `${o.restDays} gg`;
+                    return (
+                      <button
+                        key={o.id}
+                        className={`rot-sp${effective === o.id ? ' sel' : ''}${o.available ? '' : ' off'}`}
+                        disabled={!o.available}
+                        onClick={() => onPickStarter(o.id)}
+                        title={
+                          o.inCycle ? 'Nel ciclo' : 'Fuori dal ciclo (spot start): dà riposo extra all’asso'
+                        }
+                      >
+                        <span className="rot-sp-name">{p.lastName}</span>
+                        <span className="rot-sp-meta">
+                          {rest}
+                          {o.inCycle ? '' : ' · extra'}
+                          {o.available ? '' : ' · riposa'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="rot-hint">
+                  {effective && pById.get(effective)
+                    ? `Oggi parte: ${pById.get(effective)!.lastName}${
+                        todayStarter && rotIds.includes(todayStarter) ? ' (scelto)' : ' (consigliato)'
+                      }`
+                    : 'Nessun partente disponibile'}
+                  {todayStarter && (
+                    <button className="rot-reset" onClick={() => onPickStarter(null)}>
+                      ↺ consigliato
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           {pitTable(
             'Rotazione',
             'ordine degli starter · il primo parte',
