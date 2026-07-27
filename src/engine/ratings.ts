@@ -32,20 +32,32 @@ export function ratingMult(rating: number, perSigma: number): number {
 
 const round = Math.round;
 
+// Fattore che riporta la base-AB alla base-PA per il giocatore MEDIO: con
+// occhio 70, ab = pa·(1 − bb − hbp), quindi ab·AB_SCALE = pa. Mantiene la media
+// di lega invariata quando gli esiti da AB si scalano sugli AB invece che sulle PA.
+export const AB_SCALE = 1 / (1 - LEAGUE.bb - LEAGUE.hbp);
+
 /**
  * Deriva le statistiche di conteggio di un battitore dalle sue caratteristiche.
  * A tutte le doti = RATING_AVG si ottengono le medie di lega (BA ~.256, OBP ~.325).
  */
 export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
-  const so = round(pa * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
+  // BB e HBP consumano una PA che NON e' un AB. Gli esiti da AB (SO e battute
+  // valide) vanno quindi scalati sugli AB, non sulle PA: chi cammina di piu' ha
+  // MENO AB e quindi meno hit — cosi' non si possono avere BB alte E hit alte
+  // insieme (il controsenso "in base al 49% delle PA"). `AB_SCALE` riporta il
+  // giocatore MEDIO (occhio 70) esattamente a `pa` esiti da AB → media di lega
+  // NEUTRA; deviano solo i pazienti/impazienti, che e' l'effetto voluto.
   const bb = round(pa * LEAGUE.bb * ratingMult(r.eye, 1.32));
   const hbp = round(pa * LEAGUE.hbp);
-  const hr = round(pa * LEAGUE.hr * ratingMult(r.power, 1.42));
-  const triple = round(pa * LEAGUE.triple * ratingMult(r.speed, 1.82) * ratingMult(r.power, 0.9));
-  const double = round(pa * LEAGUE.double * ratingMult(r.power, 1.2) * ratingMult(r.contact, 1.05));
-  let single = round(pa * LEAGUE.single * ratingMult(r.contact, 1.1));
-
   const ab = Math.max(1, pa - bb - hbp);
+  const abBase = ab * AB_SCALE;
+
+  const so = round(abBase * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
+  const hr = round(abBase * LEAGUE.hr * ratingMult(r.power, 1.42));
+  const triple = round(abBase * LEAGUE.triple * ratingMult(r.speed, 1.82) * ratingMult(r.power, 0.9));
+  const double = round(abBase * LEAGUE.double * ratingMult(r.power, 1.2) * ratingMult(r.contact, 1.05));
+  let single = round(abBase * LEAGUE.single * ratingMult(r.contact, 1.1));
   let h = single + double + triple + hr;
   if (h > ab) {
     single = Math.max(0, single - (h - ab));
