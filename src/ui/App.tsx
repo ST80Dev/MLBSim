@@ -87,7 +87,7 @@ import {
   CALIBRATION_LABEL,
 } from '../data/stadiumCalibration';
 import type { FieldCalibration, NumericCalKey } from '../data/stadiumCalibration';
-import { gameSeed, newRandomSeed, ratingColor } from './format';
+import { gameSeed, newRandomSeed, ratingColor, upperLast } from './format';
 import { Diamond, computeMarkers } from './Diamond';
 import {
   batterStatLine,
@@ -194,7 +194,8 @@ function PlayerLink({
         }
       }}
     >
-      {children}
+      {/* Cognome in MAIUSCOLO quando il contenuto è un nome (stringa). */}
+      {typeof children === 'string' ? upperLast(children) : children}
     </span>
   );
 }
@@ -1832,7 +1833,7 @@ function SubModal({
     }));
   } else if (mode === 'pinchhit') {
     const cur = off.team.lineup[off.battingIndex];
-    hint = `Sostituisci ${cur.name} in battuta.`;
+    hint = `Sostituisci ${upperLast(cur.name)} in battuta.`;
     emptyMsg = 'Nessun giocatore in panchina.';
     incoming = off.team.bench.map((b) => ({
       id: b.id,
@@ -1852,7 +1853,7 @@ function SubModal({
           {def.team.lineup.map((b) => (
             <button key={b.id} className="sub-target" onClick={() => setOutId(b.id)}>
               <span className="pos">{b.position}</span>
-              <span className="nm">{b.name}</span>
+              <span className="nm">{upperLast(b.name)}</span>
               <span className="ov" style={{ color: ratingColor(batterOverall(b.ratings)) }}>
                 {batterOverall(b.ratings)}
               </span>
@@ -1862,7 +1863,7 @@ function SubModal({
       );
     } else {
       const out = def.team.lineup.find((b) => b.id === outId)!;
-      hint = `Chi entra per ${out.name} (${out.position})?`;
+      hint = `Chi entra per ${upperLast(out.name)} (${out.position})?`;
       incoming = def.team.bench.map((b) => ({
         id: b.id,
         player: b,
@@ -1886,7 +1887,7 @@ function SubModal({
             return (
               <button key={i} className="sub-target" onClick={() => setOutBase(i)}>
                 <span className="pos">{BASE_LABEL[i]}</span>
-                <span className="nm">{r.name}</span>
+                <span className="nm">{upperLast(r.name)}</span>
                 <span className="ov" style={{ color: ratingColor(batterOverall(r.ratings)) }}>
                   {batterOverall(r.ratings)}
                 </span>
@@ -1897,7 +1898,7 @@ function SubModal({
       );
     } else {
       const r = live.bases[outBase]!.batter;
-      hint = `Chi corre per ${r.name} (${BASE_LABEL[outBase]})?`;
+      hint = `Chi corre per ${upperLast(r.name)} (${BASE_LABEL[outBase]})?`;
       incoming = off.team.bench.map((b) => ({
         id: b.id,
         player: b,
@@ -2100,7 +2101,7 @@ function LineupSide({
                   return b ? (
                     <PlayerLink player={b} pos={b.position}>{batLabels[i]}</PlayerLink>
                   ) : (
-                    batLabels[i]
+                    upperLast(batLabels[i])
                   );
                 })()}
                 {r.line.id === currentId && <span className="atbat-dot">●</span>}
@@ -2119,7 +2120,7 @@ function LineupSide({
             {(() => {
               const p = pitById.get(curP.id);
               const label = pitLabels[pitLabels.length - 1];
-              return p ? <PlayerLink player={p}>{label}</PlayerLink> : label;
+              return p ? <PlayerLink player={p}>{label}</PlayerLink> : upperLast(label);
             })()}
           </span>
           <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
@@ -2246,7 +2247,7 @@ function BoxScore({
           {batRows.map((r) => (
             <tr key={r.id}>
               <td className="l">
-                <span className="pos">{r.label}</span> {r.name}
+                <span className="pos">{r.label}</span> {upperLast(r.name)}
               </td>
               {r.items.map((it) => (
                 <td key={it.k}>{it.v}</td>
@@ -2269,7 +2270,7 @@ function BoxScore({
         <tbody>
           {pitRows.map((r) => (
             <tr key={r.id}>
-              <td className="l">{r.name}</td>
+              <td className="l">{upperLast(r.name)}</td>
               {r.items.map((it) => (
                 <td key={it.k}>{it.v}</td>
               ))}
@@ -2650,7 +2651,7 @@ function PlayerModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal player" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{player.name}</div>
+          <div className="modal-title">{upperLast(player.name)}</div>
           <button className="modal-close" onClick={onClose} aria-label="Chiudi">
             ✕
           </button>
@@ -4946,7 +4947,7 @@ function TeamDetailModal({
                   const o = batterOverall(b.ratings);
                   return (
                     <tr key={b.id}>
-                      <td className="l">{b.name}</td>
+                      <td className="l">{upperLast(b.name)}</td>
                       <td>{b.position}</td>
                       <td>{b.age}</td>
                       <td style={{ color: ratingColor(o) }}>{o.toFixed(0)}</td>
@@ -4974,7 +4975,7 @@ function TeamDetailModal({
                   const o = pitcherOverall(p.ratings);
                   return (
                     <tr key={p.id}>
-                      <td className="l">{p.name}</td>
+                      <td className="l">{upperLast(p.name)}</td>
                       <td>{p.role}</td>
                       <td>{p.age}</td>
                       <td style={{ color: ratingColor(o) }}>{o.toFixed(0)}</td>
@@ -5188,7 +5189,7 @@ function RosterSalaryTable({ team }: { team: Team }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
-              <td className="l">{r.name}</td>
+              <td className="l">{upperLast(r.name)}</td>
               <td>
                 <span className={`type-chip ${r.kind === 'B' ? 'bat' : 'pit'}`}>
                   {r.kind === 'B' ? 'Bat' : 'Lan'}

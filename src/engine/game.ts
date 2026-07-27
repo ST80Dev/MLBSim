@@ -1456,8 +1456,9 @@ function describe(event: RawEvent, batter: Batter, runs: number, res?: EventResu
 
 function shortName(full: string): string {
   const parts = full.trim().split(/\s+/);
-  if (parts.length === 1) return full;
-  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+  // Cognome in MAIUSCOLO (riconoscibilità a colpo d'occhio nella cronaca).
+  if (parts.length === 1) return full.toUpperCase();
+  return `${parts[0][0]}. ${parts.slice(1).join(' ').toUpperCase()}`;
 }
 
 function buildTeamStats(side: SideState): TeamGameStats {
