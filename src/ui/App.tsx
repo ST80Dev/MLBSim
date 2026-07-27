@@ -425,14 +425,27 @@ export function App() {
   // scritto al centro (PlayBanner), che resta la prima fonte del turno. Cresce
   // solo al verdetto della telecronaca, in sync coi marker sul diamante.
   const [shownPlays, setShownPlays] = useState<number>(() => result.play.length);
+  // Anche lo SCOREBOARD in alto (punteggi, linescore, inning/out, giocatore
+  // coinvolto) non anticipa l'esito: aggiorna solo al verdetto della telecronaca,
+  // con la stessa istantanea di `result`/`sit` usata dal resto della plancia.
+  const [shownScore, setShownScore] = useState<{ result: GameResult; sit: LiveSituation }>(() => ({
+    result,
+    sit,
+  }));
   useEffect(() => {
-    setShownField(fieldSnap(situation(live)));
-    setShownPlays(toGameResult(live).play.length);
+    const s = situation(live);
+    const r = toGameResult(live);
+    setShownField(fieldSnap(s));
+    setShownPlays(r.play.length);
+    setShownScore({ result: r, sit: s });
   }, [live]);
   // Passata al PlayBanner: chiamata al verdetto (o subito se non c'è cronaca).
   const revealField = useCallback(() => {
-    setShownField(fieldSnap(situation(live)));
-    setShownPlays(toGameResult(live).play.length);
+    const s = situation(live);
+    const r = toGameResult(live);
+    setShownField(fieldSnap(s));
+    setShownPlays(r.play.length);
+    setShownScore({ result: r, sit: s });
   }, [live]);
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
@@ -703,6 +716,8 @@ export function App() {
         <GameScreen
           result={result}
           sit={sit}
+          displayResult={shownScore.result}
+          displaySit={shownScore.sit}
           statsMode={statsMode}
           setStatsMode={setStatsMode}
           editing={editing}
@@ -836,6 +851,8 @@ export function App() {
 function GameScreen({
   result,
   sit,
+  displayResult,
+  displaySit,
   statsMode,
   setStatsMode,
   editing,
@@ -851,6 +868,13 @@ function GameScreen({
 }: {
   result: GameResult;
   sit: LiveSituation;
+  // Istantanea RITARDATA di result/sit: la plancia (scoreboard, difensori e
+  // lanciatore sul campo, boxscore) mostra questa, che avanza solo al verdetto
+  // della telecronaca. Il PlayBanner invece riceve il `result` REALE (deve
+  // vedere subito la nuova giocata per animarla e poi far scattare il reveal).
+  // Se omesse si usano result/sit reali (schermata calibrazione).
+  displayResult?: GameResult;
+  displaySit?: LiveSituation;
   statsMode: StatsMode;
   setStatsMode: (m: StatsMode) => void;
   editing: boolean;
@@ -868,12 +892,14 @@ function GameScreen({
   onReveal?: () => void;
   controls: ReactNode;
 }) {
-  const fieldBases = basesShown ?? sit.bases;
+  const dResult = displayResult ?? result;
+  const dSit = displaySit ?? sit;
+  const fieldBases = basesShown ?? dSit.bases;
   return (
     <div className="game-screen">
       <StatBar
-        result={result}
-        sit={sit}
+        result={dResult}
+        sit={dSit}
         basesShown={fieldBases}
         statsMode={statsMode}
         setStatsMode={setStatsMode}
@@ -881,15 +907,15 @@ function GameScreen({
 
       <div className={editing ? 'gamefield editing' : 'gamefield'}>
         <Diamond
-          home={result.home}
-          away={result.away}
+          home={dResult.home}
+          away={dResult.away}
           background
           bases={fieldBases}
           runners={runners}
           runnerSpeeds={runnerSpeeds}
           batterName={batterName}
-          defenseTeam={sit.offenseSide === 'away' ? result.home : result.away}
-          pitcherName={sit.pitcher.name}
+          defenseTeam={dSit.offenseSide === 'away' ? dResult.home : dResult.away}
+          pitcherName={dSit.pitcher.name}
           cal={cal}
           editable={editing}
           onMarkerMove={onMarkerMove}
@@ -907,9 +933,9 @@ function GameScreen({
         <div className="lineup-corner left">
           <LineupSide
             side="away"
-            team={result.away}
-            stats={result.awayStats}
-            sit={sit}
+            team={dResult.away}
+            stats={dResult.awayStats}
+            sit={dSit}
             mode={statsMode}
             setMode={setStatsMode}
           />
@@ -917,9 +943,9 @@ function GameScreen({
         <div className="lineup-corner right">
           <LineupSide
             side="home"
-            team={result.home}
-            stats={result.homeStats}
-            sit={sit}
+            team={dResult.home}
+            stats={dResult.homeStats}
+            sit={dSit}
             mode={statsMode}
             setMode={setStatsMode}
           />
