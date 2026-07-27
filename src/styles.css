@@ -3045,6 +3045,62 @@ table {
   max-width: none;
 }
 
+/* Corredo riga giocatore nello spazio libero della cella nome: mini-barra OVR
+   (col tratto chiaro = spazio di crescita fino al potenziale) e posizione
+   secondaria. Info "di contorno": tono tenue, non ruba attenzione al nome. */
+.row-extras {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+.ovr-bar {
+  position: relative;
+  display: inline-block;
+  width: 54px;
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(38, 55, 92, 0.55);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.ovr-bar-pot,
+.ovr-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+}
+.ovr-bar-pot {
+  background: rgba(147, 164, 196, 0.4); /* headroom: grigio-azzurro tenue */
+}
+.sec-pos {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #9cc2ff;
+  border: 1px solid rgba(120, 180, 255, 0.4);
+  border-radius: 4px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+/* Potenziale accanto all'OVR: formato distinto dal badge (niente pill piena,
+   più piccolo, verdino tenue con freccetta) per non confonderlo col valore OVR. */
+.roster-tbl td.ovr {
+  white-space: nowrap;
+}
+.pot-tag {
+  margin-left: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #78c06a;
+  opacity: 0.92;
+  vertical-align: middle;
+}
+
 /* --- Home: leader + mini-classifica + calendario a stati ------------ */
 .home-cards {
   display: grid;

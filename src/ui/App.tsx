@@ -2418,6 +2418,56 @@ function OvrBadge({ overall }: { overall: number }) {
   );
 }
 
+// Percentuale 0-100 di un rating sulla scala 40-100 (per le barre).
+const ratingPct = (v: number) => clamp01((v - 40) / 60, 0, 1) * 100;
+
+// Barra OVR mini: il riempimento (colore del rating) è l'overall corrente; se il
+// tetto di crescita (potential) lo supera, il tratto fino al potenziale resta
+// visibile come segmento più chiaro = "spazio di crescita". Solo info di corredo.
+function OvrBar({ overall, potential }: { overall: number; potential: number }) {
+  const head = potential > overall;
+  return (
+    <span className="ovr-bar" title={head ? `OVR ${overall} · potenziale ${potential}` : `OVR ${overall}`}>
+      {head && <span className="ovr-bar-pot" style={{ width: `${ratingPct(potential)}%` }} />}
+      <span className="ovr-bar-fill" style={{ width: `${ratingPct(overall)}%`, background: ratingColor(overall) }} />
+    </span>
+  );
+}
+
+// Potenziale ESPLICITO accanto all'OVR (tetto di crescita 40-100). Formato
+// volutamente diverso dal badge OVR — niente pill piena, testo piccolo con
+// freccetta e tinta tenue — così non si confonde a colpo d'occhio. Mostrato solo
+// quando c'è margine (potential > overall): un veterano "al tetto" non lo mostra.
+function PotTag({ overall, potential }: { overall: number; potential: number }) {
+  if (potential <= overall) return null;
+  return (
+    <span className="pot-tag" title={`Potenziale ${potential} — tetto di crescita`}>
+      ▲{potential}
+    </span>
+  );
+}
+
+// Corredo riga giocatore, nello spazio libero della cella nome: barra OVR +
+// (se esiste, solo battitori) posizione secondaria difensiva.
+function RowExtras({
+  overall,
+  potential,
+  secondary,
+}: {
+  overall: number;
+  potential: number;
+  secondary?: Position;
+}) {
+  return (
+    <span className="row-extras">
+      <OvrBar overall={overall} potential={potential} />
+      {secondary && (
+        <span className="sec-pos" title="Posizione secondaria (difesa)">⇄ {secondary}</span>
+      )}
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Pagina "Roster": gestione rosa della squadra gestita, anche schermata di
 // preparazione partita. Linguette Fielders / Pitchers. Le mosse si fanno per
@@ -3046,6 +3096,7 @@ function RosterPage({
       <td className="l grip">
         ⠿ <PlayerLink player={p}>{p.name}</PlayerLink>
         {tag && <span className="tag">{tag}</span>}
+        <RowExtras overall={pitcherOverall(p.ratings)} potential={p.potential} />
       </td>
       <td className="roles">
         <span className="rolebadge">{p.role === 'CL' ? 'RP' : p.role}</span>
@@ -3064,7 +3115,10 @@ function RosterPage({
           </button>
         )}
       </td>
-      <td className="ovr"><OvrBadge overall={pitcherOverall(p.ratings)} /></td>
+      <td className="ovr">
+        <OvrBadge overall={pitcherOverall(p.ratings)} />
+        <PotTag overall={pitcherOverall(p.ratings)} potential={p.potential} />
+      </td>
       <td>{p.age}</td>
       {pitStatCells(p)}
     </tr>
@@ -3244,9 +3298,10 @@ function RosterPage({
                         <td className="n">{i + 1}</td>
                         <td className="l grip">
                           ⠿ <PlayerLink player={b} pos={arr.defense[b.id] ?? b.position} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
+                          <RowExtras overall={batterOverall(b.ratings)} potential={b.potential} secondary={b.secondaryPosition} />
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /><PotTag overall={batterOverall(b.ratings)} potential={b.potential} /></td>
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
@@ -3287,9 +3342,10 @@ function RosterPage({
                       >
                         <td className="l grip">
                           ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
+                          <RowExtras overall={batterOverall(b.ratings)} potential={b.potential} secondary={b.secondaryPosition} />
                         </td>
                         <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /><PotTag overall={batterOverall(b.ratings)} potential={b.potential} /></td>
                         <td className="age">{b.age}</td>
                         {batAtkCells(b)}
                       </tr>
@@ -3350,9 +3406,10 @@ function RosterPage({
                             </td>
                             <td className="l grip">
                               ⠿ <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
+                              <RowExtras overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} secondary={b.secondaryPosition} />
                             </td>
                             <td className="roles">{rolesOf(b)}</td>
-                            <td className="ovr"><OvrBadge overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
+                            <td className="ovr"><OvrBadge overall={batterOverall(ratingsAtPosition(b, pos))} /><PotTag overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} /></td>
                             <td className="age">{b.age}</td>
                             {batDefCells(b, pos)}
                           </tr>
@@ -3394,9 +3451,10 @@ function RosterPage({
                         >
                           <td className="l grip">
                             ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
+                            <RowExtras overall={batterOverall(b.ratings)} potential={b.potential} secondary={b.secondaryPosition} />
                           </td>
                           <td className="roles">{rolesOf(b)}</td>
-                          <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                          <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /><PotTag overall={batterOverall(b.ratings)} potential={b.potential} /></td>
                           <td className="age">{b.age}</td>
                           {batDefCells(b, b.position)}
                         </tr>

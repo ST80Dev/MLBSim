@@ -139,6 +139,35 @@ scambiano di posto, gli altri restano fermi — mai inserimento a scorrimento);
   lista è variabile: nessuna casella fissa), `placePitcher` distingue i due casi
   da `drag.from` vs lista di destinazione.
 
+### Corredo riga giocatore (barra OVR · pos. secondaria · potenziale)
+
+Nello spazio libero della cella nome (le celle rating sono ora a larghezza fissa,
+vedi sotto) ogni riga mostra info **di corredo**, tenui, che non rubano
+attenzione al nome:
+
+- **Mini-barra OVR** (`OvrBar`): riempimento colorato = overall corrente
+  (`ratingColor`); se il **potenziale** supera l'overall, il tratto fino al tetto
+  resta come segmento più chiaro = *spazio di crescita*. Scala 40-100 → 0-100%.
+- **Posizione secondaria** (`⇄ <ruolo>`): solo battitori con `secondaryPosition`.
+- **Potenziale esplicito** (`PotTag`, `▲<n>`) **accanto al badge OVR**: tetto di
+  crescita 40-100, in **formato distinto** (niente pill piena, più piccolo,
+  verdino tenue) per non confonderlo con l'OVR a colpo d'occhio. Mostrato **solo
+  se c'è margine** (`potential > overall`): un veterano al tetto non lo mostra.
+  Non esiste una "forma" da game-log: il potenziale è l'unica prospettiva reale
+  nei dati.
+
+Presente in tutti gli elenchi del roster (Ordine di battuta, Disponibili, Per
+posizione, Riserve, tabelle lanciatori). L'overall usato è quello della riga (in
+Difesa è rivalutato sulla casella via `ratingsAtPosition`, come il badge). Fuori
+scope il menu Pinch-hit in partita.
+
+### Larghezza celle rating
+
+Le card colorate dei rating (`.rat`) hanno **larghezza fissa** (~34px, quasi
+quadrate) scoped a `.roster-tbl`: prima la tabella al 100% distribuiva lo spazio
+in eccesso allungandole. Lo slack orizzontale lo assorbe ora la colonna
+**Giocatore** (`.l { width:100% }`), che libera la riga per il corredo qui sopra.
+
 ### Legenda sigle (icona «i»)
 
 A fianco della testata di ogni tabella del roster c'è un'iconcina **`i`**
