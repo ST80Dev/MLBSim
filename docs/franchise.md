@@ -15,6 +15,24 @@ di Fase 0). Le altre squadre avanzano da sole, **simulate giorno per giorno**.
 Quindi la persistenza di formazione/schieramento appartiene a **questo** momento:
 si prepara la squadra, si conferma, si gioca la partita, poi di nuovo gestione.
 
+### Riposo dei lanciatori e scelta del partente (`data/rotation.ts`)
+
+Non c'è un riquadro "4/5 uomini": la rotazione è semplicemente l'ordine della
+lista dei partenti nel Roster. Ogni lanciatore matura un **riposo in gare** in
+base all'**uso reale** dell'ultima partita (out lanciati), tracciato in
+`SeasonState.rotation.availableFrom`:
+
+- **partente / spot start** → 4 gare (un ciclo naturale a 5 uomini);
+- **rilievo lungo** (≥3 IP) → 2 gare; **pesante** (>1 IP) → 1 gara; **breve** → 0.
+
+Nel Roster (tab lanciatori, pre-gara di regular season) ogni riga mostra un
+**badge di riposo** (`pronto` / `riposa +N g`); i partenti a riposo non sono
+eleggibili. Il **partente del giorno** è di default il **primo in ordine non a
+riposo** (`suggestedStarter`); si sceglie/conferma dall'elenco col pulsante
+**“parte oggi”** (per far partire una riserva la si **scambia** prima in
+rotazione). Portare un lanciatore da *Disponibili* agli attivi è sempre uno
+**swap** (la rosa attiva resta a taglia costante), mai un'aggiunta.
+
 ## Stipendi
 
 - **Un solo stipendio annuale** per giocatore, **rinnovato automaticamente**.

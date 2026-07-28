@@ -49,13 +49,17 @@ describe('advanceWithResult', () => {
     expect(s1.pit[starter.id].outs).toBe(starter.outs);
   });
 
-  it('registra la partenza del partente gestito nello stato rotazione (riposo)', () => {
+  it('registra l’uso dei lanciatori gestiti nello stato rotazione (riposo)', () => {
     const res = playOne();
     const s1 = advanceWithResult(createSeason(), res, home.id, teams, 2024);
     const managed = res.home.id === home.id ? res.homeStats : res.awayStats;
     const starterId = managed.pitching[0].id;
-    // La partenza è al giorno 0: lastStart registrato lì.
-    expect(s1.rotation.lastStart[starterId]).toBe(0);
+    // Il partente apre al giorno 0 → riposo 4 gare → torna disponibile al giorno 5.
+    expect(s1.rotation.availableFrom[starterId]).toBe(5);
+    // Ogni lanciatore sceso in campo ha una disponibilità registrata (>= giorno 1).
+    for (const pl of managed.pitching) {
+      expect(s1.rotation.availableFrom[pl.id]).toBeGreaterThanOrEqual(1);
+    }
   });
 
   it('accumula le stat REALI di ENTRAMBE le squadre della mia partita', () => {
