@@ -2563,6 +2563,64 @@ table {
   margin-right: auto;
 }
 
+/* Forza squadra RIMPICCIOLITA: vista una volta conta poco durante il match,
+   così libera spazio per le doti del giocatore in azione. */
+.ts-strength {
+  gap: 5px;
+}
+.ts-str {
+  min-width: 0;
+  padding: 1px 5px 2px;
+  gap: 1px;
+}
+.ts-str-k {
+  font-size: 8.5px;
+}
+.ts-str-v {
+  font-size: 11px;
+  min-width: 20px;
+  padding: 0 4px;
+}
+
+/* Doti del giocatore del turno: stesse chip colorate del roster (sfondo per
+   rating, numero bianco), più in evidenza — è l'informazione utile a decidere
+   il duello lanciatore/battitore mossa per mossa. */
+.ts-ratings {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.team-stat.home .ts-ratings {
+  justify-content: flex-end;
+}
+.ts-rat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 40px;
+  padding: 3px 6px 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(8, 14, 26, 0.4);
+}
+.ts-rat-k {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.ts-rat-v {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  min-width: 26px;
+  text-align: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 /* Centro: line score su una riga + situazione (inning/out) a destra */
 .statbar-center {
   flex-direction: row;
