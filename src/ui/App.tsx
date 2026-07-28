@@ -23,6 +23,9 @@ import {
   hitAndRun,
   pinchHit,
   setInfieldIn,
+  setDpDepth,
+  setNoDoubles,
+  cpuOffenseTurn,
 } from '../engine/game';
 import { batterOverall, pitcherOverall, RATING_AVG } from '../engine/ratings';
 import { disambiguateLastNames } from '../engine/names';
@@ -1798,6 +1801,15 @@ function ActionBar({
       >
         Bunt
       </button>
+      {sit.canSqueeze && (
+        <button
+          className="btn sm"
+          onClick={() => act((g) => playOffense(g, 'squeeze'))}
+          title="Squeeze: il corridore in terza parte al lancio. Se il bunt è sbagliato, è spacciato a casa"
+        >
+          Squeeze
+        </button>
+      )}
       {sit.stealFrom.includes(1) && (
         <button
           className="btn sm"
@@ -1849,8 +1861,8 @@ function ActionBar({
       <span className="turn-tag def">DIFESA · {sit.fieldingTeam.abbrev}</span>
       <button
         className="btn primary sm"
-        onClick={() => act((g) => playOffense(g, 'swing'))}
-        title="La CPU decide la battuta: premi «Lancia» per risolvere"
+        onClick={() => act((g) => cpuOffenseTurn(g))}
+        title="La CPU decide la battuta (può anche rubare/buntare): premi «Lancia» per risolvere"
       >
         Lancia ▸
       </button>
@@ -1870,6 +1882,22 @@ function ActionBar({
           Interni dentro
         </button>
       )}
+      {sit.canDpDepth && (
+        <button
+          className={sit.dpDepth ? 'btn sm active' : 'btn sm'}
+          onClick={() => act((g) => setDpDepth(g, !g.dpDepth))}
+          title="Interni a doppio gioco: più doppi giochi, ma qualche rimbalzo passa nei buchi"
+        >
+          Interni a DP
+        </button>
+      )}
+      <button
+        className={sit.noDoubles ? 'btn sm active' : 'btn sm'}
+        onClick={() => act((g) => setNoDoubles(g, !g.noDoubles))}
+        title="Difendi le righe: meno doppi/tripli concessi, al costo di qualche singolo (per proteggere un vantaggio)"
+      >
+        Difendi le righe
+      </button>
       <button
         className="btn sm"
         disabled={noRelievers}

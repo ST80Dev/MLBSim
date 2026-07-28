@@ -158,6 +158,55 @@ export const TUNING = {
   },
 
   /**
+   * Difesa avanzata "interni a doppio gioco": interni giocati in posizione da DP
+   * col corridore in prima (<2 out). Alza la conversione del doppio gioco, ma
+   * lascia qualche buco in piu' (rimbalzi che passano per un singolo). SOLO turni
+   * interattivi (flag di default false): il quick-sim non la usa mai e la Fase 0
+   * resta invariata (nessun RNG consumato quando spenta).
+   *   gidp effettiva = gidpProb + gidpBonus
+   *   hitThrough = prob. che un rimbalzo passi nei buchi (singolo)
+   */
+  dpDepth: {
+    gidpBonus: 0.12,
+    hitThrough: 0.06,
+  },
+
+  /**
+   * Difesa anti-extrabase ("difendi le righe / esterni profondi"): tardo-gara,
+   * per proteggere un vantaggio risicato. Declassa una quota di doppi/tripli a
+   * singolo (i corridori avanzano una base in meno). SOLO turni interattivi
+   * (flag di default false): il quick-sim non la usa mai (nessun RNG consumato
+   * quando spenta), Fase 0 invariata.
+   */
+  noDoubles: {
+    downgrade: 0.5,
+  },
+
+  /**
+   * AI tattica minima della CPU in attacco (small-ball). Attiva SOLO nei turni
+   * interattivi (quando l'umano difende): il quick-sim / Fase 0 restano swing
+   * puro e NON consumano questo RNG. Le probabilita' sono guidate dalle doti
+   * (VEL per la rubata, contatto/potenza per bunt e hit-and-run) e dal contesto
+   * (punteggio, inning). Soglie volutamente basse: la CPU non fa small-ball a
+   * caso, solo quando ha senso da manuale.
+   */
+  cpuTactics: {
+    // Rubata
+    stealMinSpeed: 62, // sotto questa VEL il corridore non tenta
+    stealMinProb: 0.6, // sotto questa prob. di riuscita non tenta
+    stealBase: 0.12,
+    stealPerSpeed: 0.14, // per sigma di VEL sopra la media
+    stealLateBonus: 0.1, // dal 7° con partita in bilico
+    stealMax: 0.6,
+    // Bunt di sacrificio (0 out, corridore in 1ª/2ª, battitore debole)
+    buntMaxHitter: 58, // media potenza+contatto sotto cui e' "debole"
+    buntProb: 0.35,
+    // Hit-and-run (corridore in 1ª, 2ª libera, buon contatto)
+    hnrMinContact: 68,
+    hnrProb: 0.18,
+  },
+
+  /**
    * Micro-eventi pre-lancio coi corridori in base (SOLO turni interattivi, mai
    * nel quick-sim: la Fase 0 resta invariata). Fanno avanzare i corridori senza
    * consumare il turno. Probabilita' di *accadere* per lancio, guidate dalle doti

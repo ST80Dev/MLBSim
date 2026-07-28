@@ -65,8 +65,36 @@ spostano gli aggregati di lega.
   `hit` (bunt valido) / `fail` (corridore di testa eliminato) / `pop` /
   `sac` (riuscito, il resto). Costanti in `TUNING.bunt`. Il sacrificio riuscito
   **non addebita l'AB** (non intacca la media); il bunt valido sì (è una hit).
+- **Squeeze / bunt suicida** (`squeezeAtBat`, tattica `'squeeze'`) — disponibile
+  **solo col corridore in terza** e `<2 out`. Riusa `buntOutcomeProbs` ma il
+  corridore in terza **parte al lancio**: `hit` → battitore salvo in prima e il
+  corridore **segna**; `sac` → battitore eliminato e corridore **segna**; `fail`
+  → il corridore lanciato è **eliminato a casa** (battitore salvo in prima su
+  scelta difensiva, niente punto); `pop` → **doppio gioco al piatto** (pop preso,
+  corridore doppiato sulla terza). Alto rischio/rendimento: distinto dal sac bunt
+  perché l'obiettivo è il punto, ma un bunt sbagliato brucia il corridore.
 - **Base intenzionale** (`intentionalWalk`) — avanzamento forzato deterministico
   (nessun RNG); conta come BB.
+- **Interni a doppio gioco** (`setDpDepth`, flag `LiveGame.dpDepth`) — difensiva,
+  speculare a "interni dentro" (mutuamente escluse). Col **corridore in prima** e
+  `<2 out`, sul **rimbalzo** alza la conversione del doppio gioco
+  (`gidpProb + TUNING.dpDepth.gidpBonus`, default `.13 → .25`) al costo di qualche
+  **buco** (`TUNING.dpDepth.hitThrough` .06: un rimbalzo passa per un singolo,
+  `detail:'dphole'`). Flag `false` di default: quando spenta **non consuma RNG** e
+  il `gidpProb` resta il valore base → quick-sim e Fase 0 **invariati**.
+- **Difendi le righe / anti-extrabase** (`setNoDoubles`, flag `noDoubles`) —
+  difensiva tardo-gara per proteggere un vantaggio. In `swingAtBat`, quando il
+  risultato è un `2B`/`3B`, con probabilità `TUNING.noDoubles.downgrade` (.50) lo
+  **declassa a singolo** (i corridori avanzano una base in meno). Gated sul flag:
+  spenta **non consuma RNG**, quindi la calibrazione resta intatta.
+- **AI tattica della CPU** (`cpuOffenseTurn`, `cpuTryTactic`) — nel **solo gioco
+  interattivo** (quando l'umano difende, bottone "Lancia ▸") la CPU può fare
+  *small-ball*: **rubata** (corridore veloce, buone chance, più probabile a fine
+  gara equilibrata, rara in blowout), **bunt di sacrificio** (0 out, corridore in
+  1ª/2ª, battitore debole, gara in bilico), **hit-and-run** (corridore in 1ª, 2ª
+  libera, battitore con buon contatto). Soglie in `TUNING.cpuTactics`. **Non è mai
+  chiamata da `autoStep`/`quickSim`**: la Fase 0 e le sim di lega/stagione/playoff
+  restano *swing puro* e byte-identiche (guardia nel test `tactics.test.ts`).
 - **Micro-eventi pre-lancio** (`prePitchEvent`) — coi **corridori in base**, prima
   che il turno si risolva, può scattare un **lancio pazzo / palla passata / balk**;
   il turno **non è consumato** (il battitore resta al piatto). La *probabilità che

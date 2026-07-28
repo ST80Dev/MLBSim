@@ -103,10 +103,15 @@ Regioni, dall'alto in basso:
     (malus ai peripherals attivo) e al **rosso** oltre la soglia di cambio
     automatico (Resistenza +4 SP / +2 rilievo), via `pitcherFatigue`.
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
-    in attacco Battuta / Bunt / Ruba / **Mob & corri** (hit-and-run, se corridore
-    in 1ª e 2ª libera) / **Pinch-hit** / **Pinch-run** (se c'è un corridore); in
-    difesa Lancia / Base int. / **Interni dentro** (se corridore in 3ª e <2 out) /
-    **Cambio lanc.** / **Cambio dif.**
+    in attacco Battuta / Bunt / **Squeeze** (se corridore in 3ª e <2 out) / Ruba /
+    **Mob & corri** (hit-and-run, se corridore in 1ª e 2ª libera) / **Pinch-hit** /
+    **Pinch-run** (se c'è un corridore); in difesa Lancia / Base int. /
+    **Interni dentro** (se corridore in 3ª e <2 out) / **Interni a DP** (se
+    corridore in 1ª e <2 out) / **Difendi le righe** (anti-extrabase) /
+    **Cambio lanc.** / **Cambio dif.** I bottoni difensivi di posizionamento sono
+    *toggle* (evidenziati quando attivi) e si resettano a fine mezzo-inning.
+    Il bottone **Lancia** ora passa da `cpuOffenseTurn`: la CPU può fare
+    *small-ball* (rubare/buntare/hit-and-run) secondo doti e situazione.
   - **Sostituzioni — modale in stile roster** (`SubModal`). I vecchi menu a
     discesa (nascosti dietro la barra) sono sostituiti da un **popup ad hoc** che
     mostra il pool giusto con **OVR e caratteristiche** (come una mini-scheda
