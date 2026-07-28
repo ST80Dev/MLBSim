@@ -58,7 +58,7 @@ import {
   LEAGUE_LABEL,
   DIVISION_LABEL,
 } from '../data/league';
-import { generateSchedule } from '../data/schedule';
+import { generateSchedule, REGULAR_GAMES } from '../data/schedule';
 import type { ScheduleGame, Schedule } from '../data/schedule';
 import {
   createSeason,
@@ -73,7 +73,18 @@ import {
 } from '../data/season';
 import type { SeasonState, SeasonBat, SeasonPit, WLRecord } from '../data/season';
 import { suggestedStarter, withStarterId, restInfo } from '../data/rotation';
+import type { RotationState } from '../data/rotation';
 import { withRotationStarter, potentialRole } from '../data/generator';
+import {
+  seedPlayoffs,
+  recordManagedGame,
+  simRestOfPlayoffs,
+  nextManagedGame,
+  managedEliminated,
+  seriesByRound,
+  winsNeeded,
+} from '../data/playoff';
+import type { PlayoffState, Series, Round, NextGame } from '../data/playoff';
 import { projectBatterSeason, projectPitcherSeason, SEASON_GAMES } from '../data/projection';
 import type { BatTier } from '../data/projection';
 import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
@@ -106,6 +117,7 @@ type View =
   | 'overview'
   | 'leaderboard'
   | 'standings'
+  | 'playoff'
   | 'franchise'
   | 'calibrate'
   | 'game';
@@ -260,6 +272,12 @@ export function App() {
   // Stato di stagione: giorno corrente, record di lega reali, statistiche reali
   // accumulate dalle partite giocate. Idratato dal salvataggio all'avvio.
   const [season, setSeason] = useState<SeasonState>(() => createSeason());
+  // Postseason (Fase 4): tabellone/semine/esiti. Nasce a fine regular season
+  // (giornata 162). `null` finché la stagione è in corso. Persistita nel save.
+  const [playoff, setPlayoff] = useState<PlayoffState | null>(null);
+  // Contesto della gara di playoff in corso (serie, n° gara, avversario, casa):
+  // guida seme, rotazione avversaria e registrazione dell'esito.
+  const [playoffCtx, setPlayoffCtx] = useState<NextGame | null>(null);
   // Sorgente della lega (generata/storica) → politica di cap. Persistita nel save.
   const [source, setSource] = useState<LeagueSource>('generated');
   // Fase del flusso d'ingresso: schermata iniziale → panoramica lega/scelta
@@ -300,22 +318,28 @@ export function App() {
   // ciclo di rotazione (rispetta il riposo). Si azzera al cambio gara/giorno.
   const [todayStarter, setTodayStarter] = useState<string | null>(null);
   const isRegularGame = !activeGame || activeGame.phase === 'regular';
+  const isPlayoffGame = !!activeGame && activeGame.phase === 'playoff';
   const teams = useMemo(() => {
     const base = applyArrangement(managedTeam, arrangement);
-    // In regular season la rotazione GIRA col riposo: partente = scelta di oggi
-    // o il consigliato dal ciclo. Prestagione/playoff: parte l'asso (rotation[0]).
+    // In regular season la rotazione GIRA col riposo (partente = scelta di oggi o
+    // il consigliato dal ciclo). Nei PLAYOFF vale la rotazione playoff (riposo del
+    // partente più corto, già scontato in `availableFrom`; indice = gare di playoff
+    // giocate). Prestagione: parte l'asso (rotation[0]).
     const rotIds = base.rotation.map((p) => p.id);
     const starterId = isRegularGame
       ? todayStarter ?? suggestedStarter(season.rotation, rotIds, season.day)
-      : base.rotation[0]?.id;
+      : isPlayoffGame && playoff
+        ? todayStarter ?? suggestedStarter(playoff.rotation, rotIds, playoff.managedGames)
+        : base.rotation[0]?.id;
     const applied = starterId ? withStarterId(base, starterId) : base;
-    // L'avversario ruota anch'esso il partente (come il resto della lega).
-    const oppDay = isRegularGame ? season.day : activeGame?.day ?? 0;
+    // L'avversario ruota anch'esso il partente. Nei playoff col n° di gara nella
+    // serie (asso in Gara 1), in regular col giorno di stagione.
+    const oppDay = isRegularGame ? season.day : isPlayoffGame ? playoffCtx?.gameNo ?? 0 : activeGame?.day ?? 0;
     const opp = withRotationStarter(opponent, oppDay);
     return controlled === 'home'
       ? { away: opp, home: applied }
       : { away: applied, home: opp };
-  }, [managedTeam, opponent, controlled, arrangement, isRegularGame, todayStarter, season.rotation, season.day, activeGame]);
+  }, [managedTeam, opponent, controlled, arrangement, isRegularGame, isPlayoffGame, playoff, playoffCtx, todayStarter, season.rotation, season.day, activeGame]);
 
   // Ricarica l'elenco delle partite salvate (multi-slot), arricchendo ogni slot
   // con squadra/anno/giornata/record letti dal payload per l'hub di caricamento.
@@ -471,10 +495,21 @@ export function App() {
   const isSeasonGame =
     !!activeGame && activeGame.phase === 'regular' && activeGame.id === currentRegular?.id;
 
-  const persist = (arrs: Record<string, MatchArrangement>, seas: SeasonState) => {
+  const persist = (
+    arrs: Record<string, MatchArrangement>,
+    seas: SeasonState,
+    pl: PlayoffState | null = playoff,
+  ) => {
     if (!currentSlot) return; // nessuno slot attivo: niente da salvare
     saveStore
-      .save(currentSlot, { seed: leagueSeed, source, managedTeamId: myId, lineups: arrs, season: seas })
+      .save(currentSlot, {
+        seed: leagueSeed,
+        source,
+        managedTeamId: myId,
+        lineups: arrs,
+        season: seas,
+        playoff: pl ?? undefined,
+      })
       .catch(() => {
         /* offline: si continua, si risalvera' piu' tardi. */
       });
@@ -489,6 +524,8 @@ export function App() {
     setArrangements({});
     setActiveGame(null);
     setSeason(createSeason());
+    setPlayoff(null);
+    setPlayoffCtx(null);
     setCurrentSlot(''); // lo slot nasce alla conferma della squadra
     setStage('league');
   };
@@ -520,6 +557,8 @@ export function App() {
       setSource(pl.source ?? 'generated');
       setArrangements(pl.lineups ?? {});
       setSeason(ensureSeason(pl.season));
+      setPlayoff(pl.playoff ?? null);
+      setPlayoffCtx(null);
       setManagedId(pl.managedTeamId ?? '');
       setCurrentSlot(game.slot);
       setActiveGame(null);
@@ -557,6 +596,81 @@ export function App() {
     setActiveGame(null);
     setView('home');
   };
+
+  // --- Postseason (Fase 4) --------------------------------------------------
+  const regularOver = season.day >= REGULAR_GAMES;
+  // Prossima gara di playoff della gestita (null = bye/eliminata/non qualificata).
+  const nextPlayoffGame = playoff ? nextManagedGame(playoff) : null;
+
+  // A fine regular season crea la postseason dai record reali (una volta sola).
+  useEffect(() => {
+    if (stage !== 'play' || !managedId) return;
+    if (regularOver && !playoff) {
+      const ps = seedPlayoffs(season, league, leagueSeed, myId);
+      setPlayoff(ps);
+      persist(arrangements, season, ps);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, managedId, regularOver, playoff, leagueSeed, myId]);
+
+  // Ordine fisso delle serie: dà un `day` unico (→ seme gara unico) a ogni gara.
+  const PO_ORDER = [
+    'AL-WC-A', 'AL-WC-B', 'NL-WC-A', 'NL-WC-B',
+    'AL-DS-1', 'AL-DS-2', 'NL-DS-1', 'NL-DS-2',
+    'AL-LCS', 'NL-LCS', 'WS',
+  ];
+
+  // Avvia la prossima gara di playoff: sintetizza la gara (avversario/casa dal
+  // bracket) e va alla preparazione (Roster), come per una gara di calendario.
+  const playPlayoffGame = () => {
+    if (!nextPlayoffGame) return;
+    const ng = nextPlayoffGame;
+    setPlayoffCtx(ng);
+    setActiveGame({
+      id: `po-${ng.seriesId}-${ng.gameNo}`,
+      phase: 'playoff',
+      day: PO_ORDER.indexOf(ng.seriesId) * 10 + ng.gameNo, // unico per gara
+      opponentId: ng.opponentId,
+      home: ng.home,
+      round: ng.round,
+    });
+    setView('roster');
+  };
+
+  // Fine gara di playoff: registra l'esito, fa avanzare il bracket (quick-sim
+  // delle altre serie), salva e torna alla postseason.
+  const advancePlayoff = () => {
+    if (!playoff) return;
+    const np = recordManagedGame(playoff, toGameResult(live), league, leagueSeed);
+    setPlayoff(np);
+    persist(arrangements, season, np);
+    setActiveGame(null);
+    setPlayoffCtx(null);
+    setView('playoff');
+  };
+
+  // Simula il resto della postseason (gestita non qualificata o eliminata).
+  const simPlayoffRest = () => {
+    if (!playoff) return;
+    const np = simRestOfPlayoffs(playoff, league, leagueSeed);
+    setPlayoff(np);
+    persist(arrangements, season, np);
+  };
+
+  // Etichetta/azione del pulsante di fine gara secondo la fase.
+  const finishLabel = isSeasonGame
+    ? 'Conferma e avanza ▸'
+    : isPlayoffGame
+      ? 'Alla postseason ▸'
+      : 'Al calendario ▸';
+  const finishGame = isSeasonGame
+    ? advanceDay
+    : isPlayoffGame
+      ? advancePlayoff
+      : () => {
+          setActiveGame(null);
+          setView('home');
+        };
 
   // Editor: applica l'assetto alla sola squadra gestita (entra nella sim,
   // riavvia la gara) ed eventualmente lo rende persistente sul cloud.
@@ -638,6 +752,7 @@ export function App() {
               ['overview', 'Lega'],
               ['leaderboard', 'Leaderboard'],
               ['standings', 'Classifiche'],
+              ...(playoff ? ([['playoff', '🏆 Playoff']] as Array<[View, string]>) : []),
               ['franchise', 'Franchigia'],
               ['calibrate', '🎯 Stadi'],
             ] as Array<[View, string]>
@@ -677,21 +792,9 @@ export function App() {
                 Recap
               </button>
               {final ? (
-                isSeasonGame ? (
-                  <button className="btn primary" onClick={advanceDay}>
-                    Conferma e avanza ▸
-                  </button>
-                ) : (
-                  <button
-                    className="btn primary"
-                    onClick={() => {
-                      setActiveGame(null);
-                      setView('home');
-                    }}
-                  >
-                    Al calendario ▸
-                  </button>
-                )
+                <button className="btn primary" onClick={finishGame}>
+                  {finishLabel}
+                </button>
               ) : (
                 <button className="btn" onClick={() => act((g) => quickSim(g))}>
                   Salta a fine ⏩
@@ -724,15 +827,8 @@ export function App() {
               <FinalOverlay
                 result={result}
                 controlled={controlled}
-                newLabel={isSeasonGame ? 'Conferma e avanza ▸' : 'Al calendario ▸'}
-                onNew={
-                  isSeasonGame
-                    ? advanceDay
-                    : () => {
-                        setActiveGame(null);
-                        setView('home');
-                      }
-                }
+                newLabel={finishLabel}
+                onNew={finishGame}
                 onRecap={() => setRecapOpen(true)}
               />
             ) : (
@@ -748,6 +844,10 @@ export function App() {
           managedTeam={managedTeam}
           schedule={schedule}
           season={season}
+          playoff={playoff}
+          nextPlayoffGame={nextPlayoffGame}
+          onPlayoff={playPlayoffGame}
+          onBracket={() => setView('playoff')}
           onPlay={playGame}
           onOverview={() => setView('overview')}
           onNewLeague={() => setStage('start')}
@@ -762,6 +862,7 @@ export function App() {
           initial={arrangement}
           activeGame={!!activeGame}
           season={season}
+          playoffRot={isPlayoffGame && playoff ? { rotation: playoff.rotation, day: playoff.managedGames } : null}
           todayStarter={todayStarter}
           onPickStarter={setTodayStarter}
           canPickStarter={isRegularGame}
@@ -789,6 +890,16 @@ export function App() {
         <LeaderboardPage league={league} season={season} seed={leagueSeed} managedId={myId} />
       )}
       {view === 'standings' && <StandingsPage league={league} season={season} managedId={myId} />}
+      {view === 'playoff' && playoff && (
+        <PlayoffPage
+          league={league}
+          playoff={playoff}
+          managedId={myId}
+          nextGame={nextPlayoffGame}
+          onPlay={playPlayoffGame}
+          onSimRest={simPlayoffRest}
+        />
+      )}
       {view === 'franchise' && <FranchisePage team={managedTeam} mode={leagueMode} />}
       {view === 'calibrate' && (
         <CalibrationScreen
@@ -3311,6 +3422,7 @@ function RosterPage({
   initial,
   activeGame,
   season,
+  playoffRot,
   todayStarter,
   onPickStarter,
   canPickStarter,
@@ -3323,6 +3435,8 @@ function RosterPage({
   initial?: MatchArrangement;
   activeGame: boolean;
   season: SeasonState;
+  /** Contesto rotazione nei playoff (riposo più corto): assente in regular season. */
+  playoffRot?: { rotation: RotationState; day: number } | null;
   todayStarter: string | null;
   onPickStarter: (id: string | null) => void;
   /** Vero in pre-gara di regular season: si sceglie il partente e conta il riposo. */
@@ -3345,10 +3459,15 @@ function RosterPage({
   const bById = new Map(batters.map((b) => [b.id, b]));
   const pById = new Map(pitchers.map((p) => [p.id, p]));
   // Riposo per-lanciatore (badge nelle liste) e partente effettivo del giorno.
+  // Nei playoff vale la rotazione playoff (riposo del partente più corto); in
+  // regular season quella di stagione. `rotDay` è l'indice-gara di riferimento.
+  const rot = playoffRot ? playoffRot.rotation : season.rotation;
+  const rotDay = playoffRot ? playoffRot.day : season.day;
+  const rotLabel = playoffRot ? `playoff · gara ${rotDay + 1}` : `giornata ${season.day}`;
   const restById = new Map(
-    restInfo(season.rotation, pitchers.map((p) => p.id), season.day).map((r) => [r.id, r]),
+    restInfo(rot, pitchers.map((p) => p.id), rotDay).map((r) => [r.id, r]),
   );
-  const suggestedSp = suggestedStarter(season.rotation, arr.rotation, season.day);
+  const suggestedSp = suggestedStarter(rot, arr.rotation, rotDay);
   const effectiveStarter =
     todayStarter && arr.rotation.includes(todayStarter) && restById.get(todayStarter)?.available
       ? todayStarter
@@ -4164,7 +4283,7 @@ function RosterPage({
                 Oggi parte:{' '}
                 <b>{pById.get(effectiveStarter)?.lastName ?? '—'}</b>{' '}
                 <span className="card-sub">
-                  {starterChosen ? '(scelto)' : '(consigliato)'} · giornata {season.day} · scegli
+                  {starterChosen ? '(scelto)' : '(consigliato)'} · {rotLabel} · scegli
                   dall’elenco con “parte oggi”
                 </span>
               </span>
@@ -4290,6 +4409,10 @@ function HomePage({
   managedTeam,
   schedule,
   season,
+  playoff,
+  nextPlayoffGame,
+  onPlayoff,
+  onBracket,
   onPlay,
   onOverview,
   onNewLeague,
@@ -4298,6 +4421,10 @@ function HomePage({
   managedTeam: Team;
   schedule: Schedule;
   season: SeasonState;
+  playoff: PlayoffState | null;
+  nextPlayoffGame: NextGame | null;
+  onPlayoff: () => void;
+  onBracket: () => void;
   onPlay: (g: ScheduleGame) => void;
   onOverview: () => void;
   onNewLeague: () => void;
@@ -4371,6 +4498,31 @@ function HomePage({
             ▶ Gioca giornata {day + 1} {current.home ? 'vs' : '@'} {currentOpp.abbrev}
           </button>
         )}
+        {playoff && (() => {
+          const champ = playoff.championId ? teamById(league, playoff.championId) : undefined;
+          const oppTeam = nextPlayoffGame ? teamById(league, nextPlayoffGame.opponentId) : undefined;
+          if (champ) {
+            const iWon = champ.id === managedTeam.id;
+            return (
+              <button className="btn primary next-game" onClick={onBracket}>
+                🏆 {iWon ? 'Campioni!' : `Campione: ${champ.abbrev}`} — vedi il tabellone
+              </button>
+            );
+          }
+          if (nextPlayoffGame && oppTeam) {
+            return (
+              <button className="btn primary next-game" onClick={onPlayoff}>
+                🏆 {ROUND_LABEL[nextPlayoffGame.round]} Gara {nextPlayoffGame.gameNo + 1}{' '}
+                {nextPlayoffGame.home ? 'vs' : '@'} {oppTeam.abbrev}
+              </button>
+            );
+          }
+          return (
+            <button className="btn primary next-game" onClick={onBracket}>
+              🏆 Postseason — vedi il tabellone
+            </button>
+          );
+        })()}
         <div className="dash-actions">
           <button className="btn" onClick={onOverview} title="Vedi tutte le squadre della lega">
             📋 Panoramica lega
@@ -4644,6 +4796,127 @@ function StandingsPage({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// --- Postseason (tabellone giocabile) ----------------------------------------
+
+const ROUND_LABEL: Record<Round, string> = {
+  WC: 'Wild Card',
+  DS: 'Division Series',
+  LCS: 'Championship',
+  WS: 'World Series',
+};
+
+/** Riga di una serie nel tabellone: due squadre col punteggio serie. */
+function SeriesRow({
+  series,
+  league,
+  managedId,
+}: {
+  series: Series;
+  league: Team[];
+  managedId: string;
+}) {
+  const high = series.highId ? teamById(league, series.highId) : undefined;
+  const low = series.lowId ? teamById(league, series.lowId) : undefined;
+  const need = winsNeeded(series.bestOf);
+  const cell = (team: Team | undefined, wins: number, isWinner: boolean) => (
+    <div
+      className={`po-team${team?.id === managedId ? ' me' : ''}${isWinner ? ' win' : ''}`}
+    >
+      <span className="po-side">
+        {team ? (
+          <>
+            <TeamBadge team={team} size={16} /> {team.abbrev}
+          </>
+        ) : (
+          <span className="po-tbd">—</span>
+        )}
+      </span>
+      <span className="po-wins">{team ? wins : ''}</span>
+    </div>
+  );
+  const decided = !!series.winnerId;
+  const live = !decided && !!high && !!low && (high.id === managedId || low.id === managedId);
+  return (
+    <div className={`po-series${live ? ' live' : ''}`}>
+      {cell(high, series.highWins, series.winnerId === series.highId)}
+      {cell(low, series.lowWins, series.winnerId === series.lowId)}
+      <div className="po-meta">
+        best-of-{series.bestOf} · a {need}
+        {live ? ' · in corso' : ''}
+      </div>
+    </div>
+  );
+}
+
+function PlayoffPage({
+  league,
+  playoff,
+  managedId,
+  nextGame,
+  onPlay,
+  onSimRest,
+}: {
+  league: Team[];
+  playoff: PlayoffState;
+  managedId: string;
+  nextGame: NextGame | null;
+  onPlay: () => void;
+  onSimRest: () => void;
+}) {
+  const rounds = seriesByRound(playoff);
+  const champ = playoff.championId ? teamById(league, playoff.championId) : undefined;
+  const opp = nextGame ? teamById(league, nextGame.opponentId) : undefined;
+  const eliminated = managedEliminated(playoff);
+  const iAmChamp = champ?.id === managedId;
+
+  return (
+    <div className="page playoff-page">
+      <div className="page-note">
+        Postseason · anno {playoff.year}. Giochi le serie della tua squadra; le altre sono
+        quick-simulate. Formato: Wild Card (bo3) → Division Series (bo5) → Championship (bo7) →
+        World Series (bo7).
+      </div>
+
+      {champ && (
+        <div className={`card po-champion${iAmChamp ? ' mine' : ''}`}>
+          <TeamBadge team={champ} size={48} />
+          <div>
+            <div className="po-champ-title">🏆 {iAmChamp ? 'Campioni del mondo!' : 'Campione'}</div>
+            <div className="po-champ-name">{champ.name}</div>
+          </div>
+        </div>
+      )}
+
+      {!champ && nextGame && opp && (
+        <button className="btn primary po-cta" onClick={onPlay}>
+          ▶ {ROUND_LABEL[nextGame.round]} — Gara {nextGame.gameNo + 1}{' '}
+          {nextGame.home ? 'in casa vs' : 'in trasferta @'} {opp.abbrev}
+        </button>
+      )}
+
+      {!champ && !nextGame && eliminated && (
+        <div className="card po-out">
+          <div>La tua stagione è finita: eliminata dai playoff.</div>
+          <button className="btn primary" onClick={onSimRest}>
+            Simula il resto della postseason ▸
+          </button>
+        </div>
+      )}
+
+      <div className="po-bracket">
+        {(['WC', 'DS', 'LCS', 'WS'] as Round[]).map((r) => (
+          <div className="po-col" key={r}>
+            <div className="po-col-title">{ROUND_LABEL[r]}</div>
+            {rounds[r].map((s) => (
+              <SeriesRow key={s.id} series={s} league={league} managedId={managedId} />
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );

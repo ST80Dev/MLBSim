@@ -118,9 +118,23 @@
     media di lega (aggregati di Fase 0 invariati), scollega l'ERA del singolo
     lanciatore di ~±0.35 fra difesa scarsa ed élite. Vedi
     `docs/engine-calibration.md` § Difesa dietro il lanciatore; `TUNING.defense`.
-  - **Manca:** **playoff giocabili** (ora slot placeholder); **rollover di
-    stagione** (stagione → scorsa → carriera dai dati reali degli anni gestiti). Il
-    **fattore stadio** è **fuori scope** per scelta (non serve a questo livello).
+  - **FATTO (playoff giocabili):** postseason moderna a **12 squadre** (6 teste
+    per lega: 3 campioni division + 3 wild card) — **Wild Card bo3** (teste 1-2 in
+    bye) → **Division Series bo5** → **Championship bo7** → **World Series bo7**,
+    fino al **campione**. L'utente gioca **partita per partita** le serie della
+    propria squadra; le altre serie sono **quick-simulate** (come il resto della
+    lega in regular season). Seeding dai record reali, bracket fisso, fattore campo
+    alla testa di serie più alta (record per la WS). Motore di stato puro in
+    `data/playoff.ts` (nessuna modifica al motore di gioco), UI **tabellone**
+    (`PlayoffPage`) + celebrazione campione, stat di playoff in un **bucket
+    separato**, persistenza nel save (`playoff?`). **Rotazione accorciata nei
+    playoff**: riposo del partente ridotto a **2 gare** (`PLAYOFF_REST_STARTER`,
+    sul modello riposo-per-uso di `rotation.ts`), così l'asso può lanciare Gara 1 e
+    Gara 4. Test in `data/__tests__/playoff.test.ts`.
+  - **Manca:** **rollover di stagione** (stagione → scorsa → carriera dai dati
+    reali degli anni gestiti, con aging): dopo il campione il save contiene l'anno
+    concluso, il rollover consumerà quello stato. Il **fattore stadio** è **fuori
+    scope** per scelta (non serve a questo livello).
 - **Fase 5 — Franchigia (gestione leggera)** *(pianificata; 5A avviabile ora)*
   - Vedi `docs/franchise.md`: stipendi annuali, salary cap, scambi a valore, draft
     semplice. Fondazione modalità/cap già presente (vedi Fase 2).

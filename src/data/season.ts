@@ -95,10 +95,10 @@ export function ensureSeason(s?: SeasonState): SeasonState {
   return hasNewRotation ? s : { ...s, rotation: createRotation() };
 }
 
-const emptyBat = (): SeasonBat => ({
+export const emptyBat = (): SeasonBat => ({
   g: 0, ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, double: 0, triple: 0, hr: 0, sb: 0, cs: 0,
 });
-const emptyPit = (): SeasonPit => ({
+export const emptyPit = (): SeasonPit => ({
   g: 0, gs: 0, outs: 0, bf: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, hr: 0, w: 0, l: 0, sv: 0, svo: 0,
 });
 
@@ -107,10 +107,18 @@ function bumpRecord(records: Record<string, WLRecord>, winnerId: string, loserId
   (records[loserId] ??= { w: 0, l: 0 }).l += 1;
 }
 
-/** Accumula il tabellino della squadra gestita nelle statistiche di stagione. */
-function accumulate(season: SeasonState, stats: TeamGameStats): void {
+/**
+ * Accumula il tabellino di UNA squadra in due mappe id→linea (battitori/lanciatori).
+ * Riusabile: la stagione regolare passa `season.bat`/`season.pit`, i playoff un
+ * bucket separato. Non muta le linee del box score, solo le mappe accumulatrici.
+ */
+export function accumulateInto(
+  bat: Record<string, SeasonBat>,
+  pit: Record<string, SeasonPit>,
+  stats: TeamGameStats,
+): void {
   stats.batting.forEach((bl) => {
-    const a = (season.bat[bl.id] ??= emptyBat());
+    const a = (bat[bl.id] ??= emptyBat());
     a.g += 1;
     a.ab += bl.ab;
     a.r += bl.r;
@@ -125,7 +133,7 @@ function accumulate(season: SeasonState, stats: TeamGameStats): void {
     a.cs += bl.cs;
   });
   stats.pitching.forEach((pl, i) => {
-    const a = (season.pit[pl.id] ??= emptyPit());
+    const a = (pit[pl.id] ??= emptyPit());
     a.g += 1;
     if (i === 0) a.gs += 1; // il primo lanciatore usato e' lo starter
     a.outs += pl.outs;
@@ -143,6 +151,11 @@ function accumulate(season: SeasonState, stats: TeamGameStats): void {
       a.svo += 1; // i save mancati (blown) non sono ancora tracciati
     }
   });
+}
+
+/** Accumula il tabellino della squadra gestita nelle statistiche di stagione. */
+function accumulate(season: SeasonState, stats: TeamGameStats): void {
+  accumulateInto(season.bat, season.pit, stats);
 }
 
 /** Coppie casuali (deterministiche) tra le squadre non impegnate nella gara utente. */

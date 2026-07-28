@@ -12,12 +12,11 @@ import {
   OFFSEASON_BLOCKS,
   TARGET_BATTERS,
   TARGET_PITCHERS,
-  type OffseasonState,
   type FreeAgent,
 } from '../offseason';
 import { generateLeague } from '../league';
 import { REALIGN_VALUE_TOL } from '../offseason';
-import { GENERATED_MODE, type LeagueMode } from '../leagueMode';
+import { type LeagueMode } from '../leagueMode';
 import { playerValue } from '../../engine/value';
 import { deriveBatterStats, derivePitcherStats } from '../../engine/ratings';
 import type { Batter, Pitcher, BatterRatings, PitcherRatings } from '../../engine/types';

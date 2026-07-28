@@ -9,6 +9,7 @@
 
 import type { MatchArrangement } from '../../engine/arrangement';
 import type { SeasonState } from '../season';
+import type { PlayoffState } from '../playoff';
 import type { LeagueSource } from '../leagueMode';
 
 // Il "foglio partita" persistente e' definito nel motore (`MatchArrangement`):
@@ -54,6 +55,12 @@ export interface GameSave {
   lineups?: Record<string, MatchArrangement>;
   /** Stato di stagione: giorno corrente, record di lega, statistiche reali accumulate. */
   season?: SeasonState;
+  /**
+   * Postseason (Fase 4): tabellone, semine, esiti serie e campione. Nasce a fine
+   * regular season (giornata 162). Assente finché la stagione è in corso o nei
+   * save che non hanno ancora raggiunto i playoff → trattato come "nessun playoff".
+   */
+  playoff?: PlayoffState;
 }
 
 /** Metadati di uno slot, senza il payload (per elencare i salvataggi). */

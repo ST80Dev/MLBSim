@@ -27,16 +27,23 @@ basi (niente più "out in prima" con un codice di volata). Effetti:
 
 - **Rimbalzo** (`ground`): doppio gioco (corridore in 1ª, `gidpProb`); **scelta
   difensiva** (corridore in 2ª, 1ª e 3ª libere → eliminato verso la 3ª, battitore
-  salvo in prima: `outInfo.fc`); **groundout RBI** dalla 3ª; **out produttivo**
-  (i corridori salgono di una base se quella davanti è libera).
+  salvo in prima: `outInfo.fc`); **groundout RBI** dalla 3ª. Poi gli avanzamenti,
+  distinguendo **forzati** da **produttivi**: col battitore eliminato in prima il
+  corridore in 1ª è **sempre** forzato in 2ª (se libera), quello in 2ª è forzato in
+  3ª se la 1ª è occupata, la 3ª segna d'ufficio a **basi piene**; gli avanzamenti
+  **non forzati** (es. dalla 2ª con 1ª vuota) restano probabilistici
+  (`productiveAdvanceOnGrounder`). *(Prima l'avanzamento del corridore forzato
+  dalla 1ª era erroneamente gated dietro `productiveAdvanceOnGrounder` ~35%, così
+  con 1ª+3ª restava spesso fermo — bug corretto.)*
 - **Volata profonda** (`fly`): **volata di sacrificio** / punto dalla 3ª e
   **tag-up 2ª→3ª**.
 - **Presa comoda** (`popup`): nessun avanzamento.
 
-Costanti in `TUNING.outField`. L'impatto sull'ambiente-punti è modesto (misurato:
-+~0.1 R/squadra/partita, ben dentro la banda di realismo 4.3–6.2) e i corridori
-avanzano rispettando l'occupazione delle basi. Coperto dai test in
-`engine/__tests__/live.test.ts` e `ui/__tests__/scorecode.test.ts`.
+Costanti in `TUNING.outField`. L'impatto sull'ambiente-punti è modesto (i corridori
+forzati che avanzano restano dentro la banda di realismo 4.3–6.2) e rispettano
+l'occupazione delle basi. Coperto dai test in `engine/__tests__/live.test.ts`,
+`engine/__tests__/inplayout.test.ts` (avanzamenti forzati) e
+`ui/__tests__/scorecode.test.ts`.
 
 ## Tattiche interattive (Fase 1) e loro calibrazione
 

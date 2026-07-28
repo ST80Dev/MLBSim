@@ -13,9 +13,16 @@ import { withRotationStarter } from './generator';
 // di 2+ inning salta una gara, cosi' non si resta a secco dopo una gara difficile.
 // `availableFrom[id]` = prima giornata in cui il lanciatore torna disponibile
 // (per partire O per rilevare). Chi non ha ancora lanciato e' sempre disponibile.
+//
+// NEI PLAYOFF il riposo del PARTENTE si accorcia (`PLAYOFF_REST_STARTER`): piu'
+// off-day reali tra le gare + gare che contano, cosi' l'asso puo' lanciare Gara 1
+// e Gara 4 (riposo di 2 gare invece di 4). Vale solo alla REGISTRAZIONE dell'uso
+// (`recordUsage(..., starterRest)`); le query di disponibilita' non cambiano.
 
 export const REST_STARTER = 4;
 export const REST_RELIEF = 1;
+/** Riposo del partente nei playoff (piu' corto): l'asso rientra alla 3ª gara dopo. */
+export const PLAYOFF_REST_STARTER = 2;
 
 export interface RotationState {
   /** id lanciatore -> prima giornata in cui torna disponibile. Assente = pronto. */
@@ -38,9 +45,11 @@ export function isAvailable(rot: RotationState, id: string, day: number): boolea
   return restRemaining(rot, id, day) <= 0;
 }
 
-/** Gare di riposo dovute in base agli out lanciati e se il lanciatore era il partente. */
-export function restForUsage(outs: number, started: boolean): number {
-  if (started) return REST_STARTER;
+/** Gare di riposo dovute in base agli out lanciati e se il lanciatore era il
+ *  partente. `starterRest` = riposo del partente (default regular; più corto nei
+ *  playoff via `PLAYOFF_REST_STARTER`). */
+export function restForUsage(outs: number, started: boolean, starterRest: number = REST_STARTER): number {
+  if (started) return starterRest;
   if (outs >= 6) return REST_RELIEF; // rilievo da 2+ IP: salta una gara
   return 0; // rilievo sotto le 2 IP: pronto la gara dopo
 }
@@ -54,12 +63,18 @@ export interface PitcherUsage {
 
 /**
  * Registra l'uso di TUTTI i lanciatori scesi in campo in una gara al giorno
- * `day`: ognuno matura il proprio riposo (out + se ha aperto). Non muta l'input.
+ * `day`: ognuno matura il proprio riposo (out + se ha aperto). `starterRest`
+ * accorcia il riposo del partente nei playoff. Non muta l'input.
  */
-export function recordUsage(rot: RotationState, usage: PitcherUsage[], day: number): RotationState {
+export function recordUsage(
+  rot: RotationState,
+  usage: PitcherUsage[],
+  day: number,
+  starterRest: number = REST_STARTER,
+): RotationState {
   const availableFrom = { ...rot.availableFrom };
   for (const u of usage) {
-    availableFrom[u.id] = day + 1 + restForUsage(u.outs, u.started);
+    availableFrom[u.id] = day + 1 + restForUsage(u.outs, u.started, starterRest);
   }
   return { availableFrom };
 }
