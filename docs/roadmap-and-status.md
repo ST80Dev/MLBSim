@@ -131,9 +131,12 @@
   - **5A — motore franchigia (puro, testabile, NIENTE dipendenza da Fase 4):**
     1) `playerValue` (atomo scambi+cap, `engine/value.ts`) — **FATTO**;
     2) cap enforce + ε seedato (`leagueMode.ts`: `capOverageMargin`/`effectiveCap`/
-    `overEffectiveCap`) — **FATTO**; 3) pool free agent + riconciliazione;
-    4) draft inverso; 5) valutazione scambi (con **premio di consolidamento**,
-    vedi `franchise.md § playerValue è additivo`); 6) `runOffseason` (perf=0).
+    `overEffectiveCap`) — **FATTO**; 3) mercato free agent a **blocchi**
+    (`offseason.ts`: rilasci/firme intrecciati AI+utente, pool reattivo, gate cap)
+    — **FATTO (market core)**, manca il **finalize/reslot** (ricomposizione
+    lineup/rotazione dai set piatti) + aggancio aging/draft; 4) draft inverso;
+    5) valutazione scambi (con **premio di consolidamento**, vedi `franchise.md
+    § playerValue è additivo`); 6) `runOffseason` (perf=0, orchestra 1-5).
   - **5B — UI + accoppiamento stagione (dopo Fase 4):** finestra di gestione fra le
     partite, UI scambi/draft/off-season, `perf` reale, normalizzazione PA battitori.
   - **Persistenza:** `GameSave` schema **v3** con **rose persistite** (il multi-anno

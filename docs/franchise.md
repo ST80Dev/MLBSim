@@ -267,16 +267,43 @@ reale (~9.000 vs **~6.180 PA** di una squadra da 162 gare da 9 inning), e
 
 La CPU rispetta il cap **al rollover** (fine stagione), non a metà anno; la
 ridistribuzione passa da un **pool di free agent**, **non** da un motore di
-matching a coppie. Sequenza di ogni off-season, per tutte e 30:
+matching a coppie. L'off-season ha una **fase deterministica una-tantum** seguita
+da un **mercato a più blocchi**:
+
+**Fase una-tantum (all'apertura dell'off-season):**
 
 1. **Aging + ri-derivo stipendi** (i payroll si spostano).
 2. **Ritiri** → buchi in rosa + monte liberato.
 3. **Draft inverso** → gioventù al minimo in ingresso.
-4. **Riconciliazione:** ogni squadra sopra il **suo** tetto (`cap_base × (1+ε)`)
-   **scarica** i contratti a *peggior valore* (overall-per-$ più basso = i
-   veterani strapagati, **non** i giovani economici) nel pool, finché rientra.
-5. **Le squadre sotto tetto** pescano dal pool per riempire i minimi/migliorarsi,
-   rispettando il proprio tetto.
+
+**Mercato a blocchi (rilasci e firme INTRECCIATI, non due passi chiusi):**
+
+> **Decisione di design.** Rilasciare e firmare **non** sono due fasi separate
+> ("scarica tutti, poi firma tutti"): sarebbe innaturale e toglierebbe scelta.
+> L'off-season è una **sequenza di blocchi-data** (finestre che simulano il
+> susseguirsi delle date reali di novembre→febbraio). In **ogni blocco** accadono
+> **entrambe le cose**, sia lato AI sia lato **utente**, e il **pool di free agent
+> resta osservabile fra un blocco e l'altro**. Così puoi **vedere chi è
+> disponibile prima** di rilasciare apposta un giocatore per far spazio — e
+> viceversa — in **più momenti**, invece che in un colpo solo.
+
+- Ogni blocco, ciascuna AI fa mosse **limitate** (al più un rilascio se sopra il
+  *suo* tetto/oltre la taglia rosa, al più una firma se sotto taglia e il pool
+  offre un upgrade **che rientra nel cap**): il mercato **si schiarisce nell'arco
+  dei blocchi**, non istantaneamente.
+- Il **pool è reattivo**: se firmi tu un free agent che un'AI puntava, al blocco
+  successivo l'AI **si adatta** (ricalcola sul pool aggiornato). È l'interazione
+  emergente voluta.
+- **Rilascio a peggior valore**: si scarica dal `playerValue` più **basso** (i
+  maturi cari senza prospettiva), **mai** i giovani-affare. **Firma per bisogno**:
+  si prende dal pool il `playerValue` più alto del **tipo mancante** (battitore o
+  lanciatore, verso le taglie 20/15) che **sta sotto il proprio tetto effettivo**.
+- **Taglie rosa**: 20 battitori + 15 lanciatori per squadra (9+5+6 / 5+6+4). I
+  rilasci non scendono sotto la taglia; le firme non la superano.
+- **L'utente agisce con le STESSE primitive** in qualunque blocco (rilascia/firma
+  sulla propria franchigia): la CPU è semplicemente l'automa che le applica alle
+  altre 29. Fine off-season → **ricomposizione** di lineup/rotazione dai set piatti
+  (via `autoLineup` + assegnazione ruoli, come il generatore).
 
 Conseguenze:
 
