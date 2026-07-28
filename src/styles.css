@@ -3305,6 +3305,9 @@ table {
 .pot-num.up {
   color: #78c06a;
 }
+.pot-num.down {
+  color: #d98a5b;
+}
 
 /* --- Home: leader + mini-classifica + calendario a stati ------------ */
 .home-cards {

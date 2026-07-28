@@ -76,3 +76,53 @@ describe('code di sviluppo (bust / breakout)', () => {
     expect(outs.size).toBeGreaterThan(3);
   });
 });
+
+describe('potenziale dinamico (tetto che galleggia)', () => {
+  it('il tetto non scende MAI sotto l’overall corrente', () => {
+    for (let s = 0; s < 200; s++) {
+      const rng = makeRng(2000 + s);
+      const b = mkBat(20, 78);
+      for (let y = 0; y < 8; y++) {
+        advanceSeasonBatter(b, rng, rng.gauss(0, 1));
+        expect(b.potential).toBeGreaterThanOrEqual(batterOverall(b.ratings));
+      }
+    }
+  });
+
+  it('il rendimento (perf) muove il tetto: sopra la media lo alza, sotto lo abbassa', () => {
+    const up = mkBat(27, 70);
+    const flat = mkBat(27, 70);
+    const down = mkBat(27, 70);
+    for (let y = 0; y < 2; y++) {
+      // Stesso RNG per tutti e tre: la differenza sul tetto viene SOLO da perf
+      // (il drift del potenziale non consuma RNG).
+      advanceSeasonBatter(up, makeRng(80 + y), 2);
+      advanceSeasonBatter(flat, makeRng(80 + y), 0);
+      advanceSeasonBatter(down, makeRng(80 + y), -2);
+    }
+    expect(up.potential).toBeGreaterThan(flat.potential);
+    expect(flat.potential).toBeGreaterThan(down.potential);
+  });
+
+  it('un breakout può ALZARE il tetto oltre quello di partenza', () => {
+    let raised = 0;
+    for (let s = 0; s < 400; s++) {
+      const rng = makeRng(6000 + s);
+      const b = mkBat(21, 72);
+      for (let y = 0; y < 5; y++) advanceSeasonBatter(b, rng);
+      if (b.potential > 72) raised += 1;
+    }
+    expect(raised).toBeGreaterThan(0);
+  });
+
+  it('il tetto del veterano si erode verso l’overall (niente promesse stantie)', () => {
+    const b = mkBat(33, 90); // scenario artificioso: tetto 90 stantio su overall 50
+    let prev = b.potential;
+    for (let y = 0; y < 5; y++) {
+      advanceSeasonBatter(b, makeRng(300 + y), 0);
+      expect(b.potential).toBeLessThanOrEqual(prev); // non risale mai
+      prev = b.potential;
+    }
+    expect(b.potential).toBeLessThan(70); // molto più vicino all’overall che al 90
+  });
+});
