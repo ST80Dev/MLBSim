@@ -44,8 +44,20 @@ Regioni, dall'alto in basso:
     motore via `PlayEvent.kind` (metadato puramente descrittivo, non tocca la
     simulazione né l'RNG). Non interattivo (`pointer-events:none`).
   - **Cronaca laterale** (`CronacaTeam`, angoli **alti** sx/dx per ospite/casa):
-    a fine turno la giocata resta **sintetizzata in una riga** (`PlayEvent.text`)
+    a fine turno la giocata resta **sintetizzata in una riga** (`commentary.logLine`)
     nella timeline della squadra in attacco.
+  - **Varietà narrativa pesata sulle frequenze MLB** (`commentary.ts`): il motore
+    dà solo l'esito (`kind`: singolo/doppio/out su palla in gioco/strikeout…), non
+    *com'è* la battuta. La telecronaca assegna un **sottotipo** (groundout/flyout/
+    lineout/popout; singolo a terra/in linea/bloop/interno; doppio in gap/linea/
+    muro/angolo; strikeout a vuoto/guardato; HR netto/profondo/di un soffio) in
+    modo **deterministico ma pesato** sulle frequenze reali della MLB (out in gioco
+    ~47/33/12/8; strikeout ~72/28; ecc.), poi sceglie una frase nel pool del
+    sottotipo. Risultato: **4-5+ modi diversi** per ogni esito, con la stessa
+    *distribuzione* del gioco reale (i groundout dominano gli out, la lineout è
+    rara), e **banner e log laterale restano coerenti** (stesso sottotipo per lo
+    stesso evento). Puro, senza RNG (hash dell'evento). Test:
+    `src/ui/__tests__/commentary.test.ts` (determinismo + convergenza ai pesi).
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
     battitore corrente evidenziato, lanciatore in pedana).
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:

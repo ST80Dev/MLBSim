@@ -78,7 +78,7 @@ import {
   STATS_MODE_TITLE,
 } from './statlines';
 import type { StatItem, StatsMode } from './statlines';
-import { buildCommentary, PHASE_MS, HOLD_MS } from './commentary';
+import { buildCommentary, logLine, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
 
 type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'calibrate' | 'game';
@@ -1848,7 +1848,7 @@ function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
             <ul>
               {g.events.map((ev, i) => (
                 <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
-                  {ev.text}
+                  {logLine(ev)}
                 </li>
               ))}
             </ul>
