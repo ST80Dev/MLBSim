@@ -11,8 +11,11 @@ import { withRotationStarter } from './generator';
 // i disponibili — es. richiamare l'asso appena idoneo oppure dare spazio al #5 e
 // far riposare l'asso un giorno extra.
 
-/** Partite di riposo OBBLIGATORIE dopo una partenza. */
+/** Partite di riposo OBBLIGATORIE dopo una partenza (regular season). */
 export const REST_MIN_DAYS = 3;
+/** Riposo minimo nei PLAYOFF: più corto (più off-day reali tra le gare + gare che
+ *  contano), così l'asso può lanciare Gara 1 e Gara 4 (2 gare di riposo). */
+export const PLAYOFF_REST_MIN = 2;
 
 export type RotationSize = 4 | 5;
 
@@ -34,9 +37,15 @@ export function restDays(rot: RotationState, spId: string, day: number): number 
   return day - last - 1; // partite saltate dall'ultima partenza
 }
 
-/** Vero se lo SP ha riposato abbastanza per ripartire al giorno `day`. */
-export function isAvailable(rot: RotationState, spId: string, day: number): boolean {
-  return restDays(rot, spId, day) >= REST_MIN_DAYS;
+/** Vero se lo SP ha riposato abbastanza per ripartire al giorno `day`. Il riposo
+ *  minimo è parametrico (`REST_MIN_DAYS` di default; `PLAYOFF_REST_MIN` nei playoff). */
+export function isAvailable(
+  rot: RotationState,
+  spId: string,
+  day: number,
+  restMin: number = REST_MIN_DAYS,
+): boolean {
+  return restDays(rot, spId, day) >= restMin;
 }
 
 export interface StarterOption {
@@ -57,11 +66,12 @@ export function starterOptions(
   rot: RotationState,
   rotationIds: string[],
   day: number,
+  restMin: number = REST_MIN_DAYS,
 ): StarterOption[] {
   return rotationIds.map((id, i) => ({
     id,
     restDays: restDays(rot, id, day),
-    available: isAvailable(rot, id, day),
+    available: isAvailable(rot, id, day, restMin),
     inCycle: i < rot.size,
   }));
 }
@@ -73,8 +83,13 @@ export function starterOptions(
  * ripiega sul più riposato in assoluto — robustezza, non dovrebbe capitare con
  * size≥4 e REST=3.
  */
-export function suggestedStarter(rot: RotationState, rotationIds: string[], day: number): string {
-  const opts = starterOptions(rot, rotationIds, day);
+export function suggestedStarter(
+  rot: RotationState,
+  rotationIds: string[],
+  day: number,
+  restMin: number = REST_MIN_DAYS,
+): string {
+  const opts = starterOptions(rot, rotationIds, day, restMin);
   const cycle = opts.filter((o) => o.inCycle);
   const avail = cycle.filter((o) => o.available);
   const pool = avail.length ? avail : cycle.length ? cycle : opts;
