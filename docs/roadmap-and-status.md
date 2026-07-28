@@ -131,12 +131,16 @@
   - **5A — motore franchigia (puro, testabile, NIENTE dipendenza da Fase 4):**
     1) `playerValue` (atomo scambi+cap, `engine/value.ts`) — **FATTO**;
     2) cap enforce + ε seedato (`leagueMode.ts`: `capOverageMargin`/`effectiveCap`/
-    `overEffectiveCap`) — **FATTO**; 3) mercato free agent a **blocchi**
-    (`offseason.ts`: rilasci/firme intrecciati AI+utente, pool reattivo, gate cap)
-    — **FATTO (market core)**, manca il **finalize/reslot** (ricomposizione
-    lineup/rotazione dai set piatti) + aggancio aging/draft; 4) draft inverso;
-    5) valutazione scambi (con **premio di consolidamento**, vedi `franchise.md
-    § playerValue è additivo`); 6) `runOffseason` (perf=0, orchestra 1-5).
+    `overEffectiveCap`) — **FATTO**; 3) mercato off-season a **blocchi**
+    (`offseason.ts`): rilasci/firme intrecciati AI+utente + pool reattivo + gate cap
+    + **riallineamento AI↔AI** (scambi 1-per-1 stesso valore, fit posizionale,
+    cap-legali, bounded) — **FATTO (market core)**; manca il **finalize/reslot**
+    (ricomposizione lineup/rotazione dai set piatti) + aggancio aging/draft;
+    4) draft inverso (→ **depth**, riconciliato al finalize); 5) valutazione scambi
+    umano→1 AI (con **premio di consolidamento**); 6) `runOffseason` (perf=0).
+  - **Cadenza mercato** (decisa): in stagione **solo scambi** umano→1 AI fino alla
+    **trade deadline ~gara 103** (`TRADE_DEADLINE_GAME` in `schedule.ts`), poi rose
+    congelate; pool FA e riallineamento AI↔AI sono **eventi di off-season**.
   - **5B — UI + accoppiamento stagione (dopo Fase 4):** finestra di gestione fra le
     partite, UI scambi/draft/off-season, `perf` reale, normalizzazione PA battitori.
   - **Persistenza:** `GameSave` schema **v3** con **rose persistite** (il multi-anno

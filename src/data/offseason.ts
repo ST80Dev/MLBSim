@@ -1,5 +1,5 @@
 import type { Batter, Pitcher, Team } from '../engine/types';
-import { playerValue } from '../engine/value';
+import { playerValue, overallOf } from '../engine/value';
 import { effectiveCap, GENERATED_MODE, type LeagueMode } from './leagueMode';
 
 // ---------------------------------------------------------------------------
@@ -40,9 +40,10 @@ export const OFFSEASON_BLOCKS = [
 export type FreeAgent = Batter | Pitcher;
 const isPitcher = (p: FreeAgent): p is Pitcher => 'role' in p;
 
-export type TxnKind = 'release' | 'sign';
+export type TxnKind = 'release' | 'sign' | 'trade';
 
-/** Una mossa registrata (per il riepilogo e la UI di Fase 5B). */
+/** Una mossa registrata (per il riepilogo e la UI di Fase 5B). Per `kind==='trade'`
+ *  `playerId`/`salary` sono il giocatore RICEVUTO e `sentId`/`withTeamId` il resto. */
 export interface Txn {
   round: number;
   teamId: string;
@@ -52,7 +53,22 @@ export interface Txn {
   kindOfPlayer: 'bat' | 'pit';
   salary: number;
   byHuman: boolean;
+  /** Solo trade: contproparte e giocatore ceduto. */
+  withTeamId?: string;
+  sentId?: string;
+  sentName?: string;
 }
+
+/** Scarto di valore massimo tollerato in uno scambio di riallineamento AI↔AI. */
+export const REALIGN_VALUE_TOL = 3;
+/** Un pari-ruolo entro questo scarto di overall rende un giocatore un "doppione"
+ *  (cedibile senza perdere copertura in quello slot). Stretto apposta: solo veri
+ *  doppioni, non "ho un pari-ruolo un po' peggiore". */
+const REDUNDANCY_SLACK = 3;
+/** Un giocatore in arrivo colma un bisogno solo se MIGLIORA la copertura dello
+ *  slot di almeno questo margine (non basta un +1): tiene gli scambi rari e
+ *  significativi ("un po' di varieta'", non churn continuo). */
+const NEED_MARGIN = 5;
 
 /** Rosa PIATTA di una squadra durante l'off-season (pre-ricomposizione). */
 export interface RosterSet {
@@ -250,28 +266,144 @@ export function humanSign(state: OffseasonState, playerId: string): OffseasonSta
  *      tipo mancante che rientra nel tetto;
  *   3) altrimenti nessuna mossa.
  */
+function worstOfKind(players: FreeAgent[]): FreeAgent | null {
+  if (!players.length) return null;
+  return players.reduce((w, p) =>
+    playerValue(p) < playerValue(w) || (playerValue(p) === playerValue(w) && p.id < w.id) ? p : w,
+  );
+}
+
 function stepAiTeam(state: OffseasonState, teamId: string): OffseasonState {
   const set = state.rosters[teamId];
   const payroll = payrollOfSet(set);
   const cap = capOf(state, teamId);
+  const tgt = state.targets[teamId];
 
-  // 1) Pressione da cap: scarica il peggiore.
+  // 1) Pressione da CAP: scarica il peggiore in assoluto.
   if (payroll > cap + 1e-9) {
     const worst = worstReleasable(set);
     if (worst) return release(state, teamId, worst, false);
   }
 
-  // 2) Riempimento per bisogno (tipo sotto taglia), il migliore affrontabile.
-  const need = {
-    bat: set.batters.length < state.targets[teamId].bat,
-    pit: set.pitchers.length < state.targets[teamId].pit,
-  };
+  // 2) Sopra TAGLIA su un tipo: scarica il peggiore di quel tipo (la depth in
+  //    eccesso — es. i prospetti dal draft — defluisce nel pool).
+  if (set.batters.length > tgt.bat) {
+    const w = worstOfKind(set.batters);
+    if (w) return release(state, teamId, w, false);
+  }
+  if (set.pitchers.length > tgt.pit) {
+    const w = worstOfKind(set.pitchers);
+    if (w) return release(state, teamId, w, false);
+  }
+
+  // 3) Riempimento per bisogno (tipo sotto taglia), il migliore affrontabile.
+  const need = { bat: set.batters.length < tgt.bat, pit: set.pitchers.length < tgt.pit };
   if (need.bat || need.pit) {
     const pick = bestAffordable(state.pool, payroll, cap, need);
     if (pick) return sign(state, teamId, pick, false);
   }
 
   return state;
+}
+
+// --- Riallineamento AI↔AI: scambi 1-per-1, stesso valore, fit migliore ------
+//
+// Guardrail (docs/franchise.md § Trade AI↔AI): 1-per-1 stesso tipo, |Δvalore| ≤
+// REALIGN_VALUE_TOL, cap-legale per entrambe, guidato dal BISOGNO posizionale (una
+// cede un doppione e riceve un upgrade dove e' scoperta, l'altra simmetrica). Al
+// piu' una trade per squadra per blocco, deterministico (nessun RNG).
+
+const slotOf = (p: FreeAgent): string => (isPitcher(p) ? p.role : (p as Batter).position);
+
+function bestOverallAtSlot(players: FreeAgent[], slot: string, exceptId?: string): number {
+  let best = -Infinity;
+  for (const q of players) {
+    if (slotOf(q) === slot && q.id !== exceptId) best = Math.max(best, overallOf(q));
+  }
+  return best;
+}
+
+/** `p` e' un doppione in `arr` (esiste un pari-slot quasi equivalente): cedibile. */
+const spareable = (arr: FreeAgent[], p: FreeAgent): boolean =>
+  bestOverallAtSlot(arr, slotOf(p), p.id) >= overallOf(p) - REDUNDANCY_SLACK;
+
+/** `p` migliora la copertura di `arr` nel suo slot di almeno NEED_MARGIN. */
+const fillsNeed = (arr: FreeAgent[], p: FreeAgent): boolean =>
+  overallOf(p) >= bestOverallAtSlot(arr, slotOf(p)) + NEED_MARGIN;
+
+/** Primo scambio 1-per-1 valido di un dato tipo fra due squadre (o null). */
+function findSwap(
+  state: OffseasonState,
+  idA: string,
+  idB: string,
+  kind: 'bat' | 'pit',
+): { a: FreeAgent; b: FreeAgent } | null {
+  const setA = state.rosters[idA];
+  const setB = state.rosters[idB];
+  const arrA: FreeAgent[] = kind === 'bat' ? setA.batters : setA.pitchers;
+  const arrB: FreeAgent[] = kind === 'bat' ? setB.batters : setB.pitchers;
+  const payA = payrollOfSet(setA);
+  const payB = payrollOfSet(setB);
+  const capA = capOf(state, idA);
+  const capB = capOf(state, idB);
+  for (const a of arrA) {
+    for (const b of arrB) {
+      if (Math.abs(playerValue(a) - playerValue(b)) > REALIGN_VALUE_TOL) continue;
+      // A cede un doppione (a) e riceve un upgrade (b); B simmetrico.
+      if (!(fillsNeed(arrA, b) && spareable(arrA, a))) continue;
+      if (!(fillsNeed(arrB, a) && spareable(arrB, b))) continue;
+      // Cap-legale per entrambe DOPO lo scambio.
+      if (payA - a.salary + b.salary > capA + 1e-9) continue;
+      if (payB - b.salary + a.salary > capB + 1e-9) continue;
+      return { a, b };
+    }
+  }
+  return null;
+}
+
+function applySwap(
+  state: OffseasonState,
+  idA: string,
+  idB: string,
+  a: FreeAgent,
+  b: FreeAgent,
+): OffseasonState {
+  const rosters = { ...state.rosters };
+  rosters[idA] = addToSet(removeFromSet(rosters[idA], a), b);
+  rosters[idB] = addToSet(removeFromSet(rosters[idB], b), a);
+  const rec = (teamId: string, withTeamId: string, got: FreeAgent, sent: FreeAgent): Txn => ({
+    round: state.round, teamId, kind: 'trade',
+    playerId: got.id, playerName: got.name, kindOfPlayer: isPitcher(got) ? 'pit' : 'bat',
+    salary: got.salary, byHuman: false, withTeamId, sentId: sent.id, sentName: sent.name,
+  });
+  return {
+    ...state,
+    rosters,
+    log: [...state.log, rec(idA, idB, b, a), rec(idB, idA, a, b)],
+  };
+}
+
+/** Un giro di riallineamento: al piu' una trade AI↔AI per squadra (salta la
+ *  gestita). Scansione a coppie in ordine fisso → deterministico. */
+function realignPass(state: OffseasonState): OffseasonState {
+  let s = state;
+  const acted = new Set<string>();
+  const order = s.teamOrder;
+  for (let i = 0; i < order.length; i++) {
+    for (let j = i + 1; j < order.length; j++) {
+      const A = order[i];
+      const B = order[j];
+      if (A === s.managedId || B === s.managedId) continue;
+      if (acted.has(A) || acted.has(B)) continue;
+      const swap = findSwap(s, A, B, 'bat') ?? findSwap(s, A, B, 'pit');
+      if (swap) {
+        s = applySwap(s, A, B, swap.a, swap.b);
+        acted.add(A);
+        acted.add(B);
+      }
+    }
+  }
+  return s;
 }
 
 /**
@@ -283,10 +415,13 @@ function stepAiTeam(state: OffseasonState, teamId: string): OffseasonState {
 export function advanceBlock(state: OffseasonState): OffseasonState {
   if (isOffseasonComplete(state)) return state;
   let s = state;
+  // Mercato FA: una mossa limitata per AI.
   for (const id of state.teamOrder) {
     if (id === state.managedId) continue;
     s = stepAiTeam(s, id);
   }
+  // In PARALLELO nello stesso blocco: riallineamento AI↔AI (varieta' delle rose).
+  s = realignPass(s);
   return { ...s, round: s.round + 1 };
 }
 

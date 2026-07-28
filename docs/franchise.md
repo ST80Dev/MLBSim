@@ -320,9 +320,51 @@ Conseguenze:
   verso il basso**: il muro le impedisce di ri-caricare, l'aging ne erode i
   veterani costosi, il draft inverso rifornisce le rivali. Quindi **no**, non
   mantiene il vantaggio "per anni e anni": lo perde, in modo credibile.
-- **Niente trade AI↔AI**, di proposito: il pool ottiene lo stesso riequilibrio
-  senza un motore di valutazione+ricerca su 29 squadre. Le trade a coppie restano
-  una feature **solo-umana** (tu proponi, *una* AI valuta sì/no).
+- **Trade AI↔AI: SOLO riallineamento leggero in off-season** (decisione rivista —
+  prima erano escluse). Servono a dare **varietà alle rose**, ma con guardrail che
+  evitano un trade-AI pesante (ricerca N×N, pacchetti, aste):
+  - **1-per-1** dello stesso tipo (bat↔bat, pit↔pit): niente pacchetti → niente
+    premio di consolidamento da modellare, niente esplosione di ricerca.
+  - **bilanciati per valore**: `|Δ playerValue| ≤ REALIGN_VALUE_TOL` (≈3 pt).
+  - **cap-legali per ENTRAMBE** dopo lo scambio (rispetto del tetto effettivo).
+  - **guidati dal bisogno posizionale**: A cede un **doppione** (ha un pari-ruolo
+    quasi equivalente) e riceve un **upgrade** dove è scoperta; B **simmetrico**.
+    Stesso valore, **fit migliore per entrambe** — è un riallineamento, non un
+    affare.
+  - **bounded & deterministico**: al più **una** trade AI↔AI per squadra per
+    blocco, ordine di scansione fisso, nessun RNG. Avviene **in parallelo** al
+    mercato FA nello stesso blocco.
+  - Il **pool** resta la valvola di parità principale (scarico dei forti → deboli);
+    le trade AI↔AI aggiungono solo **mescolamento** a parità di valore.
+- Le trade con l'**utente** restano una feature a sé (tu proponi, *una* AI valuta
+  sì/no), consentite **anche in stagione fino alla deadline** (vedi § Cadenza).
+
+### Cadenza del mercato: stagione vs off-season (decisione di design)
+
+Il mercato ha **due regimi distinti**, per tenere la gestione leggera:
+
+- **Durante la stagione → SOLO scambi** (umano → *una* AI valuta sì/no), fino a una
+  **trade deadline a ~gara 103** su 162 (i ~2/3, come la deadline reale di fine
+  luglio; `TRADE_DEADLINE_GAME` in `schedule.ts`). Dopo la deadline le rose sono
+  **congelate agli scambi** fino all'off-season. **Nessuna firma dal pool FA in
+  stagione** e **nessun trade AI↔AI**: il colpo di metà stagione è lo scambio, non
+  il mercato dei free agent.
+- **A fine anno → off-season** (fase una-tantum + mercato FA a blocchi, §
+  Riconciliazione): è qui che avviene la vera ristrutturazione e il riequilibrio
+  di parità via pool.
+
+### Draft → depth, non → rosa attiva (niente overfill)
+
+**Decisione di design.** Le scelte del draft inverso entrano nella **profondità**
+(`reserveBatters`/`reservePitchers`), **non** nei 25 attivi: sono giocatori reali
+*contati* nella franchigia, ma **acquisire ≠ schierare**. Durante l'off-season la
+rosa piatta **può sforare** la taglia 20/15 (draft + ripescaggi); la taglia si
+**riconcilia solo alla fine**, nel passo **`finalize`** — **è lì che "si decidono
+gli X della rosa"**, sia le AI (automatico, per `playerValue`) sia l'utente
+(scelta). L'eccedenza (peggior valore) viene tagliata → **pool**; i buchi si
+riempiono. Conseguenza sul mercato a blocchi: il trigger di rilascio dell'AI è
+**"sopra il cap OPPURE sopra la taglia"**, così la profondità in eccesso dal draft
+**defluisce nel pool** durante i blocchi invece di restare bloccata.
 
 ### C'è spazio aggregato? Sì, per costruzione
 
@@ -378,8 +420,13 @@ che serve per lo scarico).
 
 ## Draft
 
-- **Semplificato**: un ingresso di giovani nel pool, senza le complicazioni di un
-  draft annuale a più giri con scouting profondo.
+- **Semplificato**: un ingresso di giovani, senza le complicazioni di un draft
+  annuale a più giri con scouting profondo.
+- **Ordine inverso** alla classifica (la peggiore sceglie per prima → prospetti
+  migliori ai deboli): è l'"handicap" strutturale del riequilibrio.
+- **I prospetti entrano nella DEPTH** (`reserveBatters`/`reservePitchers`), non nei
+  25 attivi (vedi § Draft → depth): niente overfill, la taglia si riconcilia al
+  `finalize`.
 - Budget squadra basilare.
 
 ### Draft storico — prospetti con tetto *possibile*, non *certo*

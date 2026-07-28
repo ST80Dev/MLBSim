@@ -16,7 +16,9 @@ import {
   type FreeAgent,
 } from '../offseason';
 import { generateLeague } from '../league';
+import { REALIGN_VALUE_TOL } from '../offseason';
 import { GENERATED_MODE, type LeagueMode } from '../leagueMode';
+import { playerValue } from '../../engine/value';
 import { deriveBatterStats, derivePitcherStats } from '../../engine/ratings';
 import type { Batter, Pitcher, BatterRatings, PitcherRatings } from '../../engine/types';
 
@@ -108,8 +110,10 @@ describe('firma per bisogno (sotto taglia, sotto cap)', () => {
     };
     expect(s.rosters[id].pitchers).toHaveLength(TARGET_PITCHERS - 1);
     const after = advanceBlock(s);
-    expect(after.rosters[id].pitchers).toHaveLength(TARGET_PITCHERS); // buco riempito
-    expect(after.rosters[id].pitchers.some((p) => p.id === 'FA-GEM')).toBe(true); // il migliore
+    expect(after.rosters[id].pitchers).toHaveLength(TARGET_PITCHERS); // buco riempito (swap 1-per-1 non cambia il conteggio)
+    // La firma e' avvenuta sul MIGLIORE (log-based: il riallineamento potrebbe poi
+    // rigirarlo, ma la firma resta registrata e il gem esce dal pool).
+    expect(after.log.some((t) => t.kind === 'sign' && t.teamId === id && t.playerId === 'FA-GEM')).toBe(true);
     expect(after.pool.some((p) => p.id === 'FA-GEM')).toBe(false);
     expect(after.pool.some((p) => p.id === 'FA-FILLER')).toBe(true); // il debole resta
   });
@@ -163,5 +167,79 @@ describe('azioni dell’utente + squadra gestita', () => {
     expect(s.rosters[managed].batters.some((p) => p.id === 'FA-SHARED')).toBe(true);
     const after = advanceBlock(s);
     expect(after.rosters[other].batters.some((p) => p.id === 'FA-SHARED')).toBe(false); // l'AI si adatta
+  });
+});
+
+describe('riallineamento AI↔AI (scambi 1-per-1, stesso valore, fit migliore)', () => {
+  // Battitore con posizione esplicita (per costruire doppioni/bisogni).
+  const batAt = (id: string, pos: Batter['position'], lvl: number, salary: number): Batter => ({
+    ...bat(id, lvl, salary), position: pos,
+  });
+
+  // Isola due squadre (teamOrder ridotto a [A,B]) con rose piatte controllate.
+  const twoTeam = (aBats: Batter[], bBats: Batter[]) => {
+    const teams = generateLeague(SEED);
+    const [A, B] = [teams[0].id, teams[1].id];
+    let s = startOffseason(teams, SEED, 1);
+    s = {
+      ...s,
+      teamOrder: [A, B],
+      rosters: {
+        ...s.rosters,
+        [A]: { batters: aBats, pitchers: [] },
+        [B]: { batters: bBats, pitchers: [] },
+      },
+    };
+    return { s, A, B };
+  };
+
+  it('due squadre con doppione↔bisogno incrociati fanno lo scambio, migliorando entrambe', () => {
+    // A: profonda a CF (78,76), scoperta a 1B (55). B: specchio (1B 78,76; CF 55).
+    const aBats = [batAt('A-CF1', 'CF', 78, 8), batAt('A-CF2', 'CF', 76, 7), batAt('A-1B', '1B', 55, 2)];
+    const bBats = [batAt('B-1B1', '1B', 78, 8), batAt('B-1B2', '1B', 76, 7), batAt('B-CF', 'CF', 55, 2)];
+    const { s, A, B } = twoTeam(aBats, bBats);
+    const after = advanceBlock(s);
+
+    const trades = after.log.filter((t) => t.kind === 'trade');
+    expect(trades.length).toBe(2); // una trade = due righe (una per squadra)
+    // A ha guadagnato un 1B forte, B un CF forte (fit migliore per entrambe).
+    expect(after.rosters[A].batters.some((p) => p.position === '1B' && p.id !== 'A-1B')).toBe(true);
+    expect(after.rosters[B].batters.some((p) => p.position === 'CF' && p.id !== 'B-CF')).toBe(true);
+    // Conteggi conservati (1-per-1).
+    expect(after.rosters[A].batters).toHaveLength(3);
+    expect(after.rosters[B].batters).toHaveLength(3);
+    // Le due righe sono speculari (contparte incrociata).
+    const [x, y] = trades;
+    expect(x.withTeamId).toBe(y.teamId);
+    expect(y.withTeamId).toBe(x.teamId);
+  });
+
+  it('nessuno scambio se lo scarto di valore supera la tolleranza', () => {
+    // B offre un 1B FORTISSIMO (90): valore troppo distante dal CF di A → niente deal.
+    const aBats = [batAt('A-CF1', 'CF', 78, 8), batAt('A-CF2', 'CF', 76, 7), batAt('A-1B', '1B', 55, 2)];
+    const bBats = [batAt('B-1B1', '1B', 90, 20), batAt('B-1B2', '1B', 76, 7), batAt('B-CF', 'CF', 55, 2)];
+    const { s } = twoTeam(aBats, bBats);
+    const after = advanceBlock(s);
+    // Nessun 1B da 90 barattato per un CF da ~76 (|Δvalore| > tol).
+    const gaveAce = after.log.some((t) => t.kind === 'trade' && t.sentId === 'B-1B1');
+    expect(gaveAce).toBe(false);
+  });
+
+  it('sulla lega generata avvengono scambi, tutti bilanciati per valore', () => {
+    const teams = generateLeague(SEED);
+    const byId = new Map(teams.flatMap((t) =>
+      [...t.lineup, ...t.bench, ...t.rotation, ...t.bullpen, ...t.reserveBatters, ...t.reservePitchers]
+        .map((p) => [p.id, p] as const),
+    ));
+    const end = runOffseasonMarket(startOffseason(teams, SEED, 1));
+    const trades = end.log.filter((t) => t.kind === 'trade');
+    expect(trades.length).toBeGreaterThan(0); // la varieta' c'e'
+    for (const t of trades) {
+      const got = byId.get(t.playerId);
+      const sent = byId.get(t.sentId!);
+      if (got && sent) {
+        expect(Math.abs(playerValue(got) - playerValue(sent))).toBeLessThanOrEqual(REALIGN_VALUE_TOL);
+      }
+    }
   });
 });
