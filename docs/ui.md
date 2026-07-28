@@ -44,8 +44,9 @@ Regioni, dall'alto in basso:
     motore via `PlayEvent.kind` (metadato puramente descrittivo, non tocca la
     simulazione né l'RNG). Non interattivo (`pointer-events:none`).
   - **Cronaca laterale** (`CronacaTeam`, angoli **alti** sx/dx per ospite/casa):
-    a fine turno la giocata resta **sintetizzata in una riga** (`PlayEvent.text`)
-    nella timeline della squadra in attacco. Davanti al testo, un **chip col
+    a fine turno la giocata resta **sintetizzata in una riga** (`commentary.logLine`,
+    con la stessa varietà narrativa del banner) nella timeline della squadra in
+    attacco. Davanti al testo, un **chip col
     codice da segnapunti** (`scoreCode` in `src/ui/scorecode.ts`): `6-4-3 DP`
     (doppio gioco SS→2B→1B), `F7` (eliminato al volo, LF), `K`/`ꓘ` (strikeout),
     `CS 2-6` (eliminato in rubata), `3U` (rimbalzo non assistito in 1ª), ecc.,
@@ -56,6 +57,20 @@ Regioni, dall'alto in basso:
     motore, **niente RNG, determinismo invariato**. Quando la difesa sarà
     simulata (fase futura) i ruoli reali sostituiranno la sintesi senza cambiare
     la UI. Coperto da test (`src/ui/__tests__/scorecode.test.ts`).
+  - **Varietà narrativa pesata sulle frequenze MLB** (`commentary.ts`): banner e
+    log laterale hanno **4-5+ modi diversi** per lo stesso esito, scelti in modo
+    **deterministico** (hash dell'evento, niente RNG). Due sorgenti di sottotipo:
+    - **Valide e strikeout** (il motore non dice *com'è* la battuta): un
+      **sottotipo pesato** sul mix reale MLB — singolo a terra/in linea/bloop/
+      interno (46/34/13/7), doppio gap/linea/muro/angolo (42/26/18/14), strikeout
+      a vuoto/guardato (72/28), più HR netto/profondo/di un soffio. Su tante azioni
+      la *distribuzione dei testi* rispecchia il gioco reale.
+    - **Out su palla in gioco**: la forma NON è inventata — viene dalla **verità
+      del motore** `inPlayOutShape(ev)` (`ev.outInfo.ball`: rimbalzo/volata/presa);
+      il testo varia solo la resa. Così banner, log laterale e codice da segnapunti
+      restano **coerenti** fra loro e con gli avanzamenti reali dei corridori.
+    Test: `src/ui/__tests__/commentary.test.ts` (determinismo, convergenza ai pesi,
+    coerenza con `outInfo`).
     - **Coerenza cronaca ↔ codice.** Per l'out su palla in gioco (`inplayout`)
       la categoria (rimbalzo / volata / presa) NON è più scelta due volte in
       modo indipendente: viene da un'unica fonte, `inPlayOutShape(ev)` in

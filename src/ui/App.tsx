@@ -97,7 +97,7 @@ import {
   STATS_MODE_TITLE,
 } from './statlines';
 import type { StatItem, StatsMode } from './statlines';
-import { buildCommentary, PHASE_MS, HOLD_MS } from './commentary';
+import { buildCommentary, logLine, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
 import { scoreCode } from './scorecode';
 
@@ -2582,7 +2582,7 @@ function CronacaTeam({
                         {sc.code}
                       </span>
                     )}
-                    {ev.text}
+                    {logLine(ev)}
                   </li>
                 );
               })}
