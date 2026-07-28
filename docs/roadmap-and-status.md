@@ -16,9 +16,17 @@
     **l'ordine dell'RNG preservato** (calibrazione Fase 0 invariata).
   - **Gestisci una squadra vs CPU**, decidendo ai tuoi turni. Toggle
     **quick-sim** ("Salta a fine partita").
-  - Tattiche **complete**: in attacco Swing / Bunt di sacrificio / Rubata /
-    **Hit-and-run** / **Pinch-hit** (panchina); in difesa cambio lanciatore
-    manuale / base intenzionale / **interni dentro** (difesa avanzata).
+  - Tattiche **complete**: in attacco Swing / Bunt di sacrificio / **Squeeze**
+    (bunt suicida col corridore in 3ª) / **Cerca fly** (volata di sacrificio dalla
+    3ª) / Rubata / **Hit-and-run** / **Pinch-hit** (panchina); in difesa cambio
+    lanciatore manuale / base intenzionale /
+    **interni dentro** / **interni a doppio gioco** / **difendi le righe**
+    (anti-extrabase). Le tre difensive sono *toggle* di posizionamento.
+  - **AI tattica della CPU (small-ball)**: nel gioco interattivo la CPU può
+    rubare / cercare il fly (punto dalla 3ª) / buntare / hit-and-run secondo doti
+    e situazione (`cpuOffenseTurn`).
+    **Solo turni interattivi**: `autoStep`/`quickSim` restano *swing puro* →
+    Fase 0 e sim di lega invariate (guardia nel test `tactics.test.ts`).
   - Doti prima dormienti ora **attive**: Velocità del corridore + Braccio del
     ricevitore + Difesa (hold) del lanciatore sulle rubate; Difesa del lanciatore
     sui bunt; Contatto del battitore sull'hit-and-run.
