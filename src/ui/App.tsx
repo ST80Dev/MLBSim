@@ -2290,15 +2290,18 @@ function LineupSide({
 }) {
   const isBatting = sit.offenseSide === side && sit.status === 'live';
   const currentId = isBatting ? sit.batter.id : null;
-  const batById = new Map(team.lineup.map((b) => [b.id, b]));
   const pitById = new Map([...team.rotation, ...team.bullpen].map((p) => [p.id, p]));
-  const rows = stats.batting.map((l) => ({
-    line: l,
-    items: batterStatLine(mode, l, batById.get(l.id)),
-  }));
+  // Ordine di battuta = i 9 titolari CORRENTI (sostituzione COMPLETA: il pinch
+  // sostituito non compare più qui; le sue stat restano nel box/recap). Ogni
+  // slot mostra la sua BattingLine accumulata (se già entrato).
+  const lineById = new Map(stats.batting.map((l) => [l.id, l]));
+  const rows = team.lineup.map((b) => {
+    const line = lineById.get(b.id);
+    return { b, line, items: batterStatLine(mode, line, b) };
+  });
   const head = rows[0]?.items.map((i) => i.k) ?? [];
   // Cognomi disambiguati per i battitori mostrati (es. R. Alomar / S. Alomar).
-  const batLabels = disambiguateLastNames(rows.map((r) => r.line.name));
+  const batLabels = disambiguateLastNames(team.lineup.map((b) => b.name));
   // TUTTI i lanciatori usati da questa squadra (partente + rilievi entrati), non
   // solo quello in pedana: così il box tiene traccia dei 3/5/7 cambi.
   const lastPitIdx = stats.pitching.length - 1;
@@ -2335,19 +2338,12 @@ function LineupSide({
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
+              <tr key={r.b.id} className={r.b.id === currentId ? 'at-bat' : undefined}>
                 <td className="l num">{i + 1}</td>
                 <td className="l bname">
-                  <span className="pos">{r.line.position}</span>{' '}
-                  {(() => {
-                    const b = batById.get(r.line.id);
-                    return b ? (
-                      <PlayerLink player={b} pos={b.position}>{batLabels[i]}</PlayerLink>
-                    ) : (
-                      upperLast(batLabels[i])
-                    );
-                  })()}
-                  {r.line.id === currentId && <span className="atbat-dot">●</span>}
+                  <span className="pos">{r.b.position}</span>{' '}
+                  <PlayerLink player={r.b} pos={r.b.position}>{batLabels[i]}</PlayerLink>
+                  {r.b.id === currentId && <span className="atbat-dot">●</span>}
                 </td>
                 {r.items.map((it) => (
                   <td key={it.k}>{it.v}</td>
