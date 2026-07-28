@@ -150,8 +150,11 @@
     + **riallineamento AI↔AI** (scambi 1-per-1 stesso valore, fit posizionale,
     cap-legali, bounded) — **FATTO (market core)**; manca il **finalize/reslot**
     (ricomposizione lineup/rotazione dai set piatti) + aggancio aging/draft;
-    4) draft inverso (→ **depth**, riconciliato al finalize); 5) valutazione scambi
-    umano→1 AI (con **premio di consolidamento**); 6) `runOffseason` (perf=0).
+    4) draft inverso (`draft.ts`: classe prospetti giovani/grezzi deterministica,
+    ordine inverso alla classifica, BPA per `playerValue`, immessi nella **depth**)
+    — **FATTO**; 5) valutazione scambi umano→1 AI (con **premio di consolidamento**);
+    6) `runOffseason` (perf=0) + **finalize/reslot** (ricomposizione lineup/rotazione
+    + riconciliazione taglia dopo draft e mercato).
   - **Cadenza mercato** (decisa): in stagione **solo scambi** umano→1 AI fino alla
     **trade deadline ~gara 103** (`TRADE_DEADLINE_GAME` in `schedule.ts`), poi rose
     congelate; pool FA e riallineamento AI↔AI sono **eventi di off-season**.
