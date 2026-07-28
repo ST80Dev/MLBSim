@@ -45,6 +45,28 @@ export const TUNING = {
   gidpProb: 0.13,
   /** Prob. che un out con corridore in terza e <2 out faccia segnare (SF/groundout RBI). */
   runnerScoresFromThirdOnOut: 0.35,
+
+  /**
+   * Logica di campo sugli out su palla in gioco (oltre il motore lineare):
+   * tipo di battuta e avanzamenti reali dei corridori. Tarati sui test di
+   * realismo (l'ambiente-punti deve restare nella banda ~4.3–6.2 R/squadra).
+   */
+  outField: {
+    /** Quota di out in gioco che sono RIMBALZI (il resto e' palla in aria). */
+    groundShare: 0.44,
+    /** Degli out in aria, quota di PRESE COMODE d'interno (pop, nessun
+     *  avanzamento); il resto sono volate profonde (tag-up/SF possibili). */
+    popupShareOfAir: 0.3,
+    /** Prob. che su un rimbalzo (battitore out in prima) un corridore avanzi di
+     *  una base, se quella davanti e' libera (out produttivo). */
+    productiveAdvanceOnGrounder: 0.35,
+    /** Prob. che, con corridore in 2ª e 1ª libera (<2 out), la difesa scelga di
+     *  eliminare il corridore verso la 3ª lasciando il battitore salvo in 1ª. */
+    fielderChoiceLeadRunner: 0.35,
+    /** Prob. che su volata profonda il corridore in 2ª guadagni la 3ª (tag-up),
+     *  se la 3ª e' libera e <2 out. */
+    tagUpSecondToThirdOnFly: 0.3,
+  },
   /** Prob. che su singolo il corridore dalla seconda segni (altrimenti va in terza). */
   runnerScoresFromSecondOnSingle: 0.6,
   /** Prob. che su singolo il corridore in prima arrivi in terza. */
@@ -150,15 +172,15 @@ export const TUNING = {
    *   pHome = clamp(homeBase + speed_sigma*homePerSpeed, homeMin, homeMax)
    */
   wildPitch: {
-    wpBase: 0.032,
-    wpPerControl: 0.009,
-    wpMin: 0.008,
-    wpMax: 0.085,
-    pbBase: 0.014,
-    pbPerCatch: 0.006,
-    pbMin: 0.003,
-    pbMax: 0.04,
-    balk: 0.004,
+    wpBase: 0.019,
+    wpPerControl: 0.008,
+    wpMin: 0.005,
+    wpMax: 0.05,
+    pbBase: 0.009,
+    pbPerCatch: 0.005,
+    pbMin: 0.002,
+    pbMax: 0.026,
+    balk: 0.003,
     homeBase: 0.5,
     homePerSpeed: 0.09,
     homeMin: 0.25,

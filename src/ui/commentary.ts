@@ -6,20 +6,18 @@
 // varieta' delle frasi e' DETERMINISTICA (hash dell'evento), cosi' lo stesso
 // turno produce sempre la stessa telecronaca.
 //
-// --- Sottotipi di battuta pesati sulle frequenze reali MLB -------------------
-// Il motore risolve solo l'ESITO (1B/2B/3B/HR/strikeout/out su palla in gioco):
-// non sa se un out e' una rullata o una volata, ne' se un singolo passa a terra o
-// cade come bloop. Quel dettaglio e' narrazione, quindi lo assegniamo QUI, ma non
-// a caso: ogni esito estrae un SOTTOTIPO con pesi che approssimano il mix reale
-// della MLB (fonti sabermetriche, era moderna). Cosi', su tante azioni, la
-// frequenza dei groundout/flyout/lineout/popout, o dei singoli a terra/in
-// linea/bloop, rispecchia la realta' del gioco — pur restando pura presentazione.
+// --- Due sorgenti di sottotipo ----------------------------------------------
+// 1) OUT su palla in gioco: la FORMA (rimbalzo/volata/presa) e' VERITA' DEL
+//    MOTORE — `ev.outInfo.ball` (ground/fly/popup) — cosi' telecronaca, codice
+//    da segnapunti (`scorecode.ts`) e avanzamenti reali dei corridori concordano.
+// 2) VALIDE e STRIKEOUT: il motore NON dice se un singolo passa a terra o cade
+//    come bloop, ne' se lo strikeout e' a vuoto o guardato. Quel dettaglio e'
+//    solo narrazione: lo assegniamo QUI, ma non a caso — ogni esito estrae un
+//    sottotipo con pesi che approssimano il mix reale MLB (fonti sabermetriche),
+//    cosi' su tante azioni la frequenza dei singoli a terra/in linea/bloop, o
+//    degli strikeout a vuoto/guardati, rispecchia la realta'. Resta presentazione.
 //
-//   Palline in gioco (MLB): ground ball ~44%, fly ball ~36%, line drive ~20%.
-//   Ma pesate per la probabilita' di diventare OUT (la line drive e' quasi sempre
-//   valida, BABIP ~.68; il pop-up e' quasi sempre out): tra gli OUT su palla in
-//   gioco prevalgono groundout e flyout, la lineout e' rara.
-//   Strikeout: ~72% a vuoto (swinging), ~28% guardati (called) — dato MLB.
+//    Strikeout: ~72% a vuoto / ~28% guardati (dato MLB).
 
 import type { PlayEvent, PlayKind } from '../engine/game';
 
@@ -66,7 +64,7 @@ export interface Commentary {
 
 /** Firma stabile di un evento: stesse componenti -> stessa telecronaca. */
 function signature(ev: PlayEvent): string {
-  return `${ev.inning}|${ev.half}|${ev.kind}|${ev.batter ?? ''}|${ev.text}`;
+  return `${ev.inning}${ev.half}${ev.kind}${ev.batter ?? ''}${ev.text}`;
 }
 
 /** Hash FNV-1a di una stringa. */
@@ -79,16 +77,17 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
-/** Indice deterministico 0..n-1 per l'evento, con un `salt` che separa i flussi
- *  (cosi' scelta del sottotipo e scelta della frase non sono correlate). */
-function idx(ev: PlayEvent, salt: string, n: number): number {
-  return hashStr(signature(ev) + '#' + salt) % n;
+/** Indice deterministico piccolo, per scegliere una variante di frase. */
+function variant(ev: PlayEvent, n: number): number {
+  return hashStr(signature(ev)) % n;
 }
 
-/** Sceglie una variante di frase (flusso separato per `salt`). */
-function pick(ev: PlayEvent, opts: string[], salt = 'p'): string {
-  return opts[idx(ev, salt, opts.length)];
-}
+const pick = (ev: PlayEvent, opts: string[]): string => opts[variant(ev, opts.length)];
+
+/** Come `pick`, ma con un `salt` che separa i flussi (cosi' scelta del sottotipo
+ *  e scelta della frase non sono correlate tra loro). */
+const pickS = (ev: PlayEvent, opts: string[], salt: string): string =>
+  opts[hashStr(signature(ev) + '#' + salt) % opts.length];
 
 /** Estrazione PESATA deterministica: i pesi (interi) approssimano le frequenze
  *  reali MLB. Su molti eventi distinti la distribuzione converge ai pesi. */
@@ -103,15 +102,21 @@ function weighted<T>(ev: PlayEvent, salt: string, table: Weighted<T>): T {
   return table[table.length - 1][1];
 }
 
-// --- Tabelle dei sottotipi (pesi = % reali MLB approssimate) -----------------
+/** Tipo di eliminazione su palla in gioco (`inplayout`). La FONTE DI VERITÀ è il
+ *  motore: `ev.outInfo.ball` (ground/fly/popup) decide, così telecronaca e codice
+ *  da segnapunti (`scorecode.ts`) raccontano lo stesso esito e concordano anche
+ *  con gli avanzamenti reali dei corridori. Se manca (eventi vecchi) si ripiega
+ *  su un hash deterministico. */
+export type InPlayOutShape = 'air' | 'ground' | 'fly';
+export function inPlayOutShape(ev: PlayEvent): InPlayOutShape {
+  if (ev.outInfo) {
+    return ev.outInfo.ball === 'ground' ? 'ground' : ev.outInfo.ball === 'fly' ? 'fly' : 'air';
+  }
+  const v = variant(ev, 3);
+  return v === 0 ? 'air' : v === 1 ? 'ground' : 'fly';
+}
 
-/** OUT su palla in gioco (escl. strikeout): prevalgono groundout e flyout. */
-const OUT_TYPES: Weighted<'groundout' | 'flyout' | 'popout' | 'lineout'> = [
-  [47, 'groundout'],
-  [33, 'flyout'],
-  [12, 'popout'],
-  [8, 'lineout'],
-];
+// --- Tabelle dei sottotipi presentazione (pesi = % reali MLB approssimate) ----
 
 /** SINGOLO: rullata nel buco > linea in esterno > bloop > singolo interno. */
 const SINGLE_TYPES: Weighted<'grounder' | 'liner' | 'blooper' | 'infield'> = [
@@ -236,29 +241,6 @@ const K_FLAVOR: Record<string, Flavor> = {
   },
 };
 
-const OUT_FLAVOR: Record<string, Flavor> = {
-  groundout: {
-    log: ['{b} eliminato, rimbalzo e out in prima', '{b} out su rullata all’interno', '{b} groundout senza problemi'],
-    action: ['Rimbalzo comodo verso l’interno…', 'La batte a terra sull’interno…'],
-    verdict: ['Raccolta e sparo in prima: {b} eliminato.', 'Out di routine in prima.'],
-  },
-  flyout: {
-    log: ['{b} eliminato, volata catturata in esterno', '{b} out su elevata all’esterno', '{b} flyout, presa comoda'],
-    action: ['Elevata verso l’esterno, il difensore sotto…', 'La alza in esterno, l’esterno si sistema…'],
-    verdict: ['Presa in corsa: {b} eliminato.', 'Volata catturata: out.'],
-  },
-  popout: {
-    log: ['{b} eliminato, pop-up sull’interno', '{b} out, campanile raccolto', '{b} popout sull’interno'],
-    action: ['Campanile altissimo sull’interno…', 'Pop-up, i difensori si chiamano…'],
-    verdict: ['Sotto la palla, presa: {b} eliminato.', 'Pop-up raccolto: out.'],
-  },
-  lineout: {
-    log: ['{b} eliminato, gran linea presa al volo', '{b} out, frustata dritta nel guantone', '{b} lineout, sfortunato'],
-    action: ['Frustata in linea… ma dritta sul difensore…', 'Gran contatto… e la difesa è lì…'],
-    verdict: ['Che presa in linea! {b} eliminato.', 'Linea catturata al volo: out.'],
-  },
-};
-
 const HR_FLAVOR: Record<string, Flavor> = {
   nodoubter: {
     log: ['{b} FUORICAMPO, bomba senza discussioni', '{b} FUORICAMPO, la spedisce lontanissima'],
@@ -277,36 +259,44 @@ const HR_FLAVOR: Record<string, Flavor> = {
   },
 };
 
-/** Sottotipo narrativo deterministico dell'evento (per kind con sottotipi). */
-export function subtypeOf(ev: PlayEvent): string | null {
-  switch (ev.kind) {
-    case 'single':
-      return weighted(ev, 'sub', SINGLE_TYPES);
-    case 'double':
-      return weighted(ev, 'sub', DOUBLE_TYPES);
-    case 'triple':
-      return weighted(ev, 'sub', TRIPLE_TYPES);
-    case 'strikeout':
-      return weighted(ev, 'sub', K_TYPES);
-    case 'homerun':
-      return weighted(ev, 'sub', HR_TYPES);
-    case 'inplayout':
-      // Se sull'out segna un corridore (dalla terza), e' per forza una palla
-      // profonda a terra/in aria: forziamo groundout, coerente col punto.
-      return ev.runsScored > 0 ? 'groundout' : weighted(ev, 'sub', OUT_TYPES);
-    default:
-      return null;
-  }
-}
-
-const FLAVORS: Partial<Record<PlayKind, Record<string, Flavor>>> = {
-  single: SINGLE_FLAVOR,
-  double: DOUBLE_FLAVOR,
-  triple: TRIPLE_FLAVOR,
-  strikeout: K_FLAVOR,
-  homerun: HR_FLAVOR,
-  inplayout: OUT_FLAVOR,
+/** Valide/K/HR: mappa kind -> tabella pesi + pool di frasi. Gli OUT no: la loro
+ *  forma e' verita' del motore (vedi `inPlayOutShape`), non un peso. */
+const HIT_KINDS: Partial<Record<PlayKind, { table: Weighted<string>; flavor: Record<string, Flavor> }>> = {
+  single: { table: SINGLE_TYPES, flavor: SINGLE_FLAVOR },
+  double: { table: DOUBLE_TYPES, flavor: DOUBLE_FLAVOR },
+  triple: { table: TRIPLE_TYPES, flavor: TRIPLE_FLAVOR },
+  strikeout: { table: K_TYPES, flavor: K_FLAVOR },
+  homerun: { table: HR_TYPES, flavor: HR_FLAVOR },
 };
+
+/** OUT su palla in gioco: frasi per forma reale (`inPlayOutShape`). */
+const OUT_FLAVOR: Record<InPlayOutShape, Flavor> = {
+  ground: {
+    log: ['{b} eliminato, rimbalzo e out in prima', '{b} out su rullata all’interno', '{b} groundout senza problemi'],
+    action: ['Rimbalzo comodo verso l’interno…', 'La batte a terra sull’interno…'],
+    verdict: ['Raccolta e sparo in prima: {b} eliminato.', 'Out di routine in prima.'],
+  },
+  fly: {
+    log: ['{b} eliminato, volata catturata in esterno', '{b} out su elevata all’esterno', '{b} flyout, presa in corsa'],
+    action: ['Elevata verso l’esterno, il difensore sotto…', 'La alza in esterno, l’esterno si sistema…'],
+    verdict: ['Presa in corsa: {b} eliminato.', 'Volata catturata: out.'],
+  },
+  air: {
+    log: ['{b} eliminato, pop-up sull’interno', '{b} out, campanile raccolto', '{b} popout sull’interno'],
+    action: ['Campanile altissimo sull’interno…', 'Pop-up, i difensori si chiamano…'],
+    verdict: ['Sotto la palla, presa: {b} eliminato.', 'Pop-up raccolto: out.'],
+  },
+};
+
+/** Sottotipo narrativo deterministico dell'evento (etichetta descrittiva).
+ *  Valide/K/HR: pesato-MLB. OUT in gioco: derivato dalla VERITA' del motore
+ *  (`fc` o forma `ground/fly/popup`). Altri kind: null. */
+export function subtypeOf(ev: PlayEvent): string | null {
+  const hk = HIT_KINDS[ev.kind];
+  if (hk) return weighted(ev, 'sub', hk.table);
+  if (ev.kind === 'inplayout') return ev.outInfo?.fc ? 'fc' : inPlayOutShape(ev);
+  return null;
+}
 
 const fill = (s: string, b: string): string => s.replace(/\{b\}/g, b);
 
@@ -316,7 +306,7 @@ function logRuns(scored: number): string {
   return ` (${scored} ${scored === 1 ? 'punto' : 'punti'})`;
 }
 
-/** Suffisso "e segnano N" per il verdetto del banner. */
+/** Suffisso "e segnano N" per il verdetto quando l'azione produce punti. */
 function runsTail(scored: number): string {
   if (scored <= 0) return '';
   return scored === 1 ? ' Un punto a casa!' : ` ${scored} punti a casa!`;
@@ -324,14 +314,23 @@ function runsTail(scored: number): string {
 
 /**
  * Riga sintetica per la CRONACA laterale (una frase). Varia il testo per
- * sottotipo pesato-MLB; per i tipi senza sottotipo usa il testo del motore.
+ * sottotipo (pesato-MLB per le valide/K/HR, forma reale per gli out); per i tipi
+ * senza narrazione dedicata usa il testo del motore.
  */
 export function logLine(ev: PlayEvent): string {
   const b = ev.batter ?? 'Il battitore';
-  const sub = subtypeOf(ev);
-  const flavors = FLAVORS[ev.kind];
-  if (sub && flavors && flavors[sub]) {
-    return fill(pick(ev, flavors[sub].log, 'log'), b) + logRuns(ev.runsScored);
+  const hk = HIT_KINDS[ev.kind];
+  if (hk) {
+    const sub = weighted(ev, 'sub', hk.table);
+    return fill(pickS(ev, hk.flavor[sub].log, 'log'), b) + logRuns(ev.runsScored);
+  }
+  if (ev.kind === 'inplayout') {
+    if (ev.outInfo?.fc) {
+      return `${b} eliminato su scelta difensiva, salvo in prima` + logRuns(ev.runsScored);
+    }
+    const f = OUT_FLAVOR[inPlayOutShape(ev)];
+    const adv = ev.outInfo?.advanced ? ', i corridori avanzano' : '';
+    return fill(pickS(ev, f.log, 'log'), b) + adv + logRuns(ev.runsScored);
   }
   return ev.text;
 }
@@ -370,7 +369,7 @@ const META: Record<
  */
 function opener(ev: PlayEvent, ctx: BannerContext): string {
   const b = ev.batter ?? 'Il battitore';
-  return pick(
+  return pickS(
     ev,
     [
       `${b} si porta in battuta per ${ctx.offense.abbrev}…`,
@@ -382,18 +381,16 @@ function opener(ev: PlayEvent, ctx: BannerContext): string {
   );
 }
 
-/** Costruisce (per i kind con sottotipo) le tre fasi: apertura, azione, verdetto. */
+/** Fasi (apertura, azione, verdetto) per i kind con sottotipo pesato (valide/K/HR). */
 function flavoredPhases(ev: PlayEvent, ctx: BannerContext): string[] | null {
-  const sub = subtypeOf(ev);
-  const flavors = FLAVORS[ev.kind];
-  if (!sub || !flavors || !flavors[sub]) return null;
+  const hk = HIT_KINDS[ev.kind];
+  if (!hk) return null;
   const b = ev.batter ?? 'Il battitore';
-  const f = flavors[sub];
-  const t = runsTail(ev.runsScored);
+  const f = hk.flavor[weighted(ev, 'sub', hk.table)];
   return [
     opener(ev, ctx),
-    fill(pick(ev, f.action, 'act'), b),
-    fill(pick(ev, f.verdict, 'ver'), b) + t,
+    fill(pickS(ev, f.action, 'act'), b),
+    fill(pickS(ev, f.verdict, 'ver'), b) + runsTail(ev.runsScored),
   ];
 }
 
@@ -402,8 +399,7 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
   const b = ev.batter ?? 'Il battitore';
   const t = runsTail(ev.runsScored);
 
-  // I kind "di battuta" (singolo/doppio/triplo/HR/strikeout/out) passano dal
-  // modello a sottotipi pesati-MLB.
+  // Valide/strikeout/HR: modello a sottotipi pesati-MLB.
   const flavored = flavoredPhases(ev, ctx);
   if (flavored) return flavored;
 
@@ -468,7 +464,35 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
       ];
     case 'buntout':
       return [open, 'Prova la smorzata…', `Difesa pronta: ${b} eliminato.`];
+    case 'inplayout': {
+      const info = ev.outInfo;
+      // Scelta difensiva: out su un corridore, battitore salvo in prima.
+      if (info?.fc) {
+        return [
+          open,
+          'Rimbalzo all’interno, la difesa ha una scelta…',
+          `Scelta difensiva: eliminato il corridore, ${b} salvo in prima.${t}`,
+        ];
+      }
+      // Il verdetto concorda col codice da segnapunti (stessa `inPlayOutShape`)
+      // e con gli avanzamenti reali dei corridori decisi dal motore. La FORMA è
+      // verità del motore; qui varia solo la resa testuale.
+      const shape = inPlayOutShape(ev);
+      const adv = info?.advanced;
+      const verdict =
+        shape === 'ground'
+          ? adv
+            ? pick(ev, [`Rimbalzo, out in prima… e i corridori avanzano.${t}`, `Out in prima, ma la corsa avanza.${t}`])
+            : fill(pickS(ev, OUT_FLAVOR.ground.verdict, 'ver'), b) + t
+          : shape === 'fly'
+            ? adv
+              ? pick(ev, [`Volata profonda catturata… il corridore guadagna una base.${t}`, `Presa profonda, tag-up riuscito.${t}`])
+              : fill(pickS(ev, OUT_FLAVOR.fly.verdict, 'ver'), b) + t
+            : fill(pickS(ev, OUT_FLAVOR.air.verdict, 'ver'), b) + t;
+      return [open, fill(pickS(ev, OUT_FLAVOR[shape].action, 'act'), b), verdict];
+    }
     case 'sub':
+      return [ev.text];
     case 'other':
       return [ev.text];
     default:

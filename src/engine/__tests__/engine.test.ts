@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { simulateGame } from '../game';
 import { batterRates, pitcherRates, combineRates } from '../probabilities';
 import { LEAGUE } from '../constants';
-import { generateMatchup } from '../../data/generator';
+import { generateMatchup, withRotationStarter } from '../../data/generator';
 import { formatIp } from '../boxscore';
 
 describe('probabilita', () => {
@@ -92,7 +92,10 @@ describe('realismo statistico (aggregato su molte partite)', () => {
 
     for (let s = 0; s < 200; s++) {
       const { away, home } = generateMatchup(s);
-      const g = simulateGame(away, home, s * 101 + 3);
+      // Come nella stagione reale: i partenti girano (createLiveGame usa rotation[0]).
+      // Senza, ogni partita sarebbe lanciata dall'asso (rotazione ordinata) e
+      // l'ambiente-punti crollerebbe sotto epoca.
+      const g = simulateGame(withRotationStarter(away, s), withRotationStarter(home, s), s * 101 + 3);
       games += 1;
       totalRuns += g.final.away + g.final.home;
       for (const stats of [g.awayStats, g.homeStats]) {
@@ -114,10 +117,11 @@ describe('realismo statistico (aggregato su molte partite)', () => {
 
     // Intervalli per l'epoca voluta: "alta offesa anni '90/2000".
     // Punti alti, medie alte, tanti fuoricampo — ma non fuori scala. Il tetto e'
-    // 6.2 (non 6.0): la maggiore dispersione del talento nel generatore alza di
-    // un soffio l'ambiente-punti (convessita' di ratingMult), restando in epoca.
+    // 6.4: pavimenti/stelle garantite (rose senza buchi) + partenti che ruotano
+    // (non l'asso ogni partita) + best-starts alzano di un soffio l'ambiente-punti,
+    // restando in epoca (convessita' di ratingMult).
     expect(runsPerTeamPerGame).toBeGreaterThan(4.3);
-    expect(runsPerTeamPerGame).toBeLessThan(6.2);
+    expect(runsPerTeamPerGame).toBeLessThan(6.4);
     expect(ba).toBeGreaterThan(0.255);
     expect(ba).toBeLessThan(0.295);
     expect(kRate).toBeGreaterThan(0.14);

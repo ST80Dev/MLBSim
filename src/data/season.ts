@@ -2,6 +2,9 @@ import type { Team } from '../engine/types';
 import type { GameResult, TeamGameStats } from '../engine/game';
 import { createLiveGame, quickSim, toGameResult } from '../engine/game';
 import { makeRng } from '../engine/rng';
+import { withRotationStarter } from './generator';
+import type { RotationState } from './rotation';
+import { createRotation, recordStart } from './rotation';
 
 // Stato di STAGIONE: il cuore del principio "gli anni gestiti dall'utente hanno
 // statistiche REALI, non derivate dai rating". Qui vivono:
@@ -71,10 +74,22 @@ export interface SeasonState {
   pit: Record<string, SeasonPit>;
   /** Esiti delle gare dell'utente, per giorno. */
   results: Record<number, DayResult>;
+  /** Rotazione della squadra gestita: uomini nel ciclo (4/5) + riposi. */
+  rotation: RotationState;
 }
 
 export function createSeason(year = 1): SeasonState {
-  return { year, day: 0, records: {}, bat: {}, pit: {}, results: {} };
+  return { year, day: 0, records: {}, bat: {}, pit: {}, results: {}, rotation: createRotation(5) };
+}
+
+/**
+ * Normalizza una stagione caricata da un save: garantisce lo stato `rotation`
+ * (i save precedenti alla feature riposo non ce l'hanno). Ritorna `createSeason`
+ * se assente.
+ */
+export function ensureSeason(s?: SeasonState): SeasonState {
+  if (!s) return createSeason();
+  return s.rotation ? s : { ...s, rotation: createRotation(5) };
 }
 
 const emptyBat = (): SeasonBat => ({
@@ -183,10 +198,20 @@ export function advanceWithResult(
     them: managedHome ? result.final.away : result.final.home,
   };
 
+  // Registra la partenza del partente della squadra gestita (il 1° lanciatore
+  // usato) per far scattare il suo riposo. Robusto ai vecchi save senza rotation.
+  const myPitching = (managedHome ? result.homeStats : result.awayStats).pitching;
+  const rot0 = season.rotation ?? createRotation(5);
+  next.rotation = myPitching.length ? recordStart(rot0, myPitching[0].id, season.day) : rot0;
+
   // Resto della lega: quick-sim per una classifica reale.
   const busy = new Set([result.home.id, result.away.id]);
   for (const [a, b] of otherPairings(teams, busy, seed, season.day)) {
-    const g = createLiveGame(a, b, (seed ^ Math.imul(season.day + 1, a.id.length + 7)) >>> 0);
+    // Ruota il partente col giorno: senza, ogni squadra lancerebbe l'asso ogni
+    // partita (rotazione ordinata). Così i 5 SP girano lungo la stagione.
+    const aS = withRotationStarter(a, season.day);
+    const bS = withRotationStarter(b, season.day);
+    const g = createLiveGame(aS, bS, (seed ^ Math.imul(season.day + 1, a.id.length + 7)) >>> 0);
     quickSim(g);
     const r = toGameResult(g);
     const wId = r.winner === 'home' ? b.id : a.id;

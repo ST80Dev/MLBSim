@@ -3,19 +3,21 @@ import type { Team } from '../engine/types';
 // ---------------------------------------------------------------------------
 // Modalita' di lega e politica del salary cap.
 //
-// Decisione di design (vedi docs/franchise.md § Modalita' e squilibrio):
-//   - Lega GENERATA: talento ~gaussiano centrato su 50, squadre di forza simile.
-//     Ha senso un cap RIGIDO (la sandbox gestionale: parita' di partenza).
+// Decisione di design (vedi docs/franchise.md § Salary cap):
+//   - Lega GENERATA: talento ~gaussiano centrato su 70, con offset di squadra
+//     (`teamTalent`). Cap a DUE CONFINI: un cap BASE "soft" (la norma) piu' un
+//     margine di sforamento; non piu' un cap rigido unico (appiattirebbe la lega
+//     negli anni). Il monte-ingaggi MEDIO e' sotto il base per calibrazione, ma
+//     lo spread lascia sempre qualche squadra in "fascia tassa".
 //   - Import STORICO: le rose reali NON sono bilanciate (le vincenti hanno
-//     giocatori migliori). E' la verita' dello snapshot e va abbracciata, non
-//     ri-bilanciata. Il cap qui e' MORBIDO (o disattivato): forzarlo falserebbe
-//     la stagione reale.
+//     giocatori migliori). E' la verita' dello snapshot e va abbracciata: cap
+//     MORBIDO (o off), forzarlo falserebbe la stagione reale.
 //
-// Questa e' la FONDAZIONE minima (tipi + utilita' sul monte-ingaggi); l'enforce
-// vero e proprio (scambi/rinnovi che rispettano il cap) arriva col layer
-// gestionale di Fase 2. `salaryFromOverall` gia' scala lo stipendio col talento,
-// quindi una corazzata storica implica un monte-ingaggi alto: col cap morbido e'
-// lecito, col cap rigido sarebbe fuori norma.
+// Questa e' la FONDAZIONE (tipi + utilita' sul monte-ingaggi + zone di cap per
+// l'indicatore informativo). L'ENFORCE vero (riconciliazione al rollover via
+// pool, margine ε per-squadra-per-anno, scambi/rinnovi) e' del layer di Fase 4/5.
+// `salaryFor` scala lo stipendio con overall+eta', calibrato perche' il payroll
+// medio stia sotto il cap base.
 // ---------------------------------------------------------------------------
 
 export type LeagueSource = 'generated' | 'historical';
@@ -39,13 +41,33 @@ export interface LeagueMode {
   cap: SalaryCapPolicy;
 }
 
-/** Tetto di riferimento dell'epoca "alta offesa anni '90/2000" (milioni). */
-export const DEFAULT_CAP_AMOUNT = 120;
+/**
+ * Cap BASE di riferimento (milioni), CALIBRATO sulla curva stipendi di
+ * `ratings.ts` (scala "MLB", stelle fino a ~45M): il payroll medio di lega
+ * (~193M) sta sotto (~77% del cap), cosi' esiste spazio aggregato per la
+ * redistribuzione (vedi docs/franchise.md § C'e' spazio aggregato). ~6
+ * squadre/lega partono sopra il base (fascia tassa) e ~2-3 oltre il muro esterno
+ * (le corazzate, riassorbite gradualmente al rollover). Ritararlo con lo script
+ * di probe se si tocca `salaryFromOverall`/`youthFactor`.
+ */
+export const DEFAULT_CAP_AMOUNT = 250;
 
-/** Lega generata: forze bilanciate, cap RIGIDO. */
+/**
+ * Frazione di sforamento del cap base che definisce il MURO ESTERNO rigido
+ * (`base × (1 + OVERAGE)`): il tetto assoluto che, a regime, nessuna squadra
+ * supera. Il margine ε per-squadra-per-anno (Fase 4/5) vive DENTRO questa banda.
+ */
+export const CAP_OVERAGE = 0.25;
+
+/** Muro esterno rigido (milioni) dal cap base. */
+export function outerWall(base = DEFAULT_CAP_AMOUNT): number {
+  return Math.round(base * (1 + CAP_OVERAGE) * 10) / 10;
+}
+
+/** Lega generata: cap BASE soft (norma) + muro esterno; sandbox a parita' morbida. */
 export const GENERATED_MODE: LeagueMode = {
   source: 'generated',
-  cap: { mode: 'hard', amount: DEFAULT_CAP_AMOUNT },
+  cap: { mode: 'soft', amount: DEFAULT_CAP_AMOUNT },
 };
 
 /** Import storico: squilibrio reale, cap MORBIDO (sforabile). */
@@ -85,4 +107,21 @@ export function capReport(team: Team, mode: LeagueMode): CapReport {
   const over = capMode === 'off' ? 0 : Math.max(0, Math.round((payroll - amount) * 10) / 10);
   const allowed = capMode !== 'hard' || over === 0;
   return { payroll, amount, mode: capMode, over, allowed };
+}
+
+/**
+ * Zona di cap per l'INDICATORE informativo (modello a due confini):
+ *   - `under` : payroll ≤ cap base (sotto la norma);
+ *   - `tax`   : tra cap base e muro esterno (fascia tassa, sforamento tollerato);
+ *   - `over`  : oltre il muro esterno (a regime lo si rientra al rollover; puo'
+ *               capitare come condizione di PARTENZA di una corazzata generata).
+ * Con cap `off` la zona e' sempre `under`.
+ */
+export type CapZone = 'under' | 'tax' | 'over';
+
+export function capZone(payroll: number, mode: LeagueMode): CapZone {
+  if (mode.cap.mode === 'off') return 'under';
+  const base = mode.cap.amount;
+  if (payroll <= base) return 'under';
+  return payroll <= outerWall(base) ? 'tax' : 'over';
 }

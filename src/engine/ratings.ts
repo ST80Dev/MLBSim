@@ -32,20 +32,32 @@ export function ratingMult(rating: number, perSigma: number): number {
 
 const round = Math.round;
 
+// Fattore che riporta la base-AB alla base-PA per il giocatore MEDIO: con
+// occhio 70, ab = pa·(1 − bb − hbp), quindi ab·AB_SCALE = pa. Mantiene la media
+// di lega invariata quando gli esiti da AB si scalano sugli AB invece che sulle PA.
+export const AB_SCALE = 1 / (1 - LEAGUE.bb - LEAGUE.hbp);
+
 /**
  * Deriva le statistiche di conteggio di un battitore dalle sue caratteristiche.
  * A tutte le doti = RATING_AVG si ottengono le medie di lega (BA ~.256, OBP ~.325).
  */
 export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
-  const so = round(pa * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
+  // BB e HBP consumano una PA che NON e' un AB. Gli esiti da AB (SO e battute
+  // valide) vanno quindi scalati sugli AB, non sulle PA: chi cammina di piu' ha
+  // MENO AB e quindi meno hit — cosi' non si possono avere BB alte E hit alte
+  // insieme (il controsenso "in base al 49% delle PA"). `AB_SCALE` riporta il
+  // giocatore MEDIO (occhio 70) esattamente a `pa` esiti da AB → media di lega
+  // NEUTRA; deviano solo i pazienti/impazienti, che e' l'effetto voluto.
   const bb = round(pa * LEAGUE.bb * ratingMult(r.eye, 1.32));
   const hbp = round(pa * LEAGUE.hbp);
-  const hr = round(pa * LEAGUE.hr * ratingMult(r.power, 1.42));
-  const triple = round(pa * LEAGUE.triple * ratingMult(r.speed, 1.82) * ratingMult(r.power, 0.9));
-  const double = round(pa * LEAGUE.double * ratingMult(r.power, 1.2) * ratingMult(r.contact, 1.05));
-  let single = round(pa * LEAGUE.single * ratingMult(r.contact, 1.1));
-
   const ab = Math.max(1, pa - bb - hbp);
+  const abBase = ab * AB_SCALE;
+
+  const so = round(abBase * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
+  const hr = round(abBase * LEAGUE.hr * ratingMult(r.power, 1.42));
+  const triple = round(abBase * LEAGUE.triple * ratingMult(r.speed, 1.82) * ratingMult(r.power, 0.9));
+  const double = round(abBase * LEAGUE.double * ratingMult(r.power, 1.2) * ratingMult(r.contact, 1.05));
+  let single = round(abBase * LEAGUE.single * ratingMult(r.contact, 1.1));
   let h = single + double + triple + hr;
   if (h > ab) {
     single = Math.max(0, single - (h - ab));
@@ -127,9 +139,41 @@ export function projectPotential(rng: Rng, overall: number, age: number): number
   return clampRating(overall + Math.max(0, boost));
 }
 
-/** Stipendio annuale (milioni) da un overall 40-100. */
+/**
+ * Curva BASE dello stipendio annuale (milioni) dall'overall 40-100.
+ *
+ * CALIBRAZIONE (vedi docs/franchise.md § Salary cap): l'ESPONENTE e' piu' dolce
+ * della prima versione (1.085 invece di 1.13), cosi' lo spread del monte-ingaggi
+ * fra squadre passa da ~10x a ~4-5x e il payroll MEDIO cade sotto il cap base
+ * (prima era ~2x il cap: il tetto non vincolava nulla). Coefficiente e tetto
+ * (0.5..45) tengono la scala "MLB": media di lega ~4M, stelle fino a 45M. La
+ * forma resta esponenziale (le stelle costano molto piu' della media). Non
+ * toccare senza rimisurare col probe.
+ */
 export function salaryFromOverall(ovr: number): number {
   // Riferimento "replacement level" = 10 punti sotto la media di lega.
-  const s = 0.7 * Math.pow(1.13, ovr - (RATING_AVG - 10));
+  const s = 1.75 * Math.pow(1.085, ovr - (RATING_AVG - 10));
   return Math.round(clamp(s, 0.5, 45) * 10) / 10;
+}
+
+/**
+ * Sconto gioventu' (modello "B-lite", vedi docs/franchise.md § Stipendi): un
+ * moltiplicatore funzione della SOLA eta', stateless — nessun contratto/arbitrato.
+ * Sale da ~0.4 a 21 anni a 1.0 a ~27 (poi 1.0). Rende il neo-draftato un asset a
+ * buon mercato che si apprezza mentre matura.
+ */
+export function youthFactor(age: number): number {
+  if (age >= 27) return 1;
+  if (age <= 21) return 0.4;
+  return 0.4 + ((age - 21) / 6) * 0.6;
+}
+
+/**
+ * Stipendio EFFETTIVO (milioni) = curva base × sconto gioventu'. E' la funzione
+ * usata ovunque (generatore, import storico, aging). Pavimento a 0.5 (minimo di
+ * lega): lo sconto non scende mai sotto il minimo.
+ */
+export function salaryFor(overall: number, age: number): number {
+  const s = salaryFromOverall(overall) * youthFactor(age);
+  return Math.round(Math.max(0.5, s) * 10) / 10;
 }

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import type { Team, Position } from '../engine/types';
 import { stadiumImage, assetUrl } from '../data/stadiumImages';
+import { ratingColor } from './format';
 import { DEFAULT_CALIBRATION } from '../data/stadiumCalibration';
 import type { FieldCalibration } from '../data/stadiumCalibration';
 
@@ -81,50 +82,81 @@ function proj(p: Pt, cal: FieldCalibration): Pt {
   return { x, y };
 }
 
+// Cognome in MAIUSCOLO per le etichette sul campo (riconoscibilità a colpo d'occhio).
 function lastNameOf(name: string): string {
   const i = name.indexOf(' ');
-  return i < 0 ? name : name.slice(i + 1);
+  return (i < 0 ? name : name.slice(i + 1)).toUpperCase();
 }
 
 /** Etichetta col solo nome (senza ruolo), per corridori in base e battitore.
- *  Sta SOTTO il marker (convenzione anti-sovrapposizione) e lo segue nel drag. */
+ *  Sta SOTTO il marker (convenzione anti-sovrapposizione) e lo segue nel drag.
+ *  Se `speed` è definito, accanto al nome compare una card VEL colorata (sfondo
+ *  = colore-rating, numero bianco), per capire a colpo d'occhio il corridore. */
 function NameChip({
   x,
   y,
   name,
   color,
+  speed,
 }: {
   x: number;
   y: number;
   name: string;
   color: string;
+  speed?: number;
 }) {
   const label = lastNameOf(name);
-  const w = Math.max(32, label.length * 6.4 + 12);
-  const lx = Math.min(VB.w - 8 - w / 2, Math.max(8 + w / 2, x));
+  const nameW = Math.max(32, label.length * 6.4 + 12);
+  const badgeW = 20;
+  const gap = 3;
+  const hasSpeed = speed != null;
+  const totalW = nameW + (hasSpeed ? gap + badgeW : 0);
+  const cx = Math.min(VB.w - 8 - totalW / 2, Math.max(8 + totalW / 2, x));
+  const left = cx - totalW / 2;
+  const nameCx = left + nameW / 2;
+  const badgeCx = left + nameW + gap + badgeW / 2;
   return (
-    <g transform={`translate(${lx}, ${y})`}>
-      <rect
-        x={-w / 2}
-        y={0}
-        width={w}
-        height={16}
-        rx={5}
-        fill="rgba(6,12,24,0.82)"
-        stroke={color}
-        strokeWidth={1.1}
-      />
-      <text
-        x={0}
-        y={11.5}
-        textAnchor="middle"
-        fontSize={10.5}
-        fontWeight={700}
-        fill="#eaf1ff"
-        fontFamily="system-ui, sans-serif"
-      >
-        {label}
-      </text>
+    <g>
+      {hasSpeed && <title>{`VEL ${speed}`}</title>}
+      <g transform={`translate(${nameCx}, ${y})`}>
+        <rect
+          x={-nameW / 2}
+          y={0}
+          width={nameW}
+          height={16}
+          rx={5}
+          fill="rgba(6,12,24,0.82)"
+          stroke={color}
+          strokeWidth={1.1}
+        />
+        <text
+          x={0}
+          y={11.5}
+          textAnchor="middle"
+          fontSize={10.5}
+          fontWeight={700}
+          fill="#eaf1ff"
+          fontFamily="system-ui, sans-serif"
+        >
+          {label}
+        </text>
+      </g>
+      {hasSpeed && (
+        <g transform={`translate(${badgeCx}, ${y})`}>
+          <rect x={-badgeW / 2} y={0} width={badgeW} height={16} rx={4} fill={ratingColor(speed)} />
+          <text
+            x={0}
+            y={11.5}
+            textAnchor="middle"
+            fontSize={10}
+            fontWeight={800}
+            fill="#fff"
+            fontFamily="system-ui, sans-serif"
+          >
+            {speed}
+          </text>
+        </g>
+      )}
     </g>
   );
 }
@@ -195,7 +227,10 @@ export function Diamond({
   background,
   bases,
   runners,
+  runnerSpeeds,
   batterName,
+  defenseTeam,
+  pitcherName,
   cal = DEFAULT_CALIBRATION,
   editable,
   onMarkerMove,
@@ -208,12 +243,23 @@ export function Diamond({
    *  In calibrazione (editable) le etichette si mostrano comunque, per poterle
    *  posizionare; in partita solo sulle basi occupate. */
   runners?: (string | null)[];
+  /** Velocità (VEL, 40-100) dei corridori in base, allineata a `runners`: se
+   *  presente, il marker mostra la card-dote colorata accanto al nome. */
+  runnerSpeeds?: (number | null)[];
   /** Nome del battitore a casa base (etichetta accanto al marker battitore). */
   batterName?: string | null;
+  /** Squadra attualmente IN DIFESA: i difensori sul campo sono i SUOI giocatori.
+   *  Cambia a ogni mezzo inning; se assente si ripiega sulla squadra di casa. */
+  defenseTeam?: Team;
+  /** Nome del lanciatore ATTUALMENTE sul monte (non il partente di rotazione). */
+  pitcherName?: string;
   cal?: FieldCalibration;
   editable?: boolean;
   onMarkerMove?: (id: string, pos: { x: number; y: number }) => void;
 }) {
+  // I difensori disegnati sono quelli della squadra in difesa (che si alterna),
+  // NON per forza la squadra di casa proprietaria dello stadio.
+  const fielders = defenseTeam ?? home;
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
   // Foto scelta in calibrazione (variante) oppure la principale dello stadio.
@@ -349,6 +395,7 @@ export function Diamond({
         const on = !!bases && bases[i];
         const s = on ? 8 : 5;
         const rname = runners?.[i] ?? null;
+        const rspeed = runnerSpeeds?.[i] ?? null;
         // Etichetta corridore: in calibrazione sempre (per posizionarla), in
         // partita solo se la base è occupata e conosciamo il nome.
         const showRunner = editable || (on && !!rname);
@@ -372,7 +419,15 @@ export function Diamond({
                 {lab}
               </text>
             )}
-            {showRunner && <NameChip x={b.x} y={b.y + 12} name={rname ?? 'Corridore'} color="#ffd15c" />}
+            {showRunner && (
+              <NameChip
+                x={b.x}
+                y={b.y + 12}
+                name={rname ?? 'Corridore'}
+                color="#ffd15c"
+                speed={rspeed ?? undefined}
+              />
+            )}
           </>,
         );
       })}
@@ -413,7 +468,7 @@ export function Diamond({
             x={p.x}
             y={p.y}
             pos={pos}
-            name={playerAt(home, pos)}
+            name={pos === 'P' && pitcherName ? pitcherName : playerAt(fielders, pos)}
             below={pos === 'P' || pos === 'C'}
           />,
         );

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useReducer, useRef, useState, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import type { Batter, Pitcher, Position, Team } from '../engine/types';
 import type { GameResult, TeamGameStats, PlayEvent } from '../engine/game';
@@ -13,13 +14,17 @@ import {
   intentionalWalk,
   changePitcher,
   defenseSide,
+  offenseSide,
+  availableRelievers,
+  substituteFielder,
+  pinchRun,
   autoManageDefense,
   quickSim,
   hitAndRun,
   pinchHit,
   setInfieldIn,
 } from '../engine/game';
-import { batterOverall, pitcherOverall, RATING_MIN, RATING_AVG } from '../engine/ratings';
+import { batterOverall, pitcherOverall, RATING_AVG } from '../engine/ratings';
 import { disambiguateLastNames } from '../engine/names';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import { teamSynthesis, staffSynthesis } from '../engine/teamRatings';
@@ -34,7 +39,17 @@ import {
 } from '../engine/arrangement';
 import { saveStore } from '../data/persistence';
 import type { MatchArrangement } from '../data/persistence';
-import { formatIp } from '../engine/boxscore';
+import {
+  teamPayroll,
+  capZone,
+  outerWall,
+  GENERATED_MODE,
+  HISTORICAL_MODE,
+} from '../data/leagueMode';
+import type { LeagueMode, LeagueSource, CapZone } from '../data/leagueMode';
+import { teamStrength } from '../engine/strength';
+import type { TeamStrength } from '../engine/strength';
+import { formatIp, estimatedPitches } from '../engine/boxscore';
 import {
   generateLeague,
   teamById,
@@ -47,6 +62,7 @@ import { generateSchedule } from '../data/schedule';
 import type { ScheduleGame, Schedule } from '../data/schedule';
 import {
   createSeason,
+  ensureSeason,
   advanceWithResult,
   recordOf,
   winPct,
@@ -55,7 +71,10 @@ import {
   addBat,
   addPit,
 } from '../data/season';
-import type { SeasonState, SeasonBat, SeasonPit } from '../data/season';
+import type { SeasonState, SeasonBat, SeasonPit, WLRecord } from '../data/season';
+import { suggestedStarter, withStarterId, setSize, starterOptions } from '../data/rotation';
+import type { RotationSize } from '../data/rotation';
+import { withRotationStarter, potentialRole } from '../data/generator';
 import { projectBatterSeason, projectPitcherSeason, SEASON_GAMES } from '../data/projection';
 import type { BatTier } from '../data/projection';
 import { stadiumImage, stadiumImageCandidates, assetUrl } from '../data/stadiumImages';
@@ -69,7 +88,7 @@ import {
   CALIBRATION_LABEL,
 } from '../data/stadiumCalibration';
 import type { FieldCalibration, NumericCalKey } from '../data/stadiumCalibration';
-import { gameSeed, newRandomSeed, ratingColor, stars } from './format';
+import { gameSeed, newRandomSeed, ratingColor, upperLast } from './format';
 import { Diamond, computeMarkers } from './Diamond';
 import {
   batterStatLine,
@@ -80,11 +99,42 @@ import {
 import type { StatItem, StatsMode } from './statlines';
 import { buildCommentary, logLine, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
+import { scoreCode } from './scorecode';
 
-type View = 'home' | 'roster' | 'leaderboard' | 'standings' | 'franchise' | 'calibrate' | 'game';
+type View =
+  | 'home'
+  | 'roster'
+  | 'overview'
+  | 'leaderboard'
+  | 'standings'
+  | 'franchise'
+  | 'calibrate'
+  | 'game';
 
-/** Slot di salvataggio unico della Fase 2 (single-player, una carriera). */
-const SAVE_SLOT = 'principale';
+// Nota: le prime build usavano un unico slot 'principale'; quei salvataggi
+// compaiono comunque nell'hub via `saveStore.list()` (retro-compatibili). Le
+// nuove carriere usano slot dedicati (`newSlotId`).
+
+/** Id di slot unico per una nuova carriera. */
+function newSlotId(): string {
+  return `save-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/**
+ * Una partita salvata, arricchita per l'hub di caricamento: metadati dello slot +
+ * dati derivati (squadra gestita, anno, giornata, record) letti dal payload.
+ */
+interface SavedGame {
+  slot: string;
+  updatedAt: string;
+  source: LeagueSource;
+  seed?: number;
+  managedTeamId?: string;
+  team?: Team;
+  year: number;
+  day: number;
+  record: WLRecord;
+}
 
 /**
  * Applica un foglio partita alla squadra gestita ricostruendo lineup, difesa,
@@ -95,6 +145,69 @@ function applyArrangement(team: Team, arr?: MatchArrangement): Team {
   return arr ? buildManagedTeam(team, arr) : team;
 }
 type Side = 'away' | 'home';
+
+// ---------------------------------------------------------------------------
+// Mini-popup giocatore (Fase 3): scheda compatta apribile da OVUNQUE compaia un
+// nome (roster, partita, leaderboard, home). Per non passare callback attraverso
+// tutta la gerarchia, un Context espone `openPlayer`; App monta il modale una
+// volta sola con `season`/`seed` correnti. Solo UI: non tocca il motore.
+// ---------------------------------------------------------------------------
+
+interface PlayerModalRequest {
+  player: Batter | Pitcher;
+  /** Posizione difensiva "del momento" (fielder): usata per DIF alla posizione. */
+  pos?: Position;
+  /** Fascia di rosa per la proiezione "carriera/storico" (battitore). */
+  tier?: BatTier;
+}
+
+/** True se il giocatore è un battitore (ha `bats`); i lanciatori hanno `throws`. */
+function isBatter(p: Batter | Pitcher): p is Batter {
+  return 'bats' in p;
+}
+
+const PlayerModalContext = createContext<(req: PlayerModalRequest) => void>(() => {});
+
+/** Nome cliccabile che apre il mini-popup giocatore. Uno `span` (non `draggable`)
+ *  così dentro le righe trascinabili del roster il drag continua a funzionare e
+ *  il click apre la scheda. */
+function PlayerLink({
+  player,
+  pos,
+  tier,
+  className,
+  children,
+}: {
+  player: Batter | Pitcher;
+  pos?: Position;
+  tier?: BatTier;
+  className?: string;
+  children: ReactNode;
+}) {
+  const open = useContext(PlayerModalContext);
+  const fire = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    open({ player, pos, tier });
+  };
+  return (
+    <span
+      className={`player-link${className ? ` ${className}` : ''}`}
+      role="button"
+      tabIndex={0}
+      title="Apri scheda giocatore"
+      onClick={fire}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fire(e);
+        }
+      }}
+    >
+      {/* Cognome in MAIUSCOLO quando il contenuto è un nome (stringa). */}
+      {typeof children === 'string' ? upperLast(children) : children}
+    </span>
+  );
+}
 
 /**
  * Calibrazione dello stadio di casa per una gara: sceglie (deterministico per
@@ -114,6 +227,22 @@ function pickMatchCalibration(
   return getCalibrationFor(homeId, pick.image);
 }
 
+// Istantanea dei soli marker sul diamante (basi + corridori + battitore),
+// mostrata con ritardo rispetto allo stato reale finché la telecronaca del
+// turno non arriva al verdetto. Vedi `shownField` in App.
+type FieldSnap = {
+  bases: [boolean, boolean, boolean];
+  baseRunners: [string | null, string | null, string | null];
+  baseRunnerSpeeds: [number | null, number | null, number | null];
+  batterName: string | null;
+};
+const fieldSnap = (s: LiveSituation): FieldSnap => ({
+  bases: s.bases,
+  baseRunners: s.baseRunners,
+  baseRunnerSpeeds: s.baseRunnerSpeeds,
+  batterName: s.batter?.name ?? null,
+});
+
 export function App() {
   const [leagueSeed, setLeagueSeed] = useState<number>(() => newRandomSeed());
   const [managedId, setManagedId] = useState<string>('');
@@ -132,6 +261,25 @@ export function App() {
   // Stato di stagione: giorno corrente, record di lega reali, statistiche reali
   // accumulate dalle partite giocate. Idratato dal salvataggio all'avvio.
   const [season, setSeason] = useState<SeasonState>(() => createSeason());
+  // Sorgente della lega (generata/storica) → politica di cap. Persistita nel save.
+  const [source, setSource] = useState<LeagueSource>('generated');
+  // Fase del flusso d'ingresso: schermata iniziale → panoramica lega/scelta
+  // squadra → gioco (dashboard). Sotto 'play' vive la navigazione `view`.
+  const [stage, setStage] = useState<'start' | 'league' | 'play'>('start');
+  // Idratazione conclusa? Evita di lampeggiare la schermata iniziale prima di
+  // aver elencato i salvataggi.
+  const [booted, setBooted] = useState(false);
+  // Elenco delle partite salvate (multi-slot), per l'hub di caricamento.
+  const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
+  // Slot del salvataggio ATTIVO: ogni nuova carriera ne crea uno dedicato, così
+  // più partite coesistono invece di sovrascrivere un'unica cache.
+  const [currentSlot, setCurrentSlot] = useState<string>('');
+  // Mini-popup giocatore: aperto da qualsiasi nome cliccabile via Context.
+  const [playerModal, setPlayerModal] = useState<PlayerModalRequest | null>(null);
+  const openPlayer = useCallback((req: PlayerModalRequest) => setPlayerModal(req), []);
+
+  // Politica di cap derivata dalla sorgente (vedi leagueMode.ts).
+  const leagueMode: LeagueMode = source === 'historical' ? HISTORICAL_MODE : GENERATED_MODE;
 
   // La lega (30 squadre) e' generata da un seed unico: calendario, classifiche e
   // leaderboard leggono tutti QUESTA stessa lega. La squadra gestita e' una
@@ -149,31 +297,87 @@ export function App() {
   // La squadra gestita gioca in casa/trasferta secondo il calendario.
   const controlled: Side = activeGame && activeGame.home === false ? 'away' : 'home';
   const arrangement = arrangements[myId];
+  // Partente scelto per OGGI dalla UI (override); null = usa il consigliato dal
+  // ciclo di rotazione (rispetta il riposo). Si azzera al cambio gara/giorno.
+  const [todayStarter, setTodayStarter] = useState<string | null>(null);
+  const isRegularGame = !activeGame || activeGame.phase === 'regular';
   const teams = useMemo(() => {
-    const applied = applyArrangement(managedTeam, arrangement);
+    const base = applyArrangement(managedTeam, arrangement);
+    // In regular season la rotazione GIRA col riposo: partente = scelta di oggi
+    // o il consigliato dal ciclo. Prestagione/playoff: parte l'asso (rotation[0]).
+    const rotIds = base.rotation.map((p) => p.id);
+    const starterId = isRegularGame
+      ? todayStarter ?? suggestedStarter(season.rotation, rotIds, season.day)
+      : base.rotation[0]?.id;
+    const applied = starterId ? withStarterId(base, starterId) : base;
+    // L'avversario ruota anch'esso il partente (come il resto della lega).
+    const oppDay = isRegularGame ? season.day : activeGame?.day ?? 0;
+    const opp = withRotationStarter(opponent, oppDay);
     return controlled === 'home'
-      ? { away: opponent, home: applied }
-      : { away: applied, home: opponent };
-  }, [managedTeam, opponent, controlled, arrangement]);
+      ? { away: opp, home: applied }
+      : { away: applied, home: opp };
+  }, [managedTeam, opponent, controlled, arrangement, isRegularGame, todayStarter, season.rotation, season.day, activeGame]);
 
-  // Idrata squadra gestita e assetti salvati (una volta).
+  // Ricarica l'elenco delle partite salvate (multi-slot), arricchendo ogni slot
+  // con squadra/anno/giornata/record letti dal payload per l'hub di caricamento.
+  const refreshSaves = useCallback(async (): Promise<void> => {
+    try {
+      const metas = await saveStore.list();
+      const games = await Promise.all(
+        metas.map(async (m) => {
+          const rec = await saveStore.load(m.slot).catch(() => null);
+          const managedTeamId = rec?.payload.managedTeamId;
+          if (!rec || !managedTeamId) return null;
+          const pl = rec.payload;
+          const seas = ensureSeason(pl.season);
+          const team =
+            typeof pl.seed === 'number'
+              ? teamById(generateLeague(pl.seed), managedTeamId)
+              : undefined;
+          return {
+            slot: m.slot,
+            updatedAt: m.updatedAt,
+            source: pl.source ?? 'generated',
+            seed: pl.seed,
+            managedTeamId,
+            team,
+            year: seas.year,
+            day: seas.day,
+            record: recordOf(seas, managedTeamId),
+          } as SavedGame;
+        }),
+      );
+      setSavedGames(games.filter((g): g is SavedGame => g !== null));
+    } catch {
+      setSavedGames([]);
+    }
+  }, []);
+
+  // Elenca i salvataggi per l'hub (una volta). NON riprende in automatico: si
+  // parte SEMPRE dal pannello iniziale, dove si sceglie carica/nuova partita.
   useEffect(() => {
     let alive = true;
-    saveStore
-      .load(SAVE_SLOT)
-      .then((rec) => {
-        if (!alive || !rec) return;
-        if (rec.payload.managedTeamId) setManagedId(rec.payload.managedTeamId);
-        if (rec.payload.lineups) setArrangements(rec.payload.lineups);
-        if (rec.payload.season) setSeason(rec.payload.season);
-      })
-      .catch(() => {
-        /* offline o slot assente: si parte dai default. */
-      });
+    refreshSaves().finally(() => {
+      if (alive) setBooted(true);
+    });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [refreshSaves]);
+
+  // Il partente scelto vale per un solo giorno/gara: azzera al cambiare.
+  useEffect(() => {
+    setTodayStarter(null);
+  }, [season.day, activeGame]);
+
+  // Cambia il numero di uomini della rotazione (4/5) e persiste.
+  const changeRotationSize = (size: RotationSize) => {
+    setSeason((s) => {
+      const ns = { ...s, rotation: setSize(s.rotation, size) };
+      persist(arrangements, ns);
+      return ns;
+    });
+  };
 
   // Seme di gara deterministico dalla partita di calendario scelta.
   const gnum = activeGame
@@ -208,6 +412,41 @@ export function App() {
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
+
+  // --- Rivelazione ritardata dei marker sulle basi -------------------------
+  // I marker (basi + corridori sul diamante) NON si spostano appena eseguito il
+  // turno: aspettano il VERDETTO della telecronaca di quel turno (PlayBanner),
+  // così non si vede il corridore già in base prima di averne letto l'esito in
+  // cronaca. Fuori dalla telecronaca (ripresa partita, quick-sim, cambio) si
+  // aggiornano subito. `live` cambia identità solo quando si ricrea la partita,
+  // non a ogni turno: l'effetto qui sotto riazzera i marker a inizio gara.
+  const [shownField, setShownField] = useState<FieldSnap>(() => fieldSnap(sit));
+  // Quante giocate sono già "lette": le cronache laterali NON anticipano l'esito
+  // scritto al centro (PlayBanner), che resta la prima fonte del turno. Cresce
+  // solo al verdetto della telecronaca, in sync coi marker sul diamante.
+  const [shownPlays, setShownPlays] = useState<number>(() => result.play.length);
+  // Anche lo SCOREBOARD in alto (punteggi, linescore, inning/out, giocatore
+  // coinvolto) non anticipa l'esito: aggiorna solo al verdetto della telecronaca,
+  // con la stessa istantanea di `result`/`sit` usata dal resto della plancia.
+  const [shownScore, setShownScore] = useState<{ result: GameResult; sit: LiveSituation }>(() => ({
+    result,
+    sit,
+  }));
+  useEffect(() => {
+    const s = situation(live);
+    const r = toGameResult(live);
+    setShownField(fieldSnap(s));
+    setShownPlays(r.play.length);
+    setShownScore({ result: r, sit: s });
+  }, [live]);
+  // Passata al PlayBanner: chiamata al verdetto (o subito se non c'è cronaca).
+  const revealField = useCallback(() => {
+    const s = situation(live);
+    const r = toGameResult(live);
+    setShownField(fieldSnap(s));
+    setShownPlays(r.play.length);
+    setShownScore({ result: r, sit: s });
+  }, [live]);
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
   const inLiveGame = view === 'game' && !!activeGame && !final;
@@ -243,18 +482,73 @@ export function App() {
     !!activeGame && activeGame.phase === 'regular' && activeGame.id === currentRegular?.id;
 
   const persist = (arrs: Record<string, MatchArrangement>, seas: SeasonState) => {
+    if (!currentSlot) return; // nessuno slot attivo: niente da salvare
     saveStore
-      .save(SAVE_SLOT, { managedTeamId: myId, lineups: arrs, season: seas })
+      .save(currentSlot, { seed: leagueSeed, source, managedTeamId: myId, lineups: arrs, season: seas })
       .catch(() => {
         /* offline: si continua, si risalvera' piu' tardi. */
       });
   };
 
-  const newLeague = () => {
+  // Dall'hub: avvia una NUOVA carriera con la sorgente scelta e vai alla
+  // panoramica per scegliere la squadra da gestire.
+  const startNewLeague = (src: LeagueSource) => {
+    setSource(src);
     setLeagueSeed(newRandomSeed());
     setManagedId('');
+    setArrangements({});
     setActiveGame(null);
     setSeason(createSeason());
+    setCurrentSlot(''); // lo slot nasce alla conferma della squadra
+    setStage('league');
+  };
+
+  // Dalla panoramica: conferma la squadra gestita, CREA un nuovo slot dedicato,
+  // salva e passa alla dashboard. Così più carriere coesistono.
+  const pickManagedTeam = (id: string) => {
+    const slot = newSlotId();
+    setCurrentSlot(slot);
+    setManagedId(id);
+    setActiveGame(null);
+    setStage('play');
+    setView('home');
+    saveStore
+      .save(slot, { seed: leagueSeed, source, managedTeamId: id, lineups: arrangements, season })
+      .then(() => refreshSaves())
+      .catch(() => {
+        /* offline: si continua. */
+      });
+  };
+
+  // Dall'hub: carica una partita salvata e riprendi dalla dashboard.
+  const loadSave = async (game: SavedGame) => {
+    try {
+      const rec = await saveStore.load(game.slot);
+      if (!rec) return;
+      const pl = rec.payload;
+      if (typeof pl.seed === 'number') setLeagueSeed(pl.seed);
+      setSource(pl.source ?? 'generated');
+      setArrangements(pl.lineups ?? {});
+      setSeason(ensureSeason(pl.season));
+      setManagedId(pl.managedTeamId ?? '');
+      setCurrentSlot(game.slot);
+      setActiveGame(null);
+      setView('home');
+      setStage('play');
+    } catch {
+      /* offline o slot sparito: resta nell'hub. */
+    }
+  };
+
+  // Dall'hub: elimina una partita salvata.
+  const deleteSave = async (slot: string) => {
+    try {
+      await saveStore.remove(slot);
+    } catch {
+      /* offline: ignora */
+    }
+    if (slot === currentSlot) setCurrentSlot('');
+    await refreshSaves();
   };
 
   // Dal calendario: scegli la gara. "Gioca" apre la preparazione (Roster), da
@@ -282,10 +576,51 @@ export function App() {
   const saveManaged = async (arr: MatchArrangement) => {
     const next = { ...arrangements, [myId]: arr };
     setArrangements(next);
-    await saveStore.save(SAVE_SLOT, { managedTeamId: myId, lineups: next, season });
+    const slot = currentSlot || newSlotId();
+    if (!currentSlot) setCurrentSlot(slot);
+    await saveStore.save(slot, {
+      seed: leagueSeed,
+      source,
+      managedTeamId: myId,
+      lineups: next,
+      season,
+    });
   };
 
+  // --- Flusso d'ingresso: prima della dashboard ---
+  if (!booted) {
+    return (
+      <div className="app boot-splash">
+        <div className="splash-logo">⚾ MLBSim</div>
+        <div className="muted">Caricamento…</div>
+      </div>
+    );
+  }
+  if (stage === 'start') {
+    return (
+      <StartScreen
+        savedGames={savedGames}
+        onLoad={loadSave}
+        onDelete={deleteSave}
+        onNewGenerated={() => startNewLeague('generated')}
+        onNewHistorical={() => startNewLeague('historical')}
+      />
+    );
+  }
+  if (stage === 'league') {
+    return (
+      <LeagueOverview
+        league={league}
+        seed={leagueSeed}
+        mode={leagueMode}
+        onPick={pickManagedTeam}
+        onBack={() => setStage('start')}
+      />
+    );
+  }
+
   return (
+    <PlayerModalContext.Provider value={openPlayer}>
     <div className={immersive ? 'app app-game' : 'app'}>
       {immersive && backdropUrl && (
         <div
@@ -310,6 +645,7 @@ export function App() {
             [
               ['home', 'Home'],
               ['roster', 'Roster'],
+              ['overview', 'Lega'],
               ['leaderboard', 'Leaderboard'],
               ['standings', 'Classifiche'],
               ['franchise', 'Franchigia'],
@@ -380,13 +716,19 @@ export function App() {
         <GameScreen
           result={result}
           sit={sit}
+          displayResult={shownScore.result}
+          displaySit={shownScore.sit}
           statsMode={statsMode}
           setStatsMode={setStatsMode}
           editing={editing}
           cal={cal}
           onMarkerMove={moveMarker}
-          runners={sit.baseRunners}
-          batterName={sit.batter.name}
+          basesShown={shownField.bases}
+          runners={shownField.baseRunners}
+          runnerSpeeds={shownField.baseRunnerSpeeds}
+          batterName={shownField.batterName}
+          shownPlays={shownPlays}
+          onReveal={revealField}
           controls={
             final ? (
               <FinalOverlay
@@ -417,11 +759,8 @@ export function App() {
           schedule={schedule}
           season={season}
           onPlay={playGame}
-          onManagedChange={(id) => {
-            setManagedId(id);
-            setActiveGame(null);
-          }}
-          onNewLeague={newLeague}
+          onOverview={() => setView('overview')}
+          onNewLeague={() => setStage('start')}
         />
       )}
 
@@ -433,9 +772,26 @@ export function App() {
           initial={arrangement}
           activeGame={!!activeGame}
           season={season}
+          todayStarter={todayStarter}
+          onPickStarter={setTodayStarter}
+          onRotationSize={changeRotationSize}
           onApply={applyManaged}
           onSave={saveManaged}
           onStart={() => setView('game')}
+        />
+      )}
+
+      {view === 'overview' && (
+        <LeagueOverview
+          league={league}
+          seed={leagueSeed}
+          mode={leagueMode}
+          embedded
+          onPick={(id) => {
+            setManagedId(id);
+            setActiveGame(null);
+            setView('home');
+          }}
         />
       )}
 
@@ -443,7 +799,7 @@ export function App() {
         <LeaderboardPage league={league} season={season} seed={leagueSeed} managedId={myId} />
       )}
       {view === 'standings' && <StandingsPage league={league} season={season} managedId={myId} />}
-      {view === 'franchise' && <FranchisePage team={managedTeam} />}
+      {view === 'franchise' && <FranchisePage team={managedTeam} mode={leagueMode} />}
       {view === 'calibrate' && (
         <CalibrationScreen
           league={league}
@@ -471,7 +827,17 @@ export function App() {
           onClose={() => setCalOpen(false)}
         />
       )}
+
+      {playerModal && (
+        <PlayerModal
+          req={playerModal}
+          season={season}
+          seed={leagueSeed}
+          onClose={() => setPlayerModal(null)}
+        />
+      )}
     </div>
+    </PlayerModalContext.Provider>
   );
 }
 
@@ -485,58 +851,91 @@ export function App() {
 function GameScreen({
   result,
   sit,
+  displayResult,
+  displaySit,
   statsMode,
   setStatsMode,
   editing,
   cal,
   onMarkerMove,
+  basesShown,
   runners,
+  runnerSpeeds,
   batterName,
+  shownPlays,
+  onReveal,
   controls,
 }: {
   result: GameResult;
   sit: LiveSituation;
+  // Istantanea RITARDATA di result/sit: la plancia (scoreboard, difensori e
+  // lanciatore sul campo, boxscore) mostra questa, che avanza solo al verdetto
+  // della telecronaca. Il PlayBanner invece riceve il `result` REALE (deve
+  // vedere subito la nuova giocata per animarla e poi far scattare il reveal).
+  // Se omesse si usano result/sit reali (schermata calibrazione).
+  displayResult?: GameResult;
+  displaySit?: LiveSituation;
   statsMode: StatsMode;
   setStatsMode: (m: StatsMode) => void;
   editing: boolean;
   cal: FieldCalibration;
   onMarkerMove: (id: string, pos: { x: number; y: number }) => void;
+  // Basi mostrate sul diamante: possono essere in ritardo rispetto a `sit.bases`
+  // (rivelate al verdetto della cronaca). Se omesse, si usa lo stato reale.
+  basesShown?: [boolean, boolean, boolean];
   runners?: (string | null)[];
+  runnerSpeeds?: (number | null)[];
   batterName?: string | null;
+  // Numero di giocate già "lette" al centro: le cronache laterali si fermano qui
+  // per non anticipare l'esito. Se omesso, si mostra tutto.
+  shownPlays?: number;
+  onReveal?: () => void;
   controls: ReactNode;
 }) {
+  const dResult = displayResult ?? result;
+  const dSit = displaySit ?? sit;
+  const fieldBases = basesShown ?? dSit.bases;
   return (
     <div className="game-screen">
-      <StatBar result={result} sit={sit} statsMode={statsMode} setStatsMode={setStatsMode} />
+      <StatBar
+        result={dResult}
+        sit={dSit}
+        basesShown={fieldBases}
+        statsMode={statsMode}
+        setStatsMode={setStatsMode}
+      />
 
       <div className={editing ? 'gamefield editing' : 'gamefield'}>
         <Diamond
-          home={result.home}
-          away={result.away}
+          home={dResult.home}
+          away={dResult.away}
           background
-          bases={sit.bases}
+          bases={fieldBases}
           runners={runners}
+          runnerSpeeds={runnerSpeeds}
           batterName={batterName}
+          defenseTeam={dSit.offenseSide === 'away' ? dResult.home : dResult.away}
+          pitcherName={dSit.pitcher.name}
           cal={cal}
           editable={editing}
           onMarkerMove={onMarkerMove}
         />
 
-        {!editing && <PlayBanner result={result} />}
+        {!editing && <PlayBanner result={result} onReveal={onReveal} />}
 
         <div className="cronaca-corner left">
-          <CronacaTeam result={result} side="away" />
+          <CronacaTeam result={result} side="away" shownPlays={shownPlays} />
         </div>
         <div className="cronaca-corner right">
-          <CronacaTeam result={result} side="home" />
+          <CronacaTeam result={result} side="home" shownPlays={shownPlays} />
         </div>
 
         <div className="lineup-corner left">
           <LineupSide
             side="away"
-            team={result.away}
-            stats={result.awayStats}
-            sit={sit}
+            team={dResult.away}
+            stats={dResult.awayStats}
+            sit={dSit}
             mode={statsMode}
             setMode={setStatsMode}
           />
@@ -544,9 +943,9 @@ function GameScreen({
         <div className="lineup-corner right">
           <LineupSide
             side="home"
-            team={result.home}
-            stats={result.homeStats}
-            sit={sit}
+            team={dResult.home}
+            stats={dResult.homeStats}
+            sit={dSit}
             mode={statsMode}
             setMode={setStatsMode}
           />
@@ -584,11 +983,13 @@ function involvedFor(result: GameResult, sit: LiveSituation, side: Side): Involv
 function StatBar({
   result,
   sit,
+  basesShown,
   statsMode,
   setStatsMode,
 }: {
   result: GameResult;
   sit: LiveSituation;
+  basesShown?: [boolean, boolean, boolean];
   statsMode: StatsMode;
   setStatsMode: (m: StatsMode) => void;
 }) {
@@ -613,7 +1014,7 @@ function StatBar({
           <span className="sb-inning">
             {arrow} {sit.inning}° <span className="sb-half">{halfLabel}</span>
           </span>
-          <BaseDiamond bases={sit.bases} />
+          <BaseDiamond bases={basesShown ?? sit.bases} />
           <OutsDots outs={sit.outs} />
         </div>
       </div>
@@ -689,7 +1090,14 @@ function TeamStatSide({
         <span className={`ts-role ${involved.kind}`}>
           {involved.kind === 'batter' ? 'ALLA BATTUTA' : 'SUL MONTE'}
         </span>
-        <span className="ts-pname">{player.name}</span>
+        <span className="ts-pname">
+          <PlayerLink
+            player={player}
+            pos={involved.kind === 'batter' ? involved.batter!.position : undefined}
+          >
+            {player.name}
+          </PlayerLink>
+        </span>
         <StatsToggle mode={mode} setMode={setMode} />
       </div>
       <div className="ts-line">
@@ -1249,7 +1657,14 @@ function ActionBar({
   sit: LiveSituation;
   act: (fn: (g: LiveGame) => void) => void;
 }) {
-  return sit.controlledBatting ? (
+  // Modale di sostituzione (popup a tutto schermo): rimpiazza i vecchi menu a
+  // discesa che restavano nascosti dietro la barra comandi.
+  const [sub, setSub] = useState<SubMode | null>(null);
+  const noBench = sit.bench.length === 0;
+  const noRelievers = availableRelievers(defenseSide(live)).length === 0;
+  const hasRunner = sit.bases.some(Boolean);
+
+  const bar = sit.controlledBatting ? (
     <div className="card actionbar compact">
       <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
       <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
@@ -1290,7 +1705,24 @@ function ActionBar({
           Mob &amp; corri
         </button>
       )}
-      <PinchHitMenu bench={sit.bench} act={act} />
+      <button
+        className="btn sm"
+        disabled={noBench}
+        onClick={() => setSub('pinchhit')}
+        title="Pinch-hit: sostituisci il battitore"
+      >
+        Pinch-hit
+      </button>
+      {hasRunner && (
+        <button
+          className="btn sm"
+          disabled={noBench}
+          onClick={() => setSub('pinchrun')}
+          title="Pinch-runner: sostituisci un corridore in base"
+        >
+          Pinch-run
+        </button>
+      )}
     </div>
   ) : (
     <div className="card actionbar compact">
@@ -1318,80 +1750,278 @@ function ActionBar({
           Interni dentro
         </button>
       )}
-      <PitcherChange live={live} act={act} />
-    </div>
-  );
-}
-
-function PinchHitMenu({
-  bench,
-  act,
-}: {
-  bench: Batter[];
-  act: (fn: (g: LiveGame) => void) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  if (bench.length === 0) return null;
-  return (
-    <div className="pchange">
-      <button className="btn sm" onClick={() => setOpen((o) => !o)} title="Sostituisci il battitore">
-        Pinch-hit ▾
+      <button
+        className="btn sm"
+        disabled={noRelievers}
+        onClick={() => setSub('pitcher')}
+        title="Cambio lanciatore: scegli un rilievo dal bullpen"
+      >
+        Cambio lanc.
       </button>
-      {open && (
-        <div className="pchange-menu">
-          {bench.map((b) => (
-            <button
-              key={b.id}
-              className="pchange-item"
-              onClick={() => {
-                act((g) => pinchHit(g, b.id));
-                setOpen(false);
-              }}
-            >
-              <span className="pos">{b.position}</span> {b.name}
-              <span className="pchange-ovr">{stars(batterOverall(b.ratings))}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      <button
+        className="btn sm"
+        disabled={noBench}
+        onClick={() => setSub('fielders')}
+        title="Sostituzione difensiva: cambia un difensore"
+      >
+        Cambio dif.
+      </button>
     </div>
+  );
+
+  return (
+    <>
+      {bar}
+      {sub && <SubModal live={live} mode={sub} act={act} onClose={() => setSub(null)} />}
+    </>
   );
 }
 
-function PitcherChange({
+// --- Sostituzioni: popup "ad hoc" in stile roster --------------------------
+// Un unico modale mostra il pool giusto (rilievi / panchina) con OVR e
+// caratteristiche, come una mini-scheda roster. Per i cambi difensivi e i
+// pinch-runner c'è un primo passo (chi esce), poi la scelta di chi entra.
+type SubMode = 'pitcher' | 'fielders' | 'pinchhit' | 'pinchrun';
+
+const SUB_TITLE: Record<SubMode, string> = {
+  pitcher: 'Cambio lanciatore',
+  fielders: 'Sostituzione difensiva',
+  pinchhit: 'Pinch-hit',
+  pinchrun: 'Pinch-runner',
+};
+
+const BASE_LABEL = ['1ª', '2ª', '3ª'];
+
+/** Caratteristiche fondamentali per la riga sostituto (come nel roster). */
+function subRatingChips(p: Batter | Pitcher): Array<[string, number]> {
+  if (isBatter(p)) {
+    return [
+      ['CON', p.ratings.contact],
+      ['POT', p.ratings.power],
+      ['OCC', p.ratings.eye],
+      ['VEL', p.ratings.speed],
+      ['DIF', p.ratings.fielding],
+      ['BRA', p.ratings.arm],
+    ];
+  }
+  const r = (p as Pitcher).ratings;
+  return [
+    ['DOM', r.stuff],
+    ['CTR', r.control],
+    ['MOV', r.movement],
+    ['RES', r.stamina],
+    ['DIF', r.fielding],
+  ];
+}
+
+/** Etichette-colonna delle caratteristiche per il tipo (batter/pitcher). */
+function subRatingKeys(p: Batter | Pitcher): string[] {
+  return subRatingChips(p).map(([k]) => k);
+}
+
+/** Riga sostituto come nel Roster: OVR, nome+sottotitolo, colonne dote, «Scegli». */
+function SubRow({
+  player,
+  subtitle,
+  onPick,
+}: {
+  player: Batter | Pitcher;
+  subtitle: string;
+  onPick: () => void;
+}) {
+  const ovr = isBatter(player)
+    ? batterOverall(player.ratings)
+    : pitcherOverall((player as Pitcher).ratings);
+  return (
+    <tr className="subrow">
+      <td className="subrow-ovr-c">
+        <span className="subrow-ovr" style={{ background: ratingColor(ovr) }}>
+          {ovr}
+        </span>
+      </td>
+      <td className="l subrow-id">
+        <PlayerLink player={player} className="subrow-name">
+          {player.name}
+        </PlayerLink>
+        <span className="subrow-sub">{subtitle}</span>
+      </td>
+      {subRatingChips(player).map(([k, v]) => (
+        <td key={k} className="subrow-stat">
+          <span className="subrow-rat" style={{ background: ratingColor(v) }}>
+            {v}
+          </span>
+        </td>
+      ))}
+      <td className="subrow-pick-c">
+        <button className="btn sm primary subrow-pick" onClick={onPick}>
+          Scegli ▸
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function SubModal({
   live,
+  mode,
   act,
+  onClose,
 }: {
   live: LiveGame;
+  mode: SubMode;
   act: (fn: (g: LiveGame) => void) => void;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [outId, setOutId] = useState<string | null>(null); // titolare che esce (fielders)
+  const [outBase, setOutBase] = useState<number | null>(null); // corridore (pinchrun)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const off = offenseSide(live);
   const def = defenseSide(live);
-  const relievers = def.pitchers.slice(def.pitcherIdx + 1);
-  if (relievers.length === 0) return null;
-  return (
-    <div className="pchange">
-      <button className="btn sm" onClick={() => setOpen((o) => !o)}>
-        Cambio lanc. ▾
-      </button>
-      {open && (
-        <div className="pchange-menu">
-          {relievers.map((p) => (
-            <button
-              key={p.id}
-              className="pchange-item"
-              onClick={() => {
-                act((g) => changePitcher(g, defenseSide(g), p.id));
-                setOpen(false);
-              }}
-            >
-              <span className="pos">{p.role}</span> {p.name}
-              <span className="pchange-ovr">{stars(pitcherOverall(p.ratings))}</span>
+
+  let hint = '';
+  let targets: ReactNode = null; // primo passo (chi esce), quando serve
+  let incoming: Array<{ id: string; player: Batter | Pitcher; subtitle: string; onPick: () => void }> = [];
+  let emptyMsg = 'Nessun giocatore disponibile.';
+
+  if (mode === 'pitcher') {
+    hint = 'Scegli il rilievo da mandare sul monte.';
+    emptyMsg = 'Nessun rilievo disponibile in bullpen.';
+    incoming = availableRelievers(def).map((p) => ({
+      id: p.id,
+      player: p,
+      subtitle: p.role === 'CL' ? 'RP (closer)' : p.role,
+      onPick: () => {
+        act((g) => changePitcher(g, defenseSide(g), p.id));
+        onClose();
+      },
+    }));
+  } else if (mode === 'pinchhit') {
+    const cur = off.team.lineup[off.battingIndex];
+    hint = `Sostituisci ${upperLast(cur.name)} in battuta.`;
+    emptyMsg = 'Nessun giocatore in panchina.';
+    incoming = off.team.bench.map((b) => ({
+      id: b.id,
+      player: b,
+      subtitle: `panchina · ${b.position}`,
+      onPick: () => {
+        act((g) => pinchHit(g, b.id));
+        onClose();
+      },
+    }));
+  } else if (mode === 'fielders') {
+    emptyMsg = 'Nessun giocatore in panchina.';
+    if (outId == null) {
+      hint = 'Chi esce dalla difesa?';
+      targets = (
+        <div className="sub-targets">
+          {def.team.lineup.map((b) => (
+            <button key={b.id} className="sub-target" onClick={() => setOutId(b.id)}>
+              <span className="pos">{b.position}</span>
+              <span className="nm">{upperLast(b.name)}</span>
+              <span className="ov" style={{ color: ratingColor(batterOverall(b.ratings)) }}>
+                {batterOverall(b.ratings)}
+              </span>
             </button>
           ))}
         </div>
-      )}
-    </div>
+      );
+    } else {
+      const out = def.team.lineup.find((b) => b.id === outId)!;
+      hint = `Chi entra per ${upperLast(out.name)} (${out.position})?`;
+      incoming = def.team.bench.map((b) => ({
+        id: b.id,
+        player: b,
+        subtitle: `entra in ${out.position}`,
+        onPick: () => {
+          act((g) => substituteFielder(g, defenseSide(g), outId, b.id));
+          onClose();
+        },
+      }));
+    }
+  } else {
+    // pinchrun
+    emptyMsg = 'Nessun giocatore in panchina.';
+    const occupied = [0, 1, 2].filter((i) => live.bases[i]);
+    if (outBase == null) {
+      hint = 'Quale corridore sostituire?';
+      targets = (
+        <div className="sub-targets">
+          {occupied.map((i) => {
+            const r = live.bases[i]!.batter;
+            return (
+              <button key={i} className="sub-target" onClick={() => setOutBase(i)}>
+                <span className="pos">{BASE_LABEL[i]}</span>
+                <span className="nm">{upperLast(r.name)}</span>
+                <span className="ov" style={{ color: ratingColor(batterOverall(r.ratings)) }}>
+                  {batterOverall(r.ratings)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      );
+    } else {
+      const r = live.bases[outBase]!.batter;
+      hint = `Chi corre per ${upperLast(r.name)} (${BASE_LABEL[outBase]})?`;
+      incoming = off.team.bench.map((b) => ({
+        id: b.id,
+        player: b,
+        subtitle: `panchina · VEL ${b.ratings.speed}`,
+        onPick: () => {
+          act((g) => pinchRun(g, offenseSide(g), outBase, b.id));
+          onClose();
+        },
+      }));
+    }
+  }
+
+  const statCols = incoming.length > 0 ? subRatingKeys(incoming[0].player) : [];
+
+  return createPortal(
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal submodal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">{SUB_TITLE[mode]}</div>
+          <button className="modal-close" style={{ marginLeft: 'auto' }} onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="sub-hint">{hint}</div>
+        {targets ?? (
+          <div className="sub-list">
+            {incoming.length === 0 ? (
+              <div className="sub-empty">{emptyMsg}</div>
+            ) : (
+              <table className="ratings sub-tbl">
+                <thead>
+                  <tr>
+                    <th title="Valore totale">OVR</th>
+                    <th className="l">Giocatore</th>
+                    {statCols.map((k) => (
+                      <th key={k}>{k}</th>
+                    ))}
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {incoming.map((it) => (
+                    <SubRow key={it.id} player={it.player} subtitle={it.subtitle} onPick={it.onPick} />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1492,6 +2122,27 @@ function strengthColor(v: number): string {
   return `hsl(${Math.round(t * 125)} 60% 46%)`;
 }
 
+/**
+ * Stato d'affaticamento del lanciatore, ancorato alla vera meccanica del motore:
+ * la soglia è la **Resistenza** (`pitcher.stamina`, in battitori affrontabili),
+ * non i lanci stimati. Il malus ai peripherals scatta appena i battitori
+ * affrontati superano la soglia (`fatigueFactor`); il cambio automatico avviene
+ * a soglia + margine (SP +4, rilievo +2, come `autoManagePitcher`).
+ *  - `fresh`  : ampio margine, nessun malus
+ *  - `tiring` : entro 2 battitori dalla soglia o appena oltre → affaticamento in corso
+ *  - `spent`  : oltre la soglia di cambio automatico
+ */
+function pitcherFatigue(
+  role: string | undefined,
+  stamina: number,
+  bf: number,
+): { state: 'fresh' | 'tiring' | 'spent'; tone?: string } {
+  const margin = role === 'SP' ? 4 : 2;
+  if (bf >= stamina + margin) return { state: 'spent', tone: '#ff6b6b' };
+  if (bf >= stamina - 2) return { state: 'tiring', tone: '#ffcf5c' };
+  return { state: 'fresh' };
+}
+
 function LineupSide({
   team,
   stats,
@@ -1510,6 +2161,7 @@ function LineupSide({
   const isBatting = sit.offenseSide === side && sit.status === 'live';
   const currentId = isBatting ? sit.batter.id : null;
   const batById = new Map(team.lineup.map((b) => [b.id, b]));
+  const pitById = new Map([...team.rotation, ...team.bullpen].map((p) => [p.id, p]));
   const rows = stats.batting.map((l) => ({
     line: l,
     items: batterStatLine(mode, l, batById.get(l.id)),
@@ -1517,8 +2169,9 @@ function LineupSide({
   const head = rows[0]?.items.map((i) => i.k) ?? [];
   // Cognomi disambiguati per i battitori mostrati (es. R. Alomar / S. Alomar).
   const batLabels = disambiguateLastNames(rows.map((r) => r.line.name));
-  // Lanciatore attualmente in pedana per questa squadra (ultima riga usata).
-  const curP = stats.pitching[stats.pitching.length - 1];
+  // TUTTI i lanciatori usati da questa squadra (partente + rilievi entrati), non
+  // solo quello in pedana: così il box tiene traccia dei 3/5/7 cambi.
+  const lastPitIdx = stats.pitching.length - 1;
   const pitLabels = disambiguateLastNames(stats.pitching.map((p) => p.name));
   return (
     <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>
@@ -1527,39 +2180,80 @@ function LineupSide({
         <span className="ls-name">{team.name}</span>
         <StatsToggle mode={mode} setMode={setMode} />
       </div>
-      <table className="ls-table">
-        <thead>
-          <tr>
-            <th className="l">#</th>
-            <th className="l">Battitore</th>
-            {head.map((k) => (
-              <th key={k}>{k}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
-              <td className="l num">{i + 1}</td>
-              <td className="l bname">
-                <span className="pos">{r.line.position}</span> {batLabels[i]}
-                {r.line.id === currentId && <span className="atbat-dot">●</span>}
-              </td>
-              {r.items.map((it) => (
-                <td key={it.k}>{it.v}</td>
+      <div className="ls-scroll">
+        <table className="ls-table">
+          <thead>
+            <tr>
+              <th className="l">#</th>
+              <th className="l">Battitore</th>
+              {head.map((k) => (
+                <th key={k}>{k}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {curP && (
-        <div className="ls-pit">
-          <span className="ls-pit-tag">LANC.</span>
-          <span className="ls-pit-name">{pitLabels[pitLabels.length - 1]}</span>
-          <span className="ls-pit-stat">{formatIp(curP.outs)} IP</span>
-          <span className="ls-pit-stat">{curP.so} SO</span>
-          <span className="ls-pit-stat">{curP.er} ER</span>
-          {curP.dec && <span className={`dec dec-${curP.dec}`}>{decLabel(curP.dec)}</span>}
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.line.id} className={r.line.id === currentId ? 'at-bat' : undefined}>
+                <td className="l num">{i + 1}</td>
+                <td className="l bname">
+                  <span className="pos">{r.line.position}</span>{' '}
+                  {(() => {
+                    const b = batById.get(r.line.id);
+                    return b ? (
+                      <PlayerLink player={b} pos={b.position}>{batLabels[i]}</PlayerLink>
+                    ) : (
+                      upperLast(batLabels[i])
+                    );
+                  })()}
+                  {r.line.id === currentId && <span className="atbat-dot">●</span>}
+                </td>
+                {r.items.map((it) => (
+                  <td key={it.k}>{it.v}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {stats.pitching.length > 0 && (
+        <div className="ls-pits">
+          {stats.pitching.map((pl, idx) => {
+            const p = pitById.get(pl.id);
+            const label = pitLabels[idx];
+            const isCur = idx === lastPitIdx && sit.status === 'live';
+            const pt = estimatedPitches(pl);
+            const fat = p ? pitcherFatigue(p.role, p.stamina, pl.bf) : undefined;
+            const stateWord =
+              fat?.state === 'spent' ? 'esausto' : fat?.state === 'tiring' ? 'in calo' : 'fresco';
+            return (
+              <div className={`ls-pit${isCur ? ' cur' : ''}`} key={pl.id}>
+                <span className="ls-pit-tag">{idx === 0 ? 'LANC.' : '↳'}</span>
+                <span className="ls-pit-name">
+                  {p ? <PlayerLink player={p}>{label}</PlayerLink> : upperLast(label)}
+                </span>
+                <span className="ls-pit-stat">{formatIp(pl.outs)} IP</span>
+                <span
+                  className="ls-pit-stat"
+                  style={{ color: fat?.tone }}
+                  title="Lanci (stima): cresce con battitori affrontati, valide, BB e SO — rende l'affaticamento"
+                >
+                  {pt} PT
+                </span>
+                {p && (
+                  <span
+                    className="ls-pit-stat"
+                    style={{ color: fat?.tone }}
+                    title={`Battitori affrontati / Resistenza (${stateWord}). La Resistenza è la soglia oltre la quale scatta l'affaticamento (peggiora BB/valide/HR, cala negli SO); superata di ${p.role === 'SP' ? 4 : 2} il lanciatore verrebbe cambiato d'ufficio.`}
+                  >
+                    {pl.bf}/{p.stamina} BF
+                  </span>
+                )}
+                <span className="ls-pit-stat">{pl.so} SO</span>
+                <span className="ls-pit-stat">{pl.er} ER</span>
+                {pl.dec && <span className={`dec dec-${pl.dec}`}>{decLabel(pl.dec)}</span>}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1668,7 +2362,7 @@ function BoxScore({
           {batRows.map((r) => (
             <tr key={r.id}>
               <td className="l">
-                <span className="pos">{r.label}</span> {r.name}
+                <span className="pos">{r.label}</span> {upperLast(r.name)}
               </td>
               {r.items.map((it) => (
                 <td key={it.k}>{it.v}</td>
@@ -1691,7 +2385,7 @@ function BoxScore({
         <tbody>
           {pitRows.map((r) => (
             <tr key={r.id}>
-              <td className="l">{r.name}</td>
+              <td className="l">{upperLast(r.name)}</td>
               {r.items.map((it) => (
                 <td key={it.k}>{it.v}</td>
               ))}
@@ -1739,7 +2433,7 @@ function groupPlays(result: GameResult): CronacaGroup[] {
  * piu' straordinari (fuoricampo, doppio gioco…). A fine sequenza svanisce e la
  * frase sintetica resta nella cronaca laterale (dx/sx).
  */
-function PlayBanner({ result }: { result: GameResult }) {
+function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?: () => void }) {
   const plays = result.play;
   const len = plays.length;
   // Non ri-animare le giocate gia' presenti al montaggio (partita ripresa).
@@ -1747,10 +2441,17 @@ function PlayBanner({ result }: { result: GameResult }) {
   const [state, setState] = useState<{ com: Commentary; phase: number; leaving: boolean } | null>(
     null,
   );
+  // `onReveal` cambia identita' quando cambia la partita: lo leggo da una ref
+  // cosi' i timer schedulati usano sempre l'ultima versione senza ri-eseguire
+  // l'effetto (che dipende solo da `len`).
+  const revealRef = useRef(onReveal);
+  revealRef.current = onReveal;
+  const reveal = () => revealRef.current?.();
 
   useEffect(() => {
     if (len <= seenRef.current) {
       seenRef.current = len;
+      reveal(); // nessuna telecronaca da animare: marker allineati subito.
       return;
     }
     seenRef.current = len;
@@ -1758,6 +2459,7 @@ function PlayBanner({ result }: { result: GameResult }) {
     // La sostituzione (pinch-hit) non e' una giocata: niente banner.
     if (ev.kind === 'sub') {
       setState(null);
+      reveal();
       return;
     }
     const offenseIsAway = ev.half === 'top';
@@ -1773,6 +2475,10 @@ function PlayBanner({ result }: { result: GameResult }) {
     for (let i = 1; i < com.phases.length; i++) {
       timers.push(setTimeout(() => setState((s) => (s ? { ...s, phase: i } : s)), i * PHASE_MS));
     }
+    // Al VERDETTO (ultima fase, "conquista la base"/"eliminato") sposto i marker
+    // sul diamante: e' il momento in cui l'esito viene letto in cronaca.
+    const revealAt = (com.phases.length - 1) * PHASE_MS;
+    timers.push(setTimeout(reveal, revealAt));
     const end = (com.phases.length - 1) * PHASE_MS + HOLD_MS;
     timers.push(setTimeout(() => setState((s) => (s ? { ...s, leaving: true } : s)), end));
     timers.push(setTimeout(() => setState(null), end + 420));
@@ -1818,14 +2524,26 @@ function PlayBanner({ result }: { result: GameResult }) {
 
 /** Cronaca di UNA squadra (ospite = mezzi alti; casa = mezzi bassi). Sempre
  *  visibile, scorre verso l'ultimo evento. */
-function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
+function CronacaTeam({
+  result,
+  side,
+  shownPlays,
+}: {
+  result: GameResult;
+  side: Side;
+  shownPlays?: number;
+}) {
   const half = side === 'away' ? 'top' : 'bottom';
-  const groups = groupPlays(result).filter((g) => g.key.endsWith(half));
+  // Le cronache laterali non anticipano l'esito scritto al centro: si fermano
+  // alle giocate già "lette" (shownPlays). Se omesso, si mostra tutto.
+  const shownLen = shownPlays ?? result.play.length;
+  const shown = shownLen >= result.play.length ? result : { ...result, play: result.play.slice(0, shownLen) };
+  const groups = groupPlays(shown).filter((g) => g.key.endsWith(half));
   const team = side === 'away' ? result.away : result.home;
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-  }, [result.play.length]);
+  }, [shownLen]);
 
   return (
     <div className="cronaca-team" style={{ ['--tc' as string]: team.primaryColor }}>
@@ -1835,24 +2553,41 @@ function CronacaTeam({ result, side }: { result: GameResult; side: Side }) {
         </span>
         <span className="crt-title">Cronaca {side === 'away' ? 'ospite' : 'casa'}</span>
       </div>
+      {/* Testate ed eventi sono figli DIRETTI del contenitore scrollabile (non
+          annidati in un box per-inning): così ogni testata `sticky` resta
+          agganciata all'intero corpo e le testate si IMPILANO in cima invece di
+          scorrere via una alla volta. */}
       <div className="crt-body" ref={bodyRef}>
         {groups.length === 0 && <div className="cr-empty">In attesa…</div>}
-        {groups.map((g) => (
-          <div key={g.key} className="cr-inning">
-            <div className="cr-inhead">
+        {groups.map((g, gi) => (
+          <Fragment key={g.key}>
+            <div
+              className="cr-inhead"
+              // Impilamento: ogni testata si ferma un gradino più in basso della
+              // precedente, così 1°/2°/3°… restano accumulati e fissi in cima.
+              style={{ top: `calc(var(--crh) * ${gi})`, zIndex: groups.length - gi }}
+            >
               <span>{g.header}</span>
               <span className="cr-score">
                 {g.events[g.events.length - 1].away}–{g.events[g.events.length - 1].home}
               </span>
             </div>
             <ul>
-              {g.events.map((ev, i) => (
-                <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
-                  {logLine(ev)}
-                </li>
-              ))}
+              {g.events.map((ev, i) => {
+                const sc = scoreCode(ev);
+                return (
+                  <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
+                    {sc && (
+                      <span className="cr-code" title={sc.title}>
+                        {sc.code}
+                      </span>
+                    )}
+                    {logLine(ev)}
+                  </li>
+                );
+              })}
             </ul>
-          </div>
+          </Fragment>
         ))}
       </div>
     </div>
@@ -1911,6 +2646,197 @@ function Rating({ v }: { v: number }) {
   );
 }
 
+// Colonne del mini-popup: battuta e lancio (una riga "Stagione" reale + una
+// "Carriera/Storico" derivata dai rating).
+const PM_BAT_COLS: Array<[string, (l: BatLine) => string]> = [
+  ['G', (l) => `${l.g}`],
+  ['AVG', (l) => pct3(l.avg)],
+  ['OBP', (l) => pct3(l.obp)],
+  ['SLG', (l) => pct3(l.slg)],
+  ['HR', (l) => `${l.hr}`],
+  ['RBI', (l) => `${l.rbi}`],
+  ['H', (l) => `${l.h}`],
+  ['2B', (l) => `${l.d2}`],
+  ['3B', (l) => `${l.t3}`],
+  ['BB', (l) => `${l.bb}`],
+  ['SO', (l) => `${l.so}`],
+  ['SB', (l) => `${l.sb}`],
+];
+const PM_PIT_COLS: Array<[string, (l: PitLine) => string]> = [
+  ['W', (l) => `${l.w}`],
+  ['L', (l) => `${l.l}`],
+  ['ERA', (l) => (l.ip ? l.era.toFixed(2) : '—')],
+  ['G', (l) => `${l.g}`],
+  ['GS', (l) => `${l.gs}`],
+  ['IP', (l) => ipFmt(l.ipOuts)],
+  ['H', (l) => `${l.h}`],
+  ['BB', (l) => `${l.bb}`],
+  ['K', (l) => `${l.k}`],
+  ['SV', (l) => `${l.sv}`],
+  ['WHIP', (l) => (l.ip ? l.whip.toFixed(2) : '—')],
+  ['K/9', (l) => (l.ip ? l.k9.toFixed(1) : '—')],
+];
+
+/** Stipendio annuale (milioni) come "12.5 M$". */
+function salaryFmt(m: number): string {
+  return `${m.toFixed(1)} M$`;
+}
+
+/**
+ * Mini-popup giocatore: intestazione (nome, età, ruolo/i, overall + stelle,
+ * stipendio), RATING DEL MOMENTO colorati (per il fielder la DIF è calcolata
+ * alla posizione occupata), e due righe STAT — "Stagione" REALE (season.bat/pit)
+ * e "Carriera/Storico" derivata dai rating (backstory). Chiudibile con ✕,
+ * click sul backdrop o Esc. Riusa le classi `.modal-*` esistenti.
+ */
+function PlayerModal({
+  req,
+  season,
+  seed,
+  onClose,
+}: {
+  req: PlayerModalRequest;
+  season: SeasonState;
+  seed: number;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const { player, pos, tier } = req;
+  const batter = isBatter(player) ? player : null;
+  const pitcher = isBatter(player) ? null : (player as Pitcher);
+
+  // Overall, ruolo/i e rating "del momento".
+  let overall: number;
+  let rolesLabel: string;
+  let ratingChips: Array<[string, number]>;
+  let statCols: Array<[string, (l: BatLine) => string]> | Array<[string, (l: PitLine) => string]>;
+  let seasonLine: BatLine | PitLine;
+  let careerLine: BatLine | PitLine;
+
+  if (batter) {
+    const activePos = pos ?? batter.position;
+    const rp = ratingsAtPosition(batter, activePos);
+    overall = batterOverall(batter.ratings);
+    rolesLabel = rolesOf(batter);
+    ratingChips = [
+      ['CON', batter.ratings.contact],
+      ['POT', batter.ratings.power],
+      ['OCC', batter.ratings.eye],
+      ['VEL', batter.ratings.speed],
+      ['DIF', rp.fielding],
+      ['BRA', batter.ratings.arm],
+    ];
+    statCols = PM_BAT_COLS;
+    seasonLine = seasonBatLine(season.bat[batter.id]);
+    careerLine = seasonBatLine(
+      projectBatterSeason(batter, tier ?? 'starter', {
+        seed,
+        year: season.year - 1,
+        day: SEASON_GAMES,
+      }),
+    );
+  } else {
+    const p = pitcher!;
+    overall = pitcherOverall(p.ratings);
+    rolesLabel = potentialRole(p.ratings) + (p.role === 'CL' ? ' · closer' : '');
+    ratingChips = [
+      ['DOM', p.ratings.stuff],
+      ['CTR', p.ratings.control],
+      ['MOV', p.ratings.movement],
+      ['PAT', p.ratings.groundball],
+      ['RES', p.ratings.stamina],
+      ['DIF', p.ratings.fielding],
+    ];
+    statCols = PM_PIT_COLS;
+    seasonLine = seasonPitLine(season.pit[p.id]);
+    careerLine = seasonPitLine(
+      projectPitcherSeason(p, { seed, year: season.year - 1, day: SEASON_GAMES }),
+    );
+  }
+
+  const statRow = (line: BatLine | PitLine, label: string, cls?: string) => (
+    <tr className={cls}>
+      <td className="pm-row-lbl">{label}</td>
+      {batter
+        ? (statCols as Array<[string, (l: BatLine) => string]>).map(([k, f]) => (
+            <td key={k}>{f(line as BatLine)}</td>
+          ))
+        : (statCols as Array<[string, (l: PitLine) => string]>).map(([k, f]) => (
+            <td key={k}>{f(line as PitLine)}</td>
+          ))}
+    </tr>
+  );
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal player" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">{upperLast(player.name)}</div>
+          <button className="modal-close" onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="modal-body pm-body">
+          <div className="pm-top">
+            <div className="pm-ident">
+              <span className="pm-role">{rolesLabel}</span>
+              <span className="pm-meta">{player.age} anni · {salaryFmt(player.salary)}</span>
+            </div>
+            <div className="pm-ovr">
+              <OvrBadge overall={overall} />
+              <span className="pm-ovr-n" style={{ color: ratingColor(overall) }}>
+                {overall}
+              </span>
+            </div>
+          </div>
+
+          <div className="pm-ratings">
+            {ratingChips.map(([k, v]) => (
+              <div className="pm-rt" key={k}>
+                <span className="pm-rt-k">{k}</span>
+                <span className="pm-rt-v" style={{ background: ratingColor(v) }}>
+                  {v}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="pm-stats">
+            <div className="roster-scroll">
+              <table className="ratings pm-stat-tbl">
+                <thead>
+                  <tr>
+                    <th className="l"></th>
+                    {(statCols as Array<[string, unknown]>).map(([k]) => (
+                      <th key={k}>{k}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {statRow(seasonLine, 'Stagione')}
+                  {statRow(careerLine, 'Carriera', 'pm-career')}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted pm-note">
+              La riga <b>Stagione</b> è reale (partite giocate). La <b>Carriera/Storico</b> è
+              una stima derivata dai rating (backstory): lo storico reale si comporrà col
+              rollover di stagione (Fase 4).
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Badge di sintesi squadra (OVR / Attacco / Difesa / staff Lanciatori). Riusato
  *  nel Roster (schieramento corrente) e in partita (titolari coinvolti). */
 function SynthBadges({ synth, staff }: { synth: TeamSynth; staff: number }) {
@@ -1931,16 +2857,114 @@ function SynthBadges({ synth, staff }: { synth: TeamSynth; staff: number }) {
 }
 
 /** Voto in stelle 1..5 dall'overall: piene evidenti, vuote smorzate. */
-function Stars({ overall }: { overall: number }) {
-  const n = Math.max(1, Math.min(5, Math.round((overall - RATING_MIN) / 15) + 1));
+/**
+ * Rating generale numerico in una card colorata in tono con la forza (testo
+ * bianco grassetto), come le celle delle singole caratteristiche: stima precisa,
+ * al posto delle stelle (troppo grossolane).
+ */
+function OvrBadge({ overall }: { overall: number }) {
   return (
-    <span className="stars" title={`${overall} OVR`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < n ? 'st full' : 'st empty'}>
-          {i < n ? '★' : '☆'}
-        </span>
-      ))}
+    <span className="ovr-badge" style={{ background: ratingColor(overall) }} title={`${overall} OVR`}>
+      {overall}
     </span>
+  );
+}
+
+// Percentuale 0-100 di un rating sulla scala 40-100 (per le barre).
+const ratingPct = (v: number) => clamp01((v - 40) / 60, 0, 1) * 100;
+
+// Hash deterministico dell'id -> [0,1): rende la "nebbia di scouting" STABILE per
+// giocatore (non sfarfalla tra un render e l'altro) ma diversa da uno all'altro.
+function hash01(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 100000) / 100000;
+}
+
+type Outlook = { dir: 'up' | 'flat' | 'down'; lo: number; hi: number };
+
+// Prospettiva di crescita "nebbiosa" mostrata in rosa AL POSTO del potenziale
+// nudo: una FASCIA (non un numero-verdetto), direzionale per fase d'età, così non
+// si legge il futuro esatto in anticipo.
+//  - giovane con margine    -> ▲ verso l'alto (upside dal potenziale, offuscato)
+//  - picco / nessun margine  -> numero secco (flat)
+//  - veterano (> 30)         -> ▼ verso il basso (declino stimato dalla curva
+//    d'età: fascia inferiore all'attuale)
+// La fascia CONTIENE il valore vero (stima onesta), ma con ampiezza e posizione
+// variabili per giocatore (seed sull'id): il tetto esatto resta nascosto.
+function growthOutlook(id: string, overall: number, potential: number, age: number): Outlook {
+  const seed = hash01(id);
+  if (age > 30) {
+    // Declino: fascia INFERIORE all'attuale, dal calo atteso (~ (età-30)/anno).
+    const dec = Math.max(1, Math.min(9, Math.round((age - 30) * 0.7)));
+    const hi = Math.max(40, overall - Math.round(seed));
+    const lo = Math.max(40, Math.min(hi, overall - dec - Math.round(seed * 2)));
+    return { dir: 'down', lo, hi };
+  }
+  const margin = potential - overall;
+  if (margin <= 1) return { dir: 'flat', lo: overall, hi: overall };
+  // Ampiezza della nebbia: cresce col margine e con la gioventù (un 20enne è più
+  // imprevedibile). La fascia racchiude il potenziale vero, spostata dal seed.
+  const spread = Math.max(1, Math.min(5, Math.round(margin * 0.4 + (age < 24 ? 2 : 1))));
+  const lo = Math.max(overall, Math.min(potential, potential - 1 - Math.round(seed * spread)));
+  const hi = Math.min(100, Math.max(potential, potential + 1 + Math.round((1 - seed) * spread)));
+  return { dir: 'up', lo, hi };
+}
+
+// Barra OVR mini: il riempimento (colore del rating) è l'overall corrente; se c'è
+// upside, il tratto fino al bordo ALTO della fascia (hi, non il potenziale esatto)
+// resta visibile come segmento più chiaro = "spazio di crescita". Info di corredo.
+function OvrBar({ id, overall, potential, age }: { id: string; overall: number; potential: number; age: number }) {
+  const o = growthOutlook(id, overall, potential, age);
+  const head = o.dir === 'up';
+  return (
+    <span className="ovr-bar" title={head ? `OVR ${overall} · crescita stimata ~${o.lo}-${o.hi}` : `OVR ${overall}`}>
+      {head && <span className="ovr-bar-pot" style={{ width: `${ratingPct(o.hi)}%` }} />}
+      <span className="ovr-bar-fill" style={{ width: `${ratingPct(overall)}%`, background: ratingColor(overall) }} />
+    </span>
+  );
+}
+
+// Colonna DEDICATA per la barra OVR (fissa, allineata verticalmente riga per
+// riga: niente più barre "a scorrimento" dopo nomi di lunghezza diversa).
+function OvrBarCell({ id, overall, potential, age }: { id: string; overall: number; potential: number; age: number }) {
+  return (
+    <td className="ovrbar-c">
+      <OvrBar id={id} overall={overall} potential={potential} age={age} />
+    </td>
+  );
+}
+
+// Colonna DEDICATA per la prospettiva (40-100). Mostra una FASCIA "nebbiosa" (mai
+// il tetto esatto): ▲lo-hi se c'è upside (giovane), ▼lo-hi se è probabile un
+// declino (veterano), o il numero secco al picco. Formato diverso dal badge OVR
+// per non confonderlo a colpo d'occhio: è una stima da scout, non un verdetto.
+function PotCell({ id, overall, potential, age }: { id: string; overall: number; potential: number; age: number }) {
+  const o = growthOutlook(id, overall, potential, age);
+  if (o.dir === 'flat') {
+    return (
+      <td className="pot-c">
+        <span className="pot-num" title="Al picco: nessun margine di crescita atteso">
+          {overall}
+        </span>
+      </td>
+    );
+  }
+  const arrow = o.dir === 'up' ? '▲' : '▼';
+  const title =
+    o.dir === 'up'
+      ? `Crescita stimata ~${o.lo}-${o.hi} (stima da scout, non il tetto esatto)`
+      : `Declino stimato ~${o.lo}-${o.hi} col progredire dell'età (stima da scout)`;
+  return (
+    <td className="pot-c">
+      <span className={`pot-num ${o.dir}`} title={title}>
+        {arrow}
+        {o.lo}-{o.hi}
+      </span>
+    </td>
   );
 }
 
@@ -2066,6 +3090,161 @@ const BAT_DEF_RATING_COLS = ['DIF', 'BRA', 'VEL'];
 const PIT_COLS = ['W', 'L', 'G', 'GS', 'IP', 'ERA', 'H', 'BB', 'K', 'SVO', 'SV', 'WHIP', 'K/9'];
 const PIT_RATING_COLS = ['DOM', 'CTR', 'MOV', 'PAT', 'RES', 'DIF'];
 
+// Legenda delle sigle mostrate nel roster. Per le DOTI (rating) la descrizione
+// dice SU COSA INFLUISCONO nel motore (fonte: docs/players-and-ratings.md); per
+// le STATISTICHE dice cosa rappresentano. Divisa per sezione (attacco / difesa /
+// lancio) cosi' l'icona "i" a fianco di ogni tabella apre solo il pezzo pertinente.
+type GlossItem = { k: string; name: string; desc: string };
+type GlossBlock = { title: string; kind: 'rating' | 'stat'; items: GlossItem[] };
+const GLOSSARY: Record<'bat' | 'def' | 'pit', GlossBlock[]> = {
+  bat: [
+    {
+      title: 'Doti offensive (scala 40-100, 70 = media di lega)',
+      kind: 'rating',
+      items: [
+        { k: 'CON', name: 'Contatto', desc: 'battute valide e media: più singoli, meno strikeout (la parte "AVG").' },
+        { k: 'POT', name: 'Potenza', desc: 'extrabase e fuoricampo (la parte "SLG").' },
+        { k: 'OCC', name: 'Occhio', desc: 'basi ball: alza l\'OBP e limita un po\' gli strikeout.' },
+        { k: 'VEL', name: 'Velocità', desc: 'rubate, tripli e basi extra in corsa.' },
+      ],
+    },
+    {
+      title: 'Statistiche offensive',
+      kind: 'stat',
+      items: [
+        { k: 'G', name: 'Gare', desc: 'partite giocate.' },
+        { k: 'AVG', name: 'Media battuta', desc: 'valide / turni ufficiali.' },
+        { k: 'OBP', name: 'On-base %', desc: 'quante volte raggiunge la base (valide + BB su arrivi al piatto).' },
+        { k: 'SLG', name: 'Slugging %', desc: 'basi totali per turno: pesa gli extrabase.' },
+        { k: 'H', name: 'Valide', desc: 'battute valide totali.' },
+        { k: '2B', name: 'Doppi', desc: 'battute da due basi.' },
+        { k: '3B', name: 'Tripli', desc: 'battute da tre basi.' },
+        { k: 'HR', name: 'Fuoricampo', desc: 'home run.' },
+        { k: 'RBI', name: 'Punti battuti a casa', desc: 'corridori mandati a punto.' },
+        { k: 'BB', name: 'Basi ball', desc: 'basi su ball (walk).' },
+        { k: 'SO', name: 'Strikeout', desc: 'eliminazioni al piatto (K).' },
+        { k: 'SB', name: 'Basi rubate', desc: 'rubate riuscite.' },
+      ],
+    },
+  ],
+  def: [
+    {
+      title: 'Doti difensive (scala 40-100 · variano con la casella giocata)',
+      kind: 'rating',
+      items: [
+        { k: 'DIF', name: 'Difesa', desc: 'palle in gioco trasformate in out e meno errori; dipende dalla casella coperta.' },
+        { k: 'BRA', name: 'Braccio', desc: 'elimina i ladri di base (ricevitore) e gli assist dagli esterni.' },
+        { k: 'VEL', name: 'Velocità', desc: 'copertura di campo e corsa verso la palla.' },
+      ],
+    },
+    {
+      title: 'Statistiche difensive (stima: la difesa non è ancora simulata dal motore)',
+      kind: 'stat',
+      items: [
+        { k: 'G', name: 'Gare', desc: 'partite giocate.' },
+        { k: 'E', name: 'Errori', desc: 'giocate difensive sbagliate.' },
+        { k: 'A', name: 'Assist', desc: 'tocchi che portano a un\'eliminazione altrui.' },
+        { k: 'PO', name: 'Put-out', desc: 'eliminazioni dirette (presa al volo, out in base).' },
+        { k: 'FLD%', name: 'Fielding %', desc: 'giocate pulite su totali (PO+A su PO+A+E).' },
+      ],
+    },
+  ],
+  pit: [
+    {
+      title: 'Doti del lanciatore (scala 40-100, 70 = media di lega)',
+      kind: 'rating',
+      items: [
+        { k: 'DOM', name: 'Dominio (stuff)', desc: 'strikeout: più K, meno palle in gioco.' },
+        { k: 'CTR', name: 'Controllo', desc: 'pochi base ball concessi.' },
+        { k: 'MOV', name: 'Movimento', desc: 'poche battute valide concesse sulle palle in gioco.' },
+        { k: 'PAT', name: 'Palle a terra', desc: 'induce battute rasoterra: pochi fuoricampo concessi e più doppi giochi.' },
+        { k: 'RES', name: 'Resistenza', desc: 'quanti battitori regge prima di calare (durata sul monte).' },
+        { k: 'DIF', name: 'Difesa', desc: 'tiene i corridori (hold) e difende sui bunt.' },
+      ],
+    },
+    {
+      title: 'Statistiche di lancio',
+      kind: 'stat',
+      items: [
+        { k: 'W', name: 'Vittorie', desc: 'vittorie accreditate.' },
+        { k: 'L', name: 'Sconfitte', desc: 'sconfitte accreditate.' },
+        { k: 'G', name: 'Presenze', desc: 'partite in cui ha lanciato.' },
+        { k: 'GS', name: 'Partenze', desc: 'partite iniziate da starter (games started).' },
+        { k: 'IP', name: 'Inning lanciati', desc: 'riprese completate (.1/.2 = 1/3, 2/3).' },
+        { k: 'ERA', name: 'Media PGL', desc: 'punti guadagnati subiti ogni 9 inning: risultato di contesto, non dote diretta.' },
+        { k: 'H', name: 'Valide concesse', desc: 'battute valide subite.' },
+        { k: 'BB', name: 'Basi ball concesse', desc: 'basi su ball regalate.' },
+        { k: 'K', name: 'Strikeout', desc: 'battitori eliminati al piatto.' },
+        { k: 'SVO', name: 'Opportunità salvezza', desc: 'occasioni di save affrontate.' },
+        { k: 'SV', name: 'Salvezze', desc: 'save convertiti.' },
+        { k: 'WHIP', name: 'WHIP', desc: '(basi ball + valide) per inning: baserunner concessi.' },
+        { k: 'K/9', name: 'K per 9 inning', desc: 'strikeout ogni 9 riprese.' },
+      ],
+    },
+  ],
+};
+
+/** Modale-legenda: spiega le sigle di una sezione (attacco / difesa / lancio). */
+function StatLegend({ section, onClose }: { section: 'bat' | 'def' | 'pit'; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const title = section === 'bat' ? 'Legenda — Attacco' : section === 'def' ? 'Legenda — Difesa' : 'Legenda — Lancio';
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal legend" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">{title}</div>
+          <button className="modal-close" onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="modal-body legend-body">
+          {GLOSSARY[section].map((block) => (
+            <div className="legend-block" key={block.title}>
+              <div className="legend-block-title">{block.title}</div>
+              <dl className="legend-dl">
+                {block.items.map((it) => (
+                  <div className="legend-row" key={it.k}>
+                    <dt className={`legend-abbr ${block.kind}`}>{it.k}</dt>
+                    <dd className="legend-def">
+                      <b>{it.name}</b> — {it.desc}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
+          <p className="muted pm-note">
+            Le <b>doti</b> (40-100) sono la fonte di verità e guidano ciò che il giocatore
+            controlla; le <b>statistiche</b> sono un risultato simulato. ERA e Vittorie dipendono
+            anche dal contesto (difesa, stadio, supporto), non solo dal talento.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Iconcina "i" cliccabile da mettere a fianco della testata di una tabella. */
+function InfoDot({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="info-dot"
+      onClick={onClick}
+      aria-label="Cosa significano le sigle"
+      title="Cosa significano le sigle"
+    >
+      i
+    </button>
+  );
+}
+
 // Posizioni difensive sul campo semplificato (percentuali dentro il riquadro).
 // Le CASELLE sono FISSE: si spostano i giocatori. Il DH sta fuori dal diamante.
 const FIELD_LAYOUT: Array<{ pos: Position; x: number; y: number }> = [
@@ -2102,12 +3281,36 @@ function DefenseFieldSVG() {
   );
 }
 
+/**
+ * Ordina `pool` secondo la lista di id preferiti `pref` (quelli noti nell'ordine
+ * indicato, poi il resto nell'ordine originale). Usato per le riserve battitori:
+ * l'ordine scelto dal manager e' stabile e i nuovi arrivi finiscono in coda.
+ */
+function orderByPref<T extends { id: string }>(pool: T[], pref?: string[]): T[] {
+  if (!pref || pref.length === 0) return pool;
+  const byId = new Map(pool.map((x) => [x.id, x]));
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const id of pref) {
+    const x = byId.get(id);
+    if (x && !seen.has(id)) {
+      out.push(x);
+      seen.add(id);
+    }
+  }
+  for (const x of pool) if (!seen.has(x.id)) out.push(x);
+  return out;
+}
+
 function RosterPage({
   team,
   seed,
   initial,
   activeGame,
   season,
+  todayStarter,
+  onPickStarter,
+  onRotationSize,
   onApply,
   onSave,
   onStart,
@@ -2117,6 +3320,9 @@ function RosterPage({
   initial?: MatchArrangement;
   activeGame: boolean;
   season: SeasonState;
+  todayStarter: string | null;
+  onPickStarter: (id: string | null) => void;
+  onRotationSize: (size: RotationSize) => void;
   onApply: (arr: MatchArrangement) => void;
   onSave: (arr: MatchArrangement) => Promise<void>;
   onStart: () => void;
@@ -2127,6 +3333,7 @@ function RosterPage({
   const [statMode, setStatMode] = useState<RosterStat>('ratings');
   const [drag, setDrag] = useState<{ id: string; from: string } | null>(null);
   const [over, setOver] = useState<string | null>(null); // bersaglio sotto il cursore
+  const [legend, setLegend] = useState<'bat' | 'def' | 'pit' | null>(null); // popup sigle
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const batters = rosterBatters(team);
@@ -2135,7 +3342,11 @@ function RosterPage({
   const pById = new Map(pitchers.map((p) => [p.id, p]));
   const lineup = arr.order.map((id) => bById.get(id)).filter(Boolean) as Batter[];
   const starterIds = new Set(arr.order);
-  const bench = batters.filter((b) => !starterIds.has(b.id));
+  // Riserve = non-titolari, ORDINATE secondo la preferenza salvata (benchOrder):
+  // gli id noti in quell'ordine, poi eventuali nuovi (es. un titolare appena
+  // scaricato) in coda. Cosi' l'ordine scelto dal manager e' stabile e persistente.
+  const benchPool = batters.filter((b) => !starterIds.has(b.id));
+  const bench = orderByPref(benchPool, arr.benchOrder);
   const check = validateArrangement(team, arr);
   const ratingsMode = statMode === 'ratings';
 
@@ -2158,12 +3369,22 @@ function RosterPage({
     (a, b) => posRank(arr.defense[a.id] ?? a.position) - posRank(arr.defense[b.id] ?? b.position),
   );
   // Sintesi di squadra dello schieramento CORRENTE: si aggiorna a ogni mossa,
-  // cosi' si vede subito se una sostituzione migliora o peggiora.
-  const synth = teamSynthesis(lineup.map((b) => ({ b, pos: arr.defense[b.id] ?? b.position })));
-  const staff = staffSynthesis(
-    arr.rotation.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
-    arr.bullpen.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
-  );
+  // così si vede subito se una sostituzione migliora o peggiora. USA la STESSA
+  // `teamStrength` della Panoramica lega (che include il LANCIO nell'OVR), così il
+  // totale del Roster coincide con la "Forza" mostrata alla scelta squadra —
+  // niente più OVR 82 nel Roster e 77 in panoramica.
+  const built = buildManagedTeam(team, arr);
+  // Panchina ORIGINALE (5 attivi), non quella di buildManagedTeam (che vi accorpa
+  // anche le riserve profonde e diluirebbe la media): così il totale coincide
+  // ESATTAMENTE con la "Forza" della Panoramica per l'assetto di default.
+  const str = teamStrength({
+    ...team,
+    lineup: built.lineup,
+    rotation: built.rotation,
+    bullpen: built.bullpen,
+  });
+  const synth = { off: str.attack, def: str.defense, ovr: str.total };
+  const staff = str.pitching;
 
   const update = (patch: Partial<MatchArrangement>) => {
     setArr((a) => ({ ...a, ...patch }));
@@ -2193,17 +3414,16 @@ function RosterPage({
     }
     update({ defense, order: reconcileOrder(arr.order, Object.keys(defense)) });
   };
+  // Riordino dell'ordine di battuta come SWAP: i due slot si SCAMBIANO e tutti
+  // gli altri restano fermi (niente inserimento a scorrimento). La difesa, che e'
+  // indipendente dall'ordine di battuta, non viene toccata.
   const reorderBatting = (targetId: string, draggedId: string) => {
     if (draggedId === targetId) return;
-    const cur = arr.order;
-    const fromI = cur.indexOf(draggedId);
-    const toI = cur.indexOf(targetId);
+    const order = [...arr.order];
+    const fromI = order.indexOf(draggedId);
+    const toI = order.indexOf(targetId);
     if (fromI < 0 || toI < 0) return;
-    const order = cur.filter((id) => id !== draggedId);
-    // Scendendo si inserisce DOPO il target, salendo PRIMA: cosi' il riordino
-    // funziona in entrambe le direzioni (prima scendeva "una posizione corta").
-    const at = order.indexOf(targetId) + (fromI < toI ? 1 : 0);
-    order.splice(at, 0, draggedId);
+    [order[fromI], order[toI]] = [order[toI], order[fromI]];
     update({ order });
   };
   const substitute = (starterId: string, benchId: string) => {
@@ -2233,8 +3453,25 @@ function RosterPage({
     }
     setDrag(null);
   };
+  // Riordino delle riserve come SWAP: le due riserve si scambiano di posto nella
+  // preferenza (benchOrder), le altre restano ferme. Si parte dall'ordine mostrato.
+  const reorderBench = (targetId: string, draggedId: string) => {
+    if (draggedId === targetId) return;
+    const ids = bench.map((b) => b.id);
+    const fromI = ids.indexOf(draggedId);
+    const toI = ids.indexOf(targetId);
+    if (fromI < 0 || toI < 0) return;
+    [ids[fromI], ids[toI]] = [ids[toI], ids[fromI]];
+    update({ benchOrder: ids });
+  };
+  // Drop su una riga riserva: un TITOLARE trascinato qui (dalla lista battuta o
+  // dalla difesa) fa lo swap e scende; una RISERVA trascinata su un'altra riserva
+  // riordina la lista dei backup.
   const dropBenchRow = (benchId: string) => {
-    if (drag && drag.from === 'lineup') substitute(drag.id, benchId);
+    if (drag && drag.id !== benchId) {
+      if (arr.order.includes(drag.id)) substitute(drag.id, benchId);
+      else reorderBench(benchId, drag.id);
+    }
     setDrag(null);
   };
 
@@ -2244,6 +3481,22 @@ function RosterPage({
   const placePitcher = (toList: 'rotation' | 'bullpen' | 'avail', targetId?: string) => {
     if (!drag) return;
     const id = drag.id;
+    // Riordino DENTRO la stessa lista (rotazione o bullpen) = SWAP: i due si
+    // scambiano di posto, gli altri restano fermi. Cross-lista resta uno spostamento
+    // (il numero di lanciatori per lista e' variabile, non c'e' una casella fissa).
+    if (drag.from === toList && targetId && id !== targetId && toList !== 'avail') {
+      const swap = (list: string[]) => {
+        const a = list.indexOf(id);
+        const b = list.indexOf(targetId);
+        if (a < 0 || b < 0) return list;
+        const next = [...list];
+        [next[a], next[b]] = [next[b], next[a]];
+        return next;
+      };
+      update(toList === 'rotation' ? { rotation: swap(arr.rotation) } : { bullpen: swap(arr.bullpen) });
+      setDrag(null);
+      return;
+    }
     let rotation = arr.rotation.filter((x) => x !== id);
     let bullpen = arr.bullpen.filter((x) => x !== id);
     const insert = (list: string[]) => {
@@ -2357,11 +3610,17 @@ function RosterPage({
     >
       <td className="n">{from === 'avail' ? '' : i + 1}</td>
       <td className="l grip">
-        ⠿ {p.name}
+        ⠿ <PlayerLink player={p}>{p.name}</PlayerLink>
         {tag && <span className="tag">{tag}</span>}
       </td>
+      <td>{p.age}</td>
       <td className="roles">
-        <span className="rolebadge">{p.role === 'CL' ? 'RP' : p.role}</span>
+        <span
+          className={`rolebadge${potentialRole(p.ratings) === 'SP/RP' ? ' swing' : ''}`}
+          title="Ruoli potenziali (dalla resistenza): dove è schierato si vede dalla sezione"
+        >
+          {potentialRole(p.ratings)}
+        </span>
         {from === 'bullpen' && (
           <button
             type="button"
@@ -2377,8 +3636,9 @@ function RosterPage({
           </button>
         )}
       </td>
-      <td className="ovr"><Stars overall={pitcherOverall(p.ratings)} /></td>
-      <td>{p.age}</td>
+      <td className="ovr"><OvrBadge overall={pitcherOverall(p.ratings)} /></td>
+      <OvrBarCell id={p.id} overall={pitcherOverall(p.ratings)} potential={p.potential} age={p.age} />
+      <PotCell id={p.id} overall={pitcherOverall(p.ratings)} potential={p.potential} age={p.age} />
       {pitStatCells(p)}
     </tr>
   );
@@ -2395,7 +3655,7 @@ function RosterPage({
       onDrop={() => placePitcher(list)}
     >
       <div className="card-title">
-        {title} <span className="card-sub">{hint}</span>
+        {title} <InfoDot onClick={() => setLegend('pit')} /> <span className="card-sub">{hint}</span>
       </div>
       <div className="roster-scroll">
         <table className="ratings roster-tbl">
@@ -2403,9 +3663,11 @@ function RosterPage({
             <tr>
               <th className="n">#</th>
               <th className="l">Lanciatore</th>
+              <th title="Età">ETÀ</th>
               <th>RUOLO</th>
               <th title="Valore totale">OVR</th>
-              <th title="Età">ETÀ</th>
+              <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+              <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
               {pitCols.map((c) => (
                 <th key={c}>{c}</th>
               ))}
@@ -2417,7 +3679,7 @@ function RosterPage({
             )}
             {rows.length === 0 && (
               <tr>
-                <td className="l" colSpan={5 + pitCols.length}>
+                <td className="l" colSpan={7 + pitCols.length}>
                   {list === 'avail' ? 'Nessun disponibile.' : 'Trascina qui un lanciatore.'}
                 </td>
               </tr>
@@ -2521,12 +3783,12 @@ function RosterPage({
 
       {tab === 'fielders' ? (
         fieldView === 'lineup' ? (
-          <>
+          <div className="lineup-layout">
             <div className="card">
               <div className="card-title">
-                Ordine di battuta{' '}
+                Ordine di battuta <InfoDot onClick={() => setLegend('bat')} />{' '}
                 <span className="card-sub">
-                  trascina per riordinare (su e giù); un disponibile su un titolare = sostituzione
+                  trascina un titolare su un altro per scambiarli; un disponibile su un titolare = sostituzione
                 </span>
               </div>
               <div className="roster-scroll">
@@ -2535,9 +3797,11 @@ function RosterPage({
                     <tr>
                       <th className="n">#</th>
                       <th className="l">Giocatore</th>
+                      <th className="age-h" title="Età">ETÀ</th>
                       <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                       <th title="Valore totale">OVR</th>
-                      <th className="age-h" title="Età">ETÀ</th>
+                      <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                      <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                       {batAtkCols.map((c) => (
                         <th key={c}>{c}</th>
                       ))}
@@ -2555,10 +3819,14 @@ function RosterPage({
                         onDrop={() => { dropLineupRow(b.id); setOver(null); }}
                       >
                         <td className="n">{i + 1}</td>
-                        <td className="l grip">⠿ {b.name}</td>
-                        <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                        <td className="l grip">
+                          ⠿ <PlayerLink player={b} pos={arr.defense[b.id] ?? b.position} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
+                        </td>
                         <td className="age">{b.age}</td>
+                        <td className="roles">{rolesOf(b)}</td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                        <OvrBarCell id={b.id} overall={batterOverall(b.ratings)} potential={b.potential} age={b.age} />
+                        <PotCell id={b.id} overall={batterOverall(b.ratings)} potential={b.potential} age={b.age} />
                         {batAtkCells(b)}
                       </tr>
                     ))}
@@ -2569,17 +3837,19 @@ function RosterPage({
 
             <div className="card" onDragOver={(e) => e.preventDefault()}>
               <div className="card-title">
-                Disponibili ({bench.length}){' '}
-                <span className="card-sub">trascina su un titolare per sostituire</span>
+                Disponibili ({bench.length}) <InfoDot onClick={() => setLegend('bat')} />{' '}
+                <span className="card-sub">trascina un titolare qui per scaricarlo · o riordina le riserve fra loro</span>
               </div>
               <div className="roster-scroll">
                 <table className="ratings roster-tbl">
                   <thead>
                     <tr>
                       <th className="l">Giocatore</th>
+                      <th className="age-h" title="Età">ETÀ</th>
                       <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                       <th title="Valore totale">OVR</th>
-                      <th className="age-h" title="Età">ETÀ</th>
+                      <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                      <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                       {batAtkCols.map((c) => (
                         <th key={c}>{c}</th>
                       ))}
@@ -2589,23 +3859,27 @@ function RosterPage({
                     {bench.map((b) => (
                       <tr
                         key={b.id}
-                        className={`drow${drag?.id === b.id ? ' dragging' : ''}`}
+                        className={`drow${drag?.id === b.id ? ' dragging' : ''}${over === b.id && drag?.id !== b.id ? ' over' : ''}`}
                         draggable
                         onDragStart={() => setDrag({ id: b.id, from: 'bench' })}
                         onDragEnd={() => { setDrag(null); setOver(null); }}
-                        onDragOver={(e) => e.preventDefault()}
+                        onDragOver={(e) => { e.preventDefault(); setOver(b.id); }}
                         onDrop={() => { dropBenchRow(b.id); setOver(null); }}
                       >
-                        <td className="l grip">⠿ {b.name}</td>
-                        <td className="roles">{rolesOf(b)}</td>
-                        <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                        <td className="l grip">
+                          ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
+                        </td>
                         <td className="age">{b.age}</td>
+                        <td className="roles">{rolesOf(b)}</td>
+                        <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                        <OvrBarCell id={b.id} overall={batterOverall(b.ratings)} potential={b.potential} age={b.age} />
+                        <PotCell id={b.id} overall={batterOverall(b.ratings)} potential={b.potential} age={b.age} />
                         {batAtkCells(b)}
                       </tr>
                     ))}
                     {bench.length === 0 && (
                       <tr>
-                        <td className="l" colSpan={4 + batAtkCols.length}>
+                        <td className="l" colSpan={6 + batAtkCols.length}>
                           Nessun disponibile.
                         </td>
                       </tr>
@@ -2614,13 +3888,13 @@ function RosterPage({
                 </table>
               </div>
             </div>
-          </>
+          </div>
         ) : (
           <div className="def-layout">
             <div className="def-col-list">
               <div className="card">
                 <div className="card-title">
-                  Per posizione{' '}
+                  Per posizione <InfoDot onClick={() => setLegend('def')} />{' '}
                   <span className="card-sub">
                     dal ricevitore al n.9; trascina un nome (o una riserva) su una riga/casella
                   </span>
@@ -2631,9 +3905,11 @@ function RosterPage({
                       <tr>
                         <th title="Casella difensiva">POS</th>
                         <th className="l">Giocatore</th>
+                        <th className="age-h" title="Età">ETÀ</th>
                         <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                         <th title="Valore totale">OVR</th>
-                        <th className="age-h" title="Età">ETÀ</th>
+                        <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                        <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                         {batDefCols.map((c) => (
                           <th key={c}>{c}</th>
                         ))}
@@ -2657,10 +3933,14 @@ function RosterPage({
                               <span className={`pos${pos === b.position ? '' : ' moved'}`}>{pos}</span>
                               {outOfRole && ' ⚠'}
                             </td>
-                            <td className="l grip">⠿ {b.name}</td>
-                            <td className="roles">{rolesOf(b)}</td>
-                            <td className="ovr"><Stars overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
+                            <td className="l grip">
+                              ⠿ <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
+                            </td>
                             <td className="age">{b.age}</td>
+                            <td className="roles">{rolesOf(b)}</td>
+                            <td className="ovr"><OvrBadge overall={batterOverall(ratingsAtPosition(b, pos))} /></td>
+                            <OvrBarCell id={b.id} overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} age={b.age} />
+                            <PotCell id={b.id} overall={batterOverall(ratingsAtPosition(b, pos))} potential={b.potential} age={b.age} />
                             {batDefCells(b, pos)}
                           </tr>
                         );
@@ -2672,17 +3952,19 @@ function RosterPage({
 
               <div className="card">
                 <div className="card-title">
-                  Riserve ({bench.length}){' '}
-                  <span className="card-sub">trascina su una casella del campo per schierarle</span>
+                  Riserve ({bench.length}) <InfoDot onClick={() => setLegend('def')} />{' '}
+                  <span className="card-sub">trascina su una casella per schierarle · un titolare qui lo scarica · fra riserve = riordina</span>
                 </div>
                 <div className="roster-scroll">
                   <table className="ratings roster-tbl">
                     <thead>
                       <tr>
                         <th className="l">Giocatore</th>
+                        <th className="age-h" title="Età">ETÀ</th>
                         <th className="roles-h" title="Ruoli naturali">RUOLI</th>
                         <th title="Valore totale">OVR</th>
-                        <th className="age-h" title="Età">ETÀ</th>
+                        <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
+                        <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
                         {batDefCols.map((c) => (
                           <th key={c}>{c}</th>
                         ))}
@@ -2692,22 +3974,27 @@ function RosterPage({
                       {bench.map((b) => (
                         <tr
                           key={b.id}
-                          className={`drow${drag?.id === b.id ? ' dragging' : ''}`}
+                          className={`drow${drag?.id === b.id ? ' dragging' : ''}${over === b.id && drag?.id !== b.id ? ' over' : ''}`}
                           draggable
                           onDragStart={() => setDrag({ id: b.id, from: 'bench' })}
                           onDragEnd={() => { setDrag(null); setOver(null); }}
-                          onDragOver={(e) => e.preventDefault()}
+                          onDragOver={(e) => { e.preventDefault(); setOver(b.id); }}
+                          onDrop={() => { dropBenchRow(b.id); setOver(null); }}
                         >
-                          <td className="l grip">⠿ {b.name}</td>
-                          <td className="roles">{rolesOf(b)}</td>
-                          <td className="ovr"><Stars overall={batterOverall(b.ratings)} /></td>
+                          <td className="l grip">
+                            ⠿ <PlayerLink player={b} pos={b.position} tier={batTierOf.get(b.id) ?? 'bench'}>{b.name}</PlayerLink>
+                          </td>
                           <td className="age">{b.age}</td>
+                          <td className="roles">{rolesOf(b)}</td>
+                          <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
+                          <OvrBarCell id={b.id} overall={batterOverall(b.ratings)} potential={b.potential} age={b.age} />
+                          <PotCell id={b.id} overall={batterOverall(b.ratings)} potential={b.potential} age={b.age} />
                           {batDefCells(b, b.position)}
                         </tr>
                       ))}
                       {bench.length === 0 && (
                         <tr>
-                          <td className="l" colSpan={4 + batDefCols.length}>Nessuna riserva.</td>
+                          <td className="l" colSpan={6 + batDefCols.length}>Nessuna riserva.</td>
                         </tr>
                       )}
                     </tbody>
@@ -2749,7 +4036,15 @@ function RosterPage({
                         }
                       >
                         <span className="fpos-lbl">{pos}</span>
-                        <span className="fpos-name">{b ? lastName(b.name) : '—'}</span>
+                        <span className="fpos-name">
+                          {b ? (
+                            <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>
+                              {lastName(b.name)}
+                            </PlayerLink>
+                          ) : (
+                            '—'
+                          )}
+                        </span>
                         {b && (
                           <span
                             className={`fpos-dif${natural ? '' : ' off'}`}
@@ -2780,7 +4075,15 @@ function RosterPage({
                         onDrop={(e) => { e.stopPropagation(); dropDefCell('DH'); setOver(null); }}
                       >
                         <span className="fpos-lbl">DH</span>
-                        <span className="fpos-name">{b ? lastName(b.name) : '—'}</span>
+                        <span className="fpos-name">
+                          {b ? (
+                            <PlayerLink player={b} pos={'DH'} tier={batTierOf.get(b.id)}>
+                              {lastName(b.name)}
+                            </PlayerLink>
+                          ) : (
+                            '—'
+                          )}
+                        </span>
                       </div>
                     );
                   })()}
@@ -2791,6 +4094,76 @@ function RosterPage({
         )
       ) : (
         <>
+          {(() => {
+            const rotIds = arr.rotation.map((id) => id);
+            const opts = starterOptions(season.rotation, rotIds, season.day);
+            const effective =
+              todayStarter && rotIds.includes(todayStarter)
+                ? todayStarter
+                : suggestedStarter(season.rotation, rotIds, season.day);
+            return (
+              <div className="card rotation-day">
+                <div className="card-title">
+                  Rotazione del giorno{' '}
+                  <span className="card-sub">
+                    riposo obbligatorio 3 giornate · giornata {season.day}
+                  </span>
+                </div>
+                <div className="rot-controls">
+                  <span className="rot-label">Uomini:</span>
+                  <div className="seg">
+                    {([4, 5] as RotationSize[]).map((sz) => (
+                      <button
+                        key={sz}
+                        className={`seg-btn${season.rotation.size === sz ? ' active' : ''}`}
+                        onClick={() => onRotationSize(sz)}
+                        title={sz === 4 ? 'Ciclo stretto: l’asso parte ogni 4 partite' : 'L’asso riposa un giorno in più'}
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="rot-starters">
+                  {opts.map((o) => {
+                    const p = pById.get(o.id);
+                    if (!p) return null;
+                    const rest = o.restDays === Infinity ? 'pronto' : `${o.restDays} gg`;
+                    return (
+                      <button
+                        key={o.id}
+                        className={`rot-sp${effective === o.id ? ' sel' : ''}${o.available ? '' : ' off'}`}
+                        disabled={!o.available}
+                        onClick={() => onPickStarter(o.id)}
+                        title={
+                          o.inCycle ? 'Nel ciclo' : 'Fuori dal ciclo (spot start): dà riposo extra all’asso'
+                        }
+                      >
+                        <span className="rot-sp-name">{p.lastName}</span>
+                        <span className="rot-sp-meta">
+                          {rest}
+                          {o.inCycle ? '' : ' · extra'}
+                          {o.available ? '' : ' · riposa'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="rot-hint">
+                  {effective && pById.get(effective)
+                    ? `Oggi parte: ${pById.get(effective)!.lastName}${
+                        todayStarter && rotIds.includes(todayStarter) ? ' (scelto)' : ' (consigliato)'
+                      }`
+                    : 'Nessun partente disponibile'}
+                  {todayStarter && (
+                    <button className="rot-reset" onClick={() => onPickStarter(null)}>
+                      ↺ consigliato
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           {pitTable(
             'Rotazione',
             'ordine degli starter · il primo parte',
@@ -2806,6 +4179,8 @@ function RosterPage({
           {pitTable('Disponibili', 'trascina in rotazione o bullpen', 'avail', availP)}
         </>
       )}
+
+      {legend && <StatLegend section={legend} onClose={() => setLegend(null)} />}
     </div>
   );
 }
@@ -2888,7 +4263,7 @@ function HomePage({
   schedule,
   season,
   onPlay,
-  onManagedChange,
+  onOverview,
   onNewLeague,
 }: {
   league: Team[];
@@ -2896,7 +4271,7 @@ function HomePage({
   schedule: Schedule;
   season: SeasonState;
   onPlay: (g: ScheduleGame) => void;
-  onManagedChange: (id: string) => void;
+  onOverview: () => void;
   onNewLeague: () => void;
 }) {
   const day = season.day;
@@ -2909,30 +4284,30 @@ function HomePage({
   const myPitchers = rosterPitchers(managedTeam);
   const batOf = (b: Batter) => season.bat[b.id];
   const pitOf = (p: Pitcher) => season.pit[p.id];
-  const leaders: Array<{ label: string; who?: string; val: string }> = [
+  const leaders: Array<{ label: string; who?: string; val: string; player?: Batter | Pitcher }> = [
     (() => {
       const x = topBy(myBatters, batOf, (s: SeasonBat) => s.hr);
-      return { label: 'HR', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'HR', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myBatters, batOf, (s: SeasonBat) => s.rbi);
-      return { label: 'RBI', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'RBI', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myBatters, batOf, (s: SeasonBat) => (s.ab ? s.h / s.ab : 0), 5);
-      return { label: 'AVG', who: x?.t.name, val: x ? x.v.toFixed(3).replace(/^0/, '') : '—' };
+      return { label: 'AVG', who: x?.t.name, val: x ? x.v.toFixed(3).replace(/^0/, '') : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.w);
-      return { label: 'W', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'W', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.so);
-      return { label: 'K', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'K', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
     (() => {
       const x = topBy(myPitchers, pitOf, (s: SeasonPit) => s.sv);
-      return { label: 'SV', who: x?.t.name, val: x ? `${x.v}` : '—' };
+      return { label: 'SV', who: x?.t.name, val: x ? `${x.v}` : '—', player: x?.t };
     })(),
   ];
   const played = Object.keys(season.results).length > 0;
@@ -2941,10 +4316,10 @@ function HomePage({
   const myDiv = sortByRecord(season, divisionRivals(league, managedTeam.id));
   const divLeader = recordOf(season, myDiv[0]?.id ?? managedTeam.id);
 
-  // Calendario a finestra: ~10 gare attorno al turno, scorrimento manuale.
+  // Calendario a finestra: -3gg / oggi / +3gg (7 gare), scorrimento manuale.
   const regState = (i: number): ChipState =>
     i < day ? 'played' : i === day ? 'current' : 'locked';
-  const WIN = 10;
+  const WIN = 7;
   const maxStart = Math.max(0, schedule.regular.length - WIN);
   const [winStart, setWinStart] = useState(() => Math.min(maxStart, Math.max(0, day - 3)));
   const shift = (d: number) => setWinStart((s) => Math.max(0, Math.min(maxStart, s + d)));
@@ -2969,18 +4344,11 @@ function HomePage({
           </button>
         )}
         <div className="dash-actions">
-          <label className="dash-pick">
-            <span>Squadra gestita</span>
-            <select value={managedTeam.id} onChange={(e) => onManagedChange(e.target.value)}>
-              {league.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.abbrev} — {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="btn" onClick={onNewLeague} title="Rigenera l'intera lega da un nuovo seed">
-            🔄 Nuova lega
+          <button className="btn" onClick={onOverview} title="Vedi tutte le squadre della lega">
+            📋 Panoramica lega
+          </button>
+          <button className="btn" onClick={onNewLeague} title="Torna al menu (carica/nuova partita)">
+            🏠 Menu
           </button>
         </div>
       </div>
@@ -2997,7 +4365,18 @@ function HomePage({
               {leaders.map((l) => (
                 <div className="leader" key={l.label}>
                   <div className="lmain">
-                    <span className="lwho">{l.who ?? '—'}</span>
+                    <span className="lwho">
+                      {l.player ? (
+                        <PlayerLink
+                          player={l.player}
+                          pos={isBatter(l.player) ? l.player.position : undefined}
+                        >
+                          {l.who}
+                        </PlayerLink>
+                      ) : (
+                        (l.who ?? '—')
+                      )}
+                    </span>
                     <span className="lstat">{l.label}</span>
                   </div>
                   <span className="lval">{l.val}</span>
@@ -3101,16 +4480,18 @@ function HomePage({
         </div>
       </div>
 
-      <div className="card cal-section">
-        <div className="card-title">
-          Prestagione <span className="card-sub">amichevoli · non incidono su record/stat</span>
+      {day === 0 && (
+        <div className="card cal-section">
+          <div className="card-title">
+            Prestagione <span className="card-sub">amichevoli · non incidono su record/stat</span>
+          </div>
+          <div className="cal-chips">
+            {schedule.preseason.map((g) => (
+              <GameChip key={g.id} g={g} league={league} state="exhibition" onPlay={onPlay} />
+            ))}
+          </div>
         </div>
-        <div className="cal-chips">
-          {schedule.preseason.map((g) => (
-            <GameChip key={g.id} g={g} league={league} state="exhibition" onPlay={onPlay} />
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -3147,12 +4528,12 @@ function MatchCard({
       </div>
       <div className="mc-teams">
         <span className="mc-team">
-          <TeamBadge team={managedTeam} size={18} /> {managedTeam.abbrev}
+          <TeamBadge team={managedTeam} size={26} /> {managedTeam.abbrev}
           <span className="mc-rec">{myRec.w}-{myRec.l}</span>
         </span>
         <span className="mc-vs">{g.home ? 'vs' : '@'}</span>
         <span className="mc-team">
-          <TeamBadge team={opp} size={18} /> {opp.abbrev}
+          <TeamBadge team={opp} size={26} /> {opp.abbrev}
           <span className="mc-rec">{oppRec.w}-{oppRec.l}</span>
         </span>
       </div>
@@ -3252,6 +4633,7 @@ interface LbBat {
   managed: boolean;
   line: BatLine;
   pa: number;
+  player: Batter;
 }
 interface LbPit {
   id: string;
@@ -3259,6 +4641,7 @@ interface LbPit {
   team: Team;
   managed: boolean;
   line: PitLine;
+  player: Pitcher;
 }
 
 interface LbCol<R> {
@@ -3302,7 +4685,9 @@ const PIT_LB_COLS: LbCol<LbPit>[] = [
 
 const LB_LIMIT = 50;
 
-function LbTable<R extends { id: string; name: string; team: Team; managed: boolean }>({
+function LbTable<
+  R extends { id: string; name: string; team: Team; managed: boolean; player: Batter | Pitcher },
+>({
   rows,
   cols,
   defaultKey,
@@ -3359,7 +4744,14 @@ function LbTable<R extends { id: string; name: string; team: Team; managed: bool
           {sorted.map((r, i) => (
             <tr key={r.id} className={r.managed ? 'me' : undefined}>
               <td className="rank">{i + 1}</td>
-              <td className="l name">{r.name}</td>
+              <td className="l name">
+                <PlayerLink
+                  player={r.player}
+                  pos={isBatter(r.player) ? r.player.position : undefined}
+                >
+                  {r.name}
+                </PlayerLink>
+              </td>
               <td className="l">
                 <TeamBadge team={r.team} size={15} /> {r.team.abbrev}
               </td>
@@ -3388,6 +4780,9 @@ function LeaderboardPage({
   managedId: string;
 }) {
   const [tab, setTab] = useState<'batting' | 'pitching'>('batting');
+  // Filtro settoriale del reparto lanciatori: partenti (>=10 aperture), rilievo
+  // (<10), o tutti. Soglia robusta anche in proiezione (un SP proietta ~32 GS).
+  const [pitScope, setPitScope] = useState<'all' | 'sp' | 'rp'>('all');
   const day = season.day;
   const preseason = day === 0;
   const projDay = preseason ? SEASON_GAMES : day;
@@ -3419,7 +4814,7 @@ function LeaderboardPage({
           if (!sb) continue;
           const pa = sb.ab + sb.bb;
           if (pa < minPA) continue;
-          out.push({ id: b.id, name: b.name, team: t, managed, line: seasonBatLine(sb), pa });
+          out.push({ id: b.id, name: b.name, team: t, managed, line: seasonBatLine(sb), pa, player: b });
         }
       }
     }
@@ -3444,11 +4839,16 @@ function LeaderboardPage({
           sp = real ? addPit(real, fill) : fill;
         }
         if (!sp || sp.outs < minOuts) continue;
-        out.push({ id: p.id, name: p.name, team: t, managed, line: seasonPitLine(sp) });
+        out.push({ id: p.id, name: p.name, team: t, managed, line: seasonPitLine(sp), player: p });
       }
     }
     return out;
   }, [league, season, seed, managedId, day, preseason, projDay]);
+
+  const pitShown = useMemo<LbPit[]>(() => {
+    if (pitScope === 'all') return pitRows;
+    return pitRows.filter((r) => (pitScope === 'sp' ? r.line.gs >= 10 : r.line.gs < 10));
+  }, [pitRows, pitScope]);
 
   return (
     <div className="page leaderboard-page">
@@ -3476,10 +4876,33 @@ function LeaderboardPage({
           </button>
         </div>
 
+        {tab === 'pitching' && (
+          <div className="subtabs pit-scope">
+            {([
+              ['all', 'Tutti'],
+              ['sp', 'Partenti'],
+              ['rp', 'Rilievo'],
+            ] as const).map(([k, lbl]) => (
+              <button
+                key={k}
+                className={pitScope === k ? 'subtab active' : 'subtab'}
+                onClick={() => setPitScope(k)}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+        )}
+
         {tab === 'batting' ? (
           <LbTable key="bat" rows={batRows} cols={BAT_LB_COLS} defaultKey="hr" />
         ) : (
-          <LbTable key="pit" rows={pitRows} cols={PIT_LB_COLS} defaultKey="era" />
+          <LbTable
+            key={`pit-${pitScope}`}
+            rows={pitShown}
+            cols={PIT_LB_COLS}
+            defaultKey={pitScope === 'rp' ? 'sv' : 'era'}
+          />
         )}
 
         <p className="muted lb-note">
@@ -3493,19 +4916,513 @@ function LeaderboardPage({
   );
 }
 
-function FranchisePage({ team }: { team: Team }) {
+// ---------------------------------------------------------------------------
+// Cap: indicatore payroll-vs-cap (modello a due confini), forza squadra, e il
+// flusso d'ingresso (schermata iniziale + panoramica lega + scelta squadra).
+// ---------------------------------------------------------------------------
+
+const CAP_ZONE: Record<CapZone, { label: string; cls: string }> = {
+  under: { label: 'Sotto cap', cls: 'under' },
+  tax: { label: 'Fascia tassa', cls: 'tax' },
+  over: { label: 'Oltre il muro', cls: 'over' },
+};
+
+/** Barra monte-ingaggi con tacche cap base e muro esterno; zona colorata. */
+function CapIndicator({
+  payroll,
+  mode,
+  compact,
+}: {
+  payroll: number;
+  mode: LeagueMode;
+  compact?: boolean;
+}) {
+  const base = mode.cap.amount;
+  const wall = outerWall(base);
+  const z = CAP_ZONE[capZone(payroll, mode)];
+  const scale = wall * 1.12; // margine oltre il muro, così la tacca resta visibile
+  const pct = (v: number) => `${Math.max(0, Math.min(100, (v / scale) * 100))}%`;
+  return (
+    <div className={`cap-ind${compact ? ' compact' : ''}`}>
+      <div
+        className="cap-bar"
+        title={`Monte-ingaggi $${payroll.toFixed(0)}M · cap base $${base}M · muro $${wall.toFixed(0)}M`}
+      >
+        <div className={`cap-fill ${z.cls}`} style={{ width: pct(payroll) }} />
+        <div className="cap-mark base" style={{ left: pct(base) }} title={`Cap base $${base}M`} />
+        <div className="cap-mark wall" style={{ left: pct(wall) }} title={`Muro $${wall.toFixed(0)}M`} />
+      </div>
+      {!compact && (
+        <div className="cap-row">
+          <span className={`cap-chip ${z.cls}`}>{z.label}</span>
+          <span className="muted">
+            ${payroll.toFixed(0)}M / cap ${base}M · muro ${wall.toFixed(0)}M
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tre barrette Attacco/Difesa/Lancio (scala 40-100). */
+function StrengthBars({ s }: { s: TeamStrength }) {
+  const rows: Array<[string, number]> = [
+    ['ATT', s.attack],
+    ['DIF', s.defense],
+    ['LAN', s.pitching],
+  ];
+  return (
+    <div className="str-bars">
+      {rows.map(([k, v]) => (
+        <div className="str-row" key={k}>
+          <span className="str-k">{k}</span>
+          <span className="str-track">
+            <span
+              className="str-fill"
+              style={{ width: `${((v - 40) / 60) * 100}%`, background: ratingColor(v) }}
+            />
+          </span>
+          <span className="str-v">{v.toFixed(0)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Card di una partita salvata nell'hub (Continua / Elimina). */
+function SavedGameCard({
+  game,
+  onLoad,
+  onDelete,
+}: {
+  game: SavedGame;
+  onLoad: (g: SavedGame) => void;
+  onDelete: (slot: string) => void;
+}) {
+  const when = (() => {
+    try {
+      return new Date(game.updatedAt).toLocaleString('it-IT');
+    } catch {
+      return '';
+    }
+  })();
+  const label = game.team ? `${game.team.abbrev} — ${game.team.name}` : game.managedTeamId ?? '—';
+  const played = game.day > 0 || game.record.w + game.record.l > 0;
+  return (
+    <div className="save-card">
+      <div className="save-badge">
+        {game.team ? <TeamBadge team={game.team} size={34} /> : <span className="sc-icon">💾</span>}
+      </div>
+      <div className="save-info">
+        <div className="save-name">{label}</div>
+        <div className="save-meta">
+          {game.source === 'historical' ? 'Storica' : 'Generata'} · Anno {game.year} ·{' '}
+          {played ? `giornata ${game.day} · ${game.record.w}-${game.record.l}` : 'nuova'}
+        </div>
+        {when && <div className="save-when muted">{when}</div>}
+      </div>
+      <div className="save-actions">
+        <button className="btn primary" onClick={() => onLoad(game)}>
+          Continua ▸
+        </button>
+        <button
+          className="btn ghost danger"
+          title="Elimina partita"
+          onClick={() => {
+            if (confirm(`Eliminare la partita ${label}? L'operazione è irreversibile.`)) {
+              onDelete(game.slot);
+            }
+          }}
+        >
+          🗑
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Hub iniziale: continua una partita salvata (caricamento) o iniziane una nuova. */
+function StartScreen({
+  savedGames,
+  onLoad,
+  onDelete,
+  onNewGenerated,
+  onNewHistorical,
+}: {
+  savedGames: SavedGame[];
+  onLoad: (g: SavedGame) => void;
+  onDelete: (slot: string) => void;
+  onNewGenerated: () => void;
+  onNewHistorical: () => void;
+}) {
+  return (
+    <div className="app start-app">
+      <div className="start-hero">
+        <div className="start-title">
+          <span className="logo">⚾</span> MLBSim
+        </div>
+        <div className="start-sub">
+          Simulatore di baseball testuale · epoca alta offesa anni '90/2000
+        </div>
+      </div>
+
+      {savedGames.length > 0 && (
+        <section className="start-section">
+          <div className="start-section-title">Continua una partita</div>
+          <div className="save-list">
+            {savedGames.map((g) => (
+              <SavedGameCard key={g.slot} game={g} onLoad={onLoad} onDelete={onDelete} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="start-section">
+        <div className="start-section-title">Nuova partita</div>
+        <div className="start-cards">
+          <button className="start-card" onClick={onNewGenerated}>
+            <div className="sc-icon">🎲</div>
+            <div className="sc-title">Nuova carriera generata</div>
+            <div className="sc-desc">
+              30 franchigie con rose procedurali da un seed casuale. Calendario 162 gare, cap a due
+              confini, evoluzione negli anni.
+            </div>
+          </button>
+          <button className="start-card" onClick={onNewHistorical}>
+            <div className="sc-icon">📜</div>
+            <div className="sc-title">
+              Stagione storica <span className="badge-soon">anteprima</span>
+            </div>
+            <div className="sc-desc">
+              Seed d'archivio da un'annata reale (rose sbilanciate, cap morbido). Dataset ancora
+              limitato: pipeline completa in arrivo.
+            </div>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** Dettaglio rosa di una squadra nella panoramica (modale). */
+function TeamDetailModal({
+  team,
+  mode,
+  onClose,
+  onPick,
+}: {
+  team: Team;
+  mode: LeagueMode;
+  onClose: () => void;
+  onPick: () => void;
+}) {
+  const s = teamStrength(team);
+  const pay = teamPayroll(team);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal team-detail" onClick={(e) => e.stopPropagation()}>
+        <div className="td-head">
+          <TeamBadge team={team} size={40} />
+          <div className="td-id">
+            <div className="td-name">{team.name}</div>
+            <div className="muted">
+              {LEAGUE_LABEL[team.league]} · {DIVISION_LABEL[team.division]}
+            </div>
+          </div>
+          <button className="btn ghost" onClick={onClose} title="Chiudi">
+            ✕
+          </button>
+        </div>
+        <div className="td-strength">
+          <div className="td-total">
+            Forza <b style={{ color: ratingColor(s.total) }}>{s.total.toFixed(0)}</b>
+          </div>
+          <StrengthBars s={s} />
+        </div>
+        <CapIndicator payroll={pay} mode={mode} />
+        <div className="td-rosters">
+          <div className="td-col">
+            <div className="card-title">Lineup</div>
+            <table className="ratings">
+              <thead>
+                <tr>
+                  <th className="l">Giocatore</th>
+                  <th>Pos</th>
+                  <th>Età</th>
+                  <th>OVR</th>
+                  <th>$M</th>
+                </tr>
+              </thead>
+              <tbody>
+                {team.lineup.map((b) => {
+                  const o = batterOverall(b.ratings);
+                  return (
+                    <tr key={b.id}>
+                      <td className="l">{upperLast(b.name)}</td>
+                      <td>{b.position}</td>
+                      <td>{b.age}</td>
+                      <td style={{ color: ratingColor(o) }}>{o.toFixed(0)}</td>
+                      <td>{b.salary.toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="td-col">
+            <div className="card-title">Rotazione</div>
+            <table className="ratings">
+              <thead>
+                <tr>
+                  <th className="l">Lanciatore</th>
+                  <th>Ruolo</th>
+                  <th>Età</th>
+                  <th>OVR</th>
+                  <th>$M</th>
+                </tr>
+              </thead>
+              <tbody>
+                {team.rotation.map((p) => {
+                  const o = pitcherOverall(p.ratings);
+                  return (
+                    <tr key={p.id}>
+                      <td className="l">{upperLast(p.name)}</td>
+                      <td>{p.role}</td>
+                      <td>{p.age}</td>
+                      <td style={{ color: ratingColor(o) }}>{o.toFixed(0)}</td>
+                      <td>{p.salary.toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="td-foot">
+          <span className="muted">Monte-ingaggi ${pay.toFixed(0)}M</span>
+          <button className="btn primary" onClick={onPick}>
+            Gestisci questa squadra ▸
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Panoramica lega: 30 squadre per division con forza e cap; scelta squadra. */
+function LeagueOverview({
+  league,
+  seed,
+  mode,
+  onPick,
+  onBack,
+  embedded = false,
+}: {
+  league: Team[];
+  seed: number;
+  mode: LeagueMode;
+  onPick: (id: string) => void;
+  onBack?: () => void;
+  /** Incorporata come pagina DENTRO la partita (usa la header di gioco): niente
+   *  topbar né "Indietro" propri, così non si esce dal flusso di gioco. */
+  embedded?: boolean;
+}) {
+  const [selId, setSelId] = useState<string>('');
+  const groups = byDivision(league);
+  const sel = selId ? teamById(league, selId) : undefined;
+  return (
+    <div className={embedded ? 'overview-embed' : 'app overview-app'}>
+      {!embedded && (
+        <header className="topbar">
+          <div className="brand">
+            <span className="logo">⚾</span> MLBSim <span className="phase">Panoramica lega</span>
+          </div>
+          <div className="actions">
+            <span className="muted seed-note">seed {seed}</span>
+            <button className="btn" onClick={onBack}>
+              ← Indietro
+            </button>
+          </div>
+        </header>
+      )}
+      <div className="page overview-page">
+        <div className="ov-legend">
+          <span>
+            {embedded ? 'Panoramica della lega' : 'Scegli la squadra da gestire'}. Forza 40-100 ·
+            monte-ingaggi vs cap ${mode.cap.amount}M (muro ${outerWall(mode.cap.amount).toFixed(0)}M).
+          </span>
+          <span className="cap-legend">
+            <span className="cap-chip under">Sotto</span>
+            <span className="cap-chip tax">Tassa</span>
+            <span className="cap-chip over">Oltre muro</span>
+          </span>
+        </div>
+        {groups.map((g) => (
+          <div className="ov-div" key={`${g.league}-${g.division}`}>
+            <div className="ov-div-title">
+              {LEAGUE_LABEL[g.league]} · {DIVISION_LABEL[g.division]}
+            </div>
+            <div className="ov-grid">
+              {g.teams.map((t) => {
+                const s = teamStrength(t);
+                const pay = teamPayroll(t);
+                const zone = capZone(pay, mode);
+                return (
+                  <button
+                    key={t.id}
+                    className={`ov-card${selId === t.id ? ' sel' : ''}`}
+                    onClick={() => setSelId(t.id)}
+                  >
+                    <div className="ov-head">
+                      <TeamBadge team={t} size={30} />
+                      <div className="ov-name">
+                        <div className="ov-abbrev">{t.abbrev}</div>
+                        <div className="ov-full">{t.name}</div>
+                      </div>
+                      <div className="ov-total" style={{ color: ratingColor(s.total) }}>
+                        {s.total.toFixed(0)}
+                      </div>
+                    </div>
+                    <StrengthBars s={s} />
+                    <div className="ov-cap">
+                      <CapIndicator payroll={pay} mode={mode} compact />
+                      <span className={`cap-chip ${zone}`}>${pay.toFixed(0)}M</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      {sel && (
+        <TeamDetailModal
+          team={sel}
+          mode={mode}
+          onClose={() => setSelId('')}
+          onPick={() => onPick(sel.id)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FranchisePage({ team, mode }: { team: Team; mode: LeagueMode }) {
+  const pay = teamPayroll(team);
   return (
     <div className="page">
-      <div className="card page-stub">
+      <div className="card">
         <div className="card-title">
           <TeamBadge team={team} size={22} /> Franchigia — {team.name}
         </div>
-        <p>
-          Il layer manageriale: stipendio unico annuale, salary cap rigido, scambi a valore,
-          draft basilare. Da ampliare nei passi successivi.
-        </p>
-        <p className="muted">Impalcatura: i controlli di gestione arriveranno qui.</p>
+        <div className="fr-cap">
+          <div className="card-sub">Monte-ingaggi vs salary cap</div>
+          <CapIndicator payroll={pay} mode={mode} />
+          <p className="muted">
+            Cap a <b>due confini</b> (base + muro esterno): oggi è solo un <b>indicatore</b>.
+            L'enforce (riconciliazione al rollover via pool, margine di sforamento per-squadra,
+            scambi/rinnovi che rispettano il cap) arriva col layer gestionale. Vedi
+            docs/franchise.md § Salary cap.
+          </p>
+        </div>
       </div>
+      <RosterSalaryTable team={team} />
+      <div className="card page-stub">
+        <p className="muted">
+          Stipendio unico annuale, cap soft, scambi a valore, draft basilare: i controlli di
+          gestione (rinnovi, scambi) arriveranno qui.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+interface FrRow {
+  id: string;
+  name: string;
+  kind: 'B' | 'P';
+  role: string;
+  tier: string;
+  age: number;
+  ovr: number;
+  salary: number;
+}
+
+/** Elenco COMPLETO della rosa (battitori + lanciatori) per giudicarla sul piano
+ *  salariale: tipo, ruolo, reparto, età, rating e stipendio, ordinato per costo. */
+function RosterSalaryTable({ team }: { team: Team }) {
+  const bRow = (b: Batter, tier: string): FrRow => ({
+    id: b.id,
+    name: b.name,
+    kind: 'B',
+    role: b.position,
+    tier,
+    age: b.age,
+    ovr: batterOverall(b.ratings),
+    salary: b.salary,
+  });
+  const pRow = (p: Pitcher, tier: string): FrRow => ({
+    id: p.id,
+    name: p.name,
+    kind: 'P',
+    role: p.role,
+    tier,
+    age: p.age,
+    ovr: pitcherOverall(p.ratings),
+    salary: p.salary,
+  });
+  const rows: FrRow[] = [
+    ...team.lineup.map((b) => bRow(b, 'Titolare')),
+    ...team.bench.map((b) => bRow(b, 'Panca')),
+    ...team.reserveBatters.map((b) => bRow(b, 'Riserva')),
+    ...team.rotation.map((p) => pRow(p, 'Rotazione')),
+    ...team.bullpen.map((p) => pRow(p, 'Bullpen')),
+    ...team.reservePitchers.map((p) => pRow(p, 'Riserva')),
+  ].sort((a, b) => b.salary - a.salary);
+
+  const total = Math.round(rows.reduce((s, r) => s + r.salary, 0) * 10) / 10;
+  const avgAge = rows.length ? Math.round((rows.reduce((s, r) => s + r.age, 0) / rows.length) * 10) / 10 : 0;
+
+  return (
+    <div className="card">
+      <div className="card-title">
+        Rosa completa{' '}
+        <span className="card-sub">
+          {rows.length} giocatori · monte-ingaggi ${total.toFixed(1)}M · età media {avgAge}
+        </span>
+      </div>
+      <table className="ratings fr-roster">
+        <thead>
+          <tr>
+            <th className="l">Giocatore</th>
+            <th>Tipo</th>
+            <th>Ruolo</th>
+            <th>Reparto</th>
+            <th>Età</th>
+            <th>OVR</th>
+            <th>$M</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td className="l">{upperLast(r.name)}</td>
+              <td>
+                <span className={`type-chip ${r.kind === 'B' ? 'bat' : 'pit'}`}>
+                  {r.kind === 'B' ? 'Bat' : 'Lan'}
+                </span>
+              </td>
+              <td>{r.role}</td>
+              <td className="tier">{r.tier}</td>
+              <td>{r.age}</td>
+              <td className="ovr">
+                <OvrBadge overall={r.ovr} />
+              </td>
+              <td className="sal">{r.salary.toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

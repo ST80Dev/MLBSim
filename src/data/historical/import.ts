@@ -9,7 +9,7 @@ import {
   deriveStamina,
   batterOverall,
   pitcherOverall,
-  salaryFromOverall,
+  salaryFor,
   projectPotential,
 } from '../../engine/ratings';
 import { splitName } from '../../engine/names';
@@ -74,7 +74,7 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
     // Potenziale = STIMA incerta eta'-scalata (headroom di crescita), NON il
     // picco reale futuro: dallo snapshot il futuro non e' un replay noto.
     potential: projectPotential(rng, ovr, l.age),
-    salary: salaryFromOverall(ovr),
+    salary: salaryFor(ovr, l.age),
     retired: false,
   };
 }
@@ -106,7 +106,7 @@ function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
     stamina: deriveStamina(ratings.stamina, l.role),
     age: l.age,
     potential: projectPotential(rng, ovr, l.age),
-    salary: salaryFromOverall(ovr),
+    salary: salaryFor(ovr, l.age),
     retired: false,
   };
 }

@@ -49,6 +49,15 @@ describe('advanceWithResult', () => {
     expect(s1.pit[starter.id].outs).toBe(starter.outs);
   });
 
+  it('registra la partenza del partente gestito nello stato rotazione (riposo)', () => {
+    const res = playOne();
+    const s1 = advanceWithResult(createSeason(), res, home.id, teams, 2024);
+    const managed = res.home.id === home.id ? res.homeStats : res.awayStats;
+    const starterId = managed.pitching[0].id;
+    // La partenza è al giorno 0: lastStart registrato lì.
+    expect(s1.rotation.lastStart[starterId]).toBe(0);
+  });
+
   it('accumula le stat REALI di ENTRAMBE le squadre della mia partita', () => {
     const res = playOne();
     const s1 = advanceWithResult(createSeason(), res, home.id, teams, 2024);

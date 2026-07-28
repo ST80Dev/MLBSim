@@ -16,6 +16,28 @@ Le costanti di corsa sulle basi sono in `TUNING` (`constants.ts`): probabilità 
 GIDP, di segnare dalla terza su out, di segnare dalla seconda su singolo, di
 arrivare in terza dalla prima, bonus/penalità di platoon, affaticamento.
 
+### Logica di campo sugli out in gioco (`resolveInPlayOut`)
+
+L'out su palla in gioco (`IPO`) non è più "lineare" (battitore eliminato e
+corridori fermi): `resolveInPlayOut` decide un **tipo di battuta** e i relativi
+**effetti reali** sui corridori. Il tipo (`ground` / `fly` / `popup`) diventa
+`PlayEvent.outInfo.ball` ed è la **fonte di verità** condivisa con la UI, così
+telecronaca e codice da segnapunti concordano fra loro e con ciò che accade sulle
+basi (niente più "out in prima" con un codice di volata). Effetti:
+
+- **Rimbalzo** (`ground`): doppio gioco (corridore in 1ª, `gidpProb`); **scelta
+  difensiva** (corridore in 2ª, 1ª e 3ª libere → eliminato verso la 3ª, battitore
+  salvo in prima: `outInfo.fc`); **groundout RBI** dalla 3ª; **out produttivo**
+  (i corridori salgono di una base se quella davanti è libera).
+- **Volata profonda** (`fly`): **volata di sacrificio** / punto dalla 3ª e
+  **tag-up 2ª→3ª**.
+- **Presa comoda** (`popup`): nessun avanzamento.
+
+Costanti in `TUNING.outField`. L'impatto sull'ambiente-punti è modesto (misurato:
++~0.1 R/squadra/partita, ben dentro la banda di realismo 4.3–6.2) e i corridori
+avanzano rispettando l'occupazione delle basi. Coperto dai test in
+`engine/__tests__/live.test.ts` e `ui/__tests__/scorecode.test.ts`.
+
 ## Tattiche interattive (Fase 1) e loro calibrazione
 
 Il motore è una **macchina a stati** (`LiveGame` in `game.ts`): `simulateGame`
@@ -53,6 +75,11 @@ spostano gli aggregati di lega.
   (`playOffense`): `autoStep`/`quickSim` non li chiamano mai, quindi l'aggregato di
   lega e la calibrazione restano invariati. Spegnibili con
   `LiveGame.microEvents = false` (usato nelle misurazioni controllate dei test).
+  *Taratura*: `wpBase 0.019` (era `0.032`) → un lanciatore di **Controllo** medio
+  concede il lancio pazzo nel ~1,9 % dei turni-con-corridori (~0,3/partita, in
+  linea con la MLB, prima era ~0,5), scarso ~3,5 %, ottimo verso `wpMin`. Ridotti
+  in proporzione anche palla passata (`pbBase 0.009`) e balk (`balk 0.003`) per
+  non farli diventare l'evento dominante una volta abbassati i lanci pazzi.
 - **Cambio lanciatore** (`changePitcher` manuale / `autoManagePitcher` per la CPU)
   — porta in pedana un rilievo e ne registra `enteredDiff` (per i save).
 
@@ -127,10 +154,13 @@ palla in gioco), **mai** HR/BB/HBP/SO.
   → uno spread di ~0.7 ERA fra i due estremi. Sensibile ma **non dominante**: il
   lanciatore resta il fattore principale. Test in `engine/__tests__/defense.test.ts`.
 
-Curva ERA↔bravura misurata in Fase 0 (media, gare complete, lega calda): livello
-doti 50→ERA ~4.3; 60→~3.2; ~61 è la soglia del 3.00; 66→~2.4; 72→~1.8; 80→~1.4.
-Con la distribuzione generata, **~8-10 partenti sotto il 3.00 in tutta la lega** —
-è un valore desiderato, l'ERA sotto 2 resta appannaggio dei soli assi.
+Curva ERA↔bravura **del motore** (Log5, gare complete), misurata simulando una
+stagione intera con rotazione piena (R/g ~5.4): ovr ~72→ERA ~6.3; ~80→~4.3;
+~84→~3.6; ~92→~2.2. Il motore **regredisce ogni sfida verso la media di lega**
+(il fenomeno affronta anche avversari forti), quindi comprime i totali: in tutta
+la lega restano **~3-6 partenti sotto il 3.00** e l'ERA sotto 2 è appannaggio dei
+soli assi. Questo è il **bersaglio** a cui la proiezione dev'essere allineata
+(vedi "Proiezione di lega").
 
 ## Come ri-calibrare (procedura)
 
@@ -160,36 +190,92 @@ può portare a .400+ solo *di rado*.
 ## Proiezione di lega e varianza d'annata (`data/projection.ts`)
 
 La leaderboard mostra le stat REALI della squadra gestita e una **proiezione** per
-le altre 29 (senza simulare ogni loro partita). Due livelli di varianza:
+le altre 29 (senza simulare ogni loro partita).
 
-- **stagione su stagione** — un *profilo d'annata* seedato con `form` (livello
-  generale: molte stat su/giù INSIEME), asse `power`↔contatto, e **code rare**
-  (`powerSpike`/`contactSpike`/`kSpike`/`domSpike` ~5%, `collapse` ~7%) che
-  producono le **gemme** (non legate al rating tutti gli anni);
+**Regressione verso la media (Log5-like) — il cardine dell'allineamento.**
+`deriveBatterStats`/`derivePitcherStats` estrapolano il rating **in solitaria**
+(mappa esponenziale: power 90 → ~2× HR, 100 → ~2.9×). Il motore invece fa
+affrontare al fenomeno anche avversari forti, quindi **ogni sfida regredisce verso
+la media** e i totali si comprimono. Senza correzione la proiezione sfornava
+decine di "quasi-fenomeni" che il motore non produce (54 BA≥.317, 40 HR≥40, 22 SP
+sotto 3.00, leader 190 RBI, 113 in tutte le 162 gare). La proiezione perciò
+**regredisce i rating verso `RATING_AVG` prima di derivare**: `r' = 70 + λ·(r−70)`,
+con λ per-dote (`regressBat`/`regressPit` in `projection.ts`). λ più basso =
+più compressione; la **velocità** si comprime meno (le SB restano salienti), i
+**lanciatori** di più (Log5 li regredisce parecchio). Calibrato perché la
+distribuzione proiettata **combaci col motore** (stagioni simulate).
+
+Sopra alla base regredita agiscono ancora due livelli di varianza:
+
+- **stagione su stagione** — un *profilo d'annata* seedato con `form`, asse
+  `power`↔contatto, `gamesCap` (disponibilità: pochi arrivano a 162), e **code
+  rare** (`powerSpike`/`contactSpike`/`kSpike`/`domSpike`, `collapse`) per le
+  **gemme**; `eraLuck` galleggia con pavimento 0.80 (l'ERA sotto 3.00 non è a
+  comando). RBI/R sono **risultati** stimati dalla linea (coeff. tarati: leader
+  RBI ~150, non ~190);
 - **intra-stagione** — curve di forma monotone che si **riallineano** al target
-  d'annata entro la giornata 162 (tanta varianza a inizio anno, poi converge).
+  d'annata entro la giornata 162.
 
-Distribuzione del **campione di lega** (leader per annata, misurata su ~48
-lega-annate; p50 / p90 / max — gemma = coda rara "ogni tanto"):
+Aggregati di lega della proiezione (allineati al motore): **R/g ~5.4**, **HR/g
+~1.45**, BA ~.266. Code realistiche **per lega** (bersaglio, misurato su molte
+lega-annate):
 
-| | p50 | p90 | max | %gemma |
-|---|---|---|---|---|
-| HR | 55 | 60 | 65 | 60+ ≈ 13% |
-| BA | .379 | .402 | .42 | .400+ ≈ 13% |
-| K | 264 | 307 | — | 300+ ≈ 17% |
-| ERA | 2.39 | 1.96 | — | ≤2.10 ≈ 15% |
+| Metrica | Proiezione | Metrica | Proiezione |
+|---|---|---|---|
+| BA ≥ .317 | ~15 | SP ERA < 3.00 | ~5-7 |
+| HR ≥ 40 | ~10 (max ~50) | SP K ≥ 200 | ~12 (top ~260) |
+| SB ≥ 45 | ~7 | leader RBI | ~150-158 |
+| G = 162 | ~1 (raro "iron man") | RBI ≥ 120 | ~10 |
 
-Giocatore tipico (mediana titolari): **BA ~.263, ~20 HR**; ERA SP mediana ~4.78.
-Ri-tarare: gli SD di routine restano piccoli (il **max su ~600** amplifica già la
-coda ~3σ), le gemme sono termini **additivi e limitati**; misura con uno script
-Monte-Carlo nello scratchpad (distribuzione del leader + % gemme), non a occhio.
+Ri-tarare: cambia i **λ** di `regressBat`/`regressPit` (compressione delle cime,
+non tocca la media di lega perché la mappa è convessa — Jensen); misura con uno
+script Monte-Carlo nello scratchpad confrontando **sempre** col bersaglio del
+motore (stagione simulata), non a occhio.
 
 ## Varietà: fra squadre, fra compagni, code basse
 
-**Fra squadre** — `generateTeamFromFranchise` estrae un `teamTalent` (gauss, σ≈5)
-che sposta TUTTI i giocatori della rosa su/giù insieme: alcune franchigie sono da
-contender, altre da cantina (le stagioni non finiscono tutte sul .500). Centrato
-su 0 → la media di lega non si sposta.
+**Fra squadre (modello a stelle + profondità)** — la forza di una franchigia NON
+è più un semplice shift uniforme (dava rose tutte-scarse/tutte-forti e payroll
+fuori scala, es. $45M con tutti <70 vs $390M con 5 SP >83). Ora
+`generateTeamFromFranchise` compone:
+
+- **`teamTalent` morbido** (gauss σ≈2.5, clamp ±6): qualità della **profondità**,
+  sposta lievemente tutta la rosa. Centrato su 0 → media di lega invariata.
+- **Stelle garantite**: **ogni** squadra, anche la peggiore, ha **1-3 franchise
+  player** (bias di talento ~+19); le migliori ne hanno di più. Così nessuna rosa
+  è tutta <80 (`STAR_FLOOR`=80, con rete di sicurezza).
+- **Pavimenti realistici**: nessun **titolare** di movimento sotto 55
+  (`LINEUP_FLOOR`) né **partente** titolare sotto 52 (`ROT_FLOOR`) — via i
+  giocatori sotto-replacement e i bracci da Tripla-A dai ruoli di partenza.
+- **Assi rari**: solo ~1/3 dei team con 2+ stelle spende una stella sull'asso
+  (bias ridotto ×0.65 → un asso ~85, non un fenomeno 92), per non deprimere
+  l'offesa dell'epoca.
+
+Risultato: gap di forza fra squadre più contenuto (ogni team ha stelle + depth),
+spread del monte-ingaggi **~2.5-3× (compresso, come richiesto)**, e nessuna rosa
+irreale. I due pavimenti (lineup/rotazione) si **compensano** nel run-environment.
+
+**Payroll disaccoppiato dal talento (come MLB)** — ogni franchigia ha un
+**profilo d'età** (`ageSkew`, gauss σ≈3.2, clamp ±6): win-now vecchia (cara) vs
+rebuild giovane (a buon mercato, via `youthFactor`) — **senza toccare la forza**.
+Così nascono i **cheap-good** e gli **expensive-mediocre**: la correlazione
+payroll↔forza scende a ~0.81 (non più incollata) e **a pari forza** il payroll
+varia ~2.4×. In MLB il legame monte-ingaggi↔vittorie è debole; il motore è il
+talento giovane a costo controllato.
+
+**Rotazione (gradiente)** — i 5 slot di partente NON sono uguali: `SP_SLOTS`
+applica un bias di talento a **media ~0** (asso +5 … #5 −6) più una fascia d'età,
+così ogni rosa ha **1-2 partenti forti**, un #3 medio e **#4/#5 più deboli e più
+giovani** (back-end da sviluppare, soggetti a rotazione con le riserve SP, anch'esse
+giovani). Media ~0 → non sposta la calibrazione di lega, cambia solo la
+distribuzione dentro la rotazione (niente "5 assi" su una squadra forte).
+
+**Rotazione (gradiente)** — i 5 slot di partente NON sono uguali: `SP_SLOTS`
+applica un bias di talento a **media ~0** (asso +5 … #5 −6) più una fascia d'età,
+così ogni rosa ha **1-2 partenti forti**, un #3 medio e **#4/#5 più deboli e più
+giovani** (back-end da sviluppare, soggetti a rotazione con le riserve SP, anch'esse
+giovani). Media ~0 → non sposta la calibrazione di lega, cambia solo la
+distribuzione dentro la rotazione (niente "5 assi" su una squadra forte).
 
 **Fra compagni** — il talento individuale (σ≈7) + gli **archetipi** (`batterArchetype`:
 **slugger** HR+/media−, **contact/slap** media+/HR−−, **occhio/OBP** BB+, **velocista**

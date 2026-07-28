@@ -21,8 +21,11 @@ import {
   playOffense,
   prePitchEvent,
   offenseSide,
+  substituteFielder,
+  pinchRun,
 } from '../game';
 import type { LiveGame } from '../game';
+import { estimatedPitches } from '../boxscore';
 import { generateMatchup } from '../../data/generator';
 import type { Batter, Pitcher } from '../types';
 
@@ -435,5 +438,97 @@ describe('difesa avanzata — interni dentro', () => {
     expect(situation(live).infieldIn).toBe(true);
     setInfieldIn(live, false);
     expect(live.infieldIn).toBe(false);
+  });
+});
+
+describe('stima lanci (affaticamento)', () => {
+  it('cresce con battitori affrontati, BB e SO (formula di Tango)', () => {
+    const base = estimatedPitches({ bf: 20, so: 5, bb: 2 });
+    expect(base).toBe(Math.round(3.3 * 20 + 1.5 * 5 + 2.2 * 2)); // 82
+    // Più battitori affrontati ⇒ più lanci; più BB/SO ⇒ più lanci.
+    expect(estimatedPitches({ bf: 30, so: 5, bb: 2 })).toBeGreaterThan(base);
+    expect(estimatedPitches({ bf: 20, so: 12, bb: 6 })).toBeGreaterThan(base);
+    expect(estimatedPitches({ bf: 0, so: 0, bb: 0 })).toBe(0);
+  });
+
+  it('coerente con la linea reale di una partita simulata', () => {
+    const { away, home } = generateMatchup(11);
+    const g = simulateGame(away, home, 123);
+    for (const st of [g.awayStats, g.homeStats]) {
+      for (const p of st.pitching) {
+        // Un lanciatore che ha affrontato battitori ha una stima > 0.
+        if (p.bf > 0) expect(estimatedPitches(p)).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe('logica di campo sugli out (avanzamenti reali oltre il motore lineare)', () => {
+  it('ogni out in gioco porta un outInfo col tipo di battuta', () => {
+    let inplay = 0;
+    let advanced = 0;
+    let fc = 0;
+    for (let s = 0; s < 120; s++) {
+      const { away, home } = generateMatchup(s);
+      const g = simulateGame(away, home, s * 17 + 5);
+      for (const p of g.play) {
+        if (p.kind !== 'inplayout') continue;
+        inplay += 1;
+        expect(p.outInfo, JSON.stringify(p)).toBeTruthy();
+        expect(['ground', 'fly', 'popup']).toContain(p.outInfo!.ball);
+        if (p.outInfo!.advanced) advanced += 1;
+        if (p.outInfo!.fc) fc += 1;
+      }
+    }
+    expect(inplay).toBeGreaterThan(0);
+    // Su un campione così ampio devono comparire sia avanzamenti sia scelte
+    // difensive (comportamenti nuovi del motore).
+    expect(advanced).toBeGreaterThan(0);
+    expect(fc).toBeGreaterThan(0);
+  });
+
+  it('sostituzione difensiva: un panchinaro entra al posto di un titolare', () => {
+    const { away, home } = generateMatchup(3);
+    const live = createLiveGame(away, home, 3);
+    const def = defenseSide(live);
+    const out = def.team.lineup[4];
+    const inc = def.team.bench[0];
+    const benchBefore = def.team.bench.length;
+    expect(substituteFielder(live, def, out.id, inc.id)).toBe(true);
+    expect(def.team.lineup[4].id).toBe(inc.id);
+    expect(inc.position).toBe(out.position); // eredita il ruolo
+    expect(def.team.bench.length).toBe(benchBefore - 1);
+    expect(live.play[live.play.length - 1].kind).toBe('sub');
+  });
+
+  it('pinch-runner: un panchinaro rileva il corridore in base', () => {
+    const { away, home } = generateMatchup(4);
+    const live = createLiveGame(away, home, 4);
+    const off = offenseSide(live);
+    putRunner(live, 0, 6); // corridore in 1ª (lineup[6])
+    const outId = live.bases[0]!.batter.id;
+    const inc = off.team.bench[0];
+    expect(pinchRun(live, off, 0, inc.id)).toBe(true);
+    expect(live.bases[0]!.batter.id).toBe(inc.id);
+    expect(live.bases[0]!.batter.id).not.toBe(outId);
+    expect(off.team.bench.find((b) => b.id === inc.id)).toBeUndefined();
+  });
+
+  it('scelta difensiva: con corridore in 2ª (1ª e 3ª libere) a volte il battitore resta salvo in prima', () => {
+    let batterSafe = 0;
+    for (let s = 0; s < 400; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 7 + 2);
+      live.microEvents = false;
+      live.outs = 0;
+      live.bases = [null, null, null];
+      putRunner(live, 1, 8); // solo la 2ª occupata
+      const before = offenseSide(live).team.lineup[offenseSide(live).battingIndex];
+      playOffense(live, 'swing');
+      // FC: il battitore è finito in prima pur non essendo una valida/BB.
+      const last = live.play[live.play.length - 1];
+      if (last?.outInfo?.fc && live.bases[0]?.batter.id === before.id) batterSafe += 1;
+    }
+    expect(batterSafe).toBeGreaterThan(0);
   });
 });
