@@ -9,8 +9,7 @@ import {
   suggestedStarter,
   withStarterId,
   REST_STARTER,
-  REST_LONG,
-  REST_HEAVY,
+  REST_RELIEF,
 } from '../rotation';
 import { generateLeague } from '../league';
 
@@ -24,14 +23,13 @@ describe('riposo per uso reale', () => {
     expect(isAvailable(rot, 'SP1', 0)).toBe(true);
   });
 
-  it('gare di riposo per carico: partente 4, lungo 2, pesante 1, breve 0', () => {
+  it('gare di riposo per carico: partente 4, rilievo 2+ IP salta una gara, sotto 0', () => {
     expect(restForUsage(21, true)).toBe(REST_STARTER); // apre la gara
     expect(restForUsage(2, true)).toBe(REST_STARTER); // spot start = comunque partente
-    expect(restForUsage(12, false)).toBe(REST_LONG); // 4 IP di rilievo
-    expect(restForUsage(9, false)).toBe(REST_LONG); // 3 IP
-    expect(restForUsage(6, false)).toBe(REST_HEAVY); // 2 IP
-    expect(restForUsage(4, false)).toBe(REST_HEAVY); // oltre 1 IP
-    expect(restForUsage(3, false)).toBe(0); // 1 IP: pronto domani
+    expect(restForUsage(12, false)).toBe(REST_RELIEF); // 4 IP di rilievo
+    expect(restForUsage(6, false)).toBe(REST_RELIEF); // esattamente 2 IP
+    expect(restForUsage(5, false)).toBe(0); // 1.2 IP: pronto la gara dopo
+    expect(restForUsage(3, false)).toBe(0); // 1 IP
     expect(restForUsage(0, false)).toBe(0);
   });
 
@@ -58,13 +56,13 @@ describe('riposo per uso reale', () => {
       rot,
       [
         { id: 'SP1', outs: 18, started: true }, // 4 gare
-        { id: 'RP1', outs: 9, started: false }, // 2 gare (lungo)
-        { id: 'RP2', outs: 3, started: false }, // 0 (breve)
+        { id: 'RP1', outs: 9, started: false }, // 3 IP -> 1 gara
+        { id: 'RP2', outs: 3, started: false }, // 1 IP -> 0
       ],
       0,
     );
     expect(restRemaining(rot, 'SP1', 1)).toBe(4);
-    expect(restRemaining(rot, 'RP1', 1)).toBe(2);
+    expect(restRemaining(rot, 'RP1', 1)).toBe(REST_RELIEF);
     expect(isAvailable(rot, 'RP2', 1)).toBe(true);
   });
 });

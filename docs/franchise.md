@@ -23,15 +23,20 @@ base all'**uso reale** dell'ultima partita (out lanciati), tracciato in
 `SeasonState.rotation.availableFrom`:
 
 - **partente / spot start** → 4 gare (un ciclo naturale a 5 uomini);
-- **rilievo lungo** (≥3 IP) → 2 gare; **pesante** (>1 IP) → 1 gara; **breve** → 0.
+- **rilievo da 2+ IP** (6+ out) → 1 gara; **sotto le 2 IP** → 0 (pronto la gara dopo).
 
-Nel Roster (tab lanciatori, pre-gara di regular season) ogni riga mostra un
-**badge di riposo** (`pronto` / `riposa +N g`); i partenti a riposo non sono
-eleggibili. Il **partente del giorno** è di default il **primo in ordine non a
-riposo** (`suggestedStarter`); si sceglie/conferma dall'elenco col pulsante
-**“parte oggi”** (per far partire una riserva la si **scambia** prima in
-rotazione). Portare un lanciatore da *Disponibili* agli attivi è sempre uno
-**swap** (la rosa attiva resta a taglia costante), mai un'aggiunta.
+I rilievi restano quasi sempre disponibili (i bullpen sono corti): solo chi si
+carica di 2+ inning salta una gara, così non si resta a secco dopo una partita
+difficile. *(Nota: non c'è un tetto al numero di lanciatori attivi/bullpen in
+`validateArrangement` — serve solo ≥1 partente in rotazione.)*
+
+Nel Roster (tab lanciatori, pre-gara di regular season) due **colonne dedicate**:
+**RIP.** (badge `pronto` / `+N g`) e **PARTE** (pulsante “parte” sulle righe di
+rotazione). I partenti a riposo non sono eleggibili. Il **partente del giorno** è
+di default il **primo in ordine non a riposo** (`suggestedStarter`); si
+sceglie/conferma dalla colonna PARTE (per far partire una riserva la si
+**scambia** prima in rotazione). Portare un lanciatore da *Disponibili* agli
+attivi è sempre uno **swap** (la rosa attiva resta a taglia costante).
 
 ## Stipendi
 

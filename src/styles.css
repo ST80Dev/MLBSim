@@ -2768,9 +2768,17 @@ table {
   display: flex;
   gap: 6px;
 }
-/* Badge di riposo accanto al nome del lanciatore nelle liste del Roster. */
+/* Colonne dedicate "RIP." (riposo) e "PARTE" (scelta partente) nel Roster. */
+.roster-tbl th.rest-col,
+.roster-tbl td.rest-col,
+.roster-tbl th.pick-col,
+.roster-tbl td.pick-col {
+  text-align: center;
+  white-space: nowrap;
+}
+/* Badge di riposo nella colonna RIP. delle liste del Roster. */
 .rest-badge {
-  margin-left: 8px;
+  display: inline-block;
   font-size: 10px;
   font-weight: 600;
   padding: 1px 6px;
@@ -2785,9 +2793,8 @@ table {
   color: #f0a08a;
   background: rgba(240, 160, 138, 0.12);
 }
-/* Pulsante "parte oggi" nella riga della rotazione (scelta del partente). */
+/* Pulsante "parte" nella colonna PARTE della rotazione (scelta del partente). */
 .start-pick {
-  margin-left: 8px;
   font-size: 10px;
   font-weight: 600;
   padding: 2px 8px;

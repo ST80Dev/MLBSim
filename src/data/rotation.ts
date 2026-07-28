@@ -6,16 +6,16 @@ import { withRotationStarter } from './generator';
 //
 // Dopo aver lanciato, ogni lanciatore matura un riposo obbligatorio in GARE, in
 // funzione del carico:
-//   - Partente / spot start .............. 4 gare  (ciclo naturale a 5 uomini)
-//   - Rilievo lungo   (>= 3 IP, 9+ out) ... 2 gare
-//   - Rilievo pesante (>  1 IP, 4-8 out) .. 1 gara
-//   - Rilievo breve   (<= 1 IP, 0-3 out) .. 0       (disponibile la gara dopo)
+//   - Partente / spot start ............... 4 gare  (ciclo naturale a 5 uomini)
+//   - Rilievo da 2+ IP (6+ out) ........... 1 gara  (salta la gara dopo)
+//   - Rilievo sotto le 2 IP (0-5 out) ..... 0       (disponibile la gara dopo)
+// I rilievi restano quasi sempre disponibili (bullpen corti): solo chi si carica
+// di 2+ inning salta una gara, cosi' non si resta a secco dopo una gara difficile.
 // `availableFrom[id]` = prima giornata in cui il lanciatore torna disponibile
 // (per partire O per rilevare). Chi non ha ancora lanciato e' sempre disponibile.
 
 export const REST_STARTER = 4;
-export const REST_LONG = 2;
-export const REST_HEAVY = 1;
+export const REST_RELIEF = 1;
 
 export interface RotationState {
   /** id lanciatore -> prima giornata in cui torna disponibile. Assente = pronto. */
@@ -41,9 +41,8 @@ export function isAvailable(rot: RotationState, id: string, day: number): boolea
 /** Gare di riposo dovute in base agli out lanciati e se il lanciatore era il partente. */
 export function restForUsage(outs: number, started: boolean): number {
   if (started) return REST_STARTER;
-  if (outs >= 9) return REST_LONG; // rilievo lungo (3+ IP)
-  if (outs > 3) return REST_HEAVY; // rilievo pesante (oltre 1 IP)
-  return 0; // rilievo breve: pronto la gara dopo
+  if (outs >= 6) return REST_RELIEF; // rilievo da 2+ IP: salta una gara
+  return 0; // rilievo sotto le 2 IP: pronto la gara dopo
 }
 
 export interface PitcherUsage {

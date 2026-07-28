@@ -3615,7 +3615,11 @@ function RosterPage({
   const pitCols = ratingsMode ? PIT_RATING_COLS : PIT_COLS;
 
   // Riga pitcher riusabile per Rotazione / Bullpen / Disponibili.
-  const pitcherRow = (p: Pitcher, from: string, i: number, tag?: string) => (
+  const pitcherRow = (p: Pitcher, from: string, i: number) => {
+    const ri = restById.get(p.id);
+    const resting = ri ? ri.restRemaining > 0 : false;
+    const available = ri ? ri.available : true;
+    return (
     <tr
       key={p.id}
       className={`drow${drag?.id === p.id ? ' dragging' : ''}`}
@@ -3631,36 +3635,34 @@ function RosterPage({
       <td className="n">{from === 'avail' ? '' : i + 1}</td>
       <td className="l grip">
         ⠿ <PlayerLink player={p}>{p.name}</PlayerLink>
-        {tag && <span className="tag">{tag}</span>}
-        {canPickStarter &&
-          (() => {
-            const ri = restById.get(p.id);
-            const resting = ri ? ri.restRemaining > 0 : false;
-            return (
-              <span
-                className={`rest-badge${resting ? ' resting' : ' ready'}`}
-                title={resting ? `A riposo: ${ri!.restRemaining} gare` : 'Pronto a lanciare'}
-              >
-                {resting ? `riposa +${ri!.restRemaining}g` : 'pronto'}
-              </span>
-            );
-          })()}
-        {canPickStarter && from === 'rotation' && (
-          <button
-            type="button"
-            className={`start-pick${effectiveStarter === p.id ? ' sel' : ''}`}
-            disabled={!(restById.get(p.id)?.available ?? true)}
-            onClick={() => onPickStarter(p.id)}
-            title={
-              (restById.get(p.id)?.available ?? true)
-                ? 'Fai partire oggi questo lanciatore'
-                : 'A riposo: non può partire oggi'
-            }
-          >
-            {effectiveStarter === p.id ? '✓ parte oggi' : 'parte oggi'}
-          </button>
-        )}
       </td>
+      {canPickStarter && (
+        <td className="rest-col">
+          <span
+            className={`rest-badge${resting ? ' resting' : ' ready'}`}
+            title={resting ? `A riposo: ${ri!.restRemaining} gare` : 'Pronto a lanciare'}
+          >
+            {resting ? `+${ri!.restRemaining}g` : 'pronto'}
+          </span>
+        </td>
+      )}
+      {canPickStarter && (
+        <td className="pick-col">
+          {from === 'rotation' && (
+            <button
+              type="button"
+              className={`start-pick${effectiveStarter === p.id ? ' sel' : ''}`}
+              disabled={!available}
+              onClick={() => onPickStarter(p.id)}
+              title={
+                available ? 'Fai partire oggi questo lanciatore' : 'A riposo: non può partire oggi'
+              }
+            >
+              {effectiveStarter === p.id ? '✓ parte' : 'parte'}
+            </button>
+          )}
+        </td>
+      )}
       <td>{p.age}</td>
       <td className="roles">
         <span
@@ -3689,7 +3691,8 @@ function RosterPage({
       <PotCell id={p.id} overall={pitcherOverall(p.ratings)} potential={p.potential} age={p.age} />
       {pitStatCells(p)}
     </tr>
-  );
+    );
+  };
 
   const pitTable = (
     title: string,
@@ -3711,6 +3714,8 @@ function RosterPage({
             <tr>
               <th className="n">#</th>
               <th className="l">Lanciatore</th>
+              {canPickStarter && <th className="rest-col" title="Riposo residuo prima di poter rilanciare">RIP.</th>}
+              {canPickStarter && <th className="pick-col" title="Partente del giorno (scegli nella rotazione)">PARTE</th>}
               <th title="Età">ETÀ</th>
               <th>RUOLO</th>
               <th title="Valore totale">OVR</th>
@@ -3722,12 +3727,10 @@ function RosterPage({
             </tr>
           </thead>
           <tbody>
-            {rows.map((p, i) =>
-              pitcherRow(p, list, i, list === 'rotation' && i === 0 ? 'parte' : undefined),
-            )}
+            {rows.map((p, i) => pitcherRow(p, list, i))}
             {rows.length === 0 && (
               <tr>
-                <td className="l" colSpan={7 + pitCols.length}>
+                <td className="l" colSpan={(canPickStarter ? 9 : 7) + pitCols.length}>
                   {list === 'avail' ? 'Nessun disponibile.' : 'Trascina qui un lanciatore.'}
                 </td>
               </tr>
