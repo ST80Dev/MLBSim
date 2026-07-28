@@ -16,7 +16,11 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # NON annullare un deploy in corso: se due merge su main arrivano ravvicinati,
+  # il deploy della main "buona" veniva cancellato (cancel-in-progress) lasciando
+  # il sito fermo al build precedente. Come da template ufficiale GitHub Pages,
+  # lasciamo COMPLETARE il deploy in corso e accodiamo il successivo.
+  cancel-in-progress: false
 
 jobs:
   build:
