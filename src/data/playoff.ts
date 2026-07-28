@@ -16,8 +16,9 @@ import {
 } from './season';
 import {
   createRotation,
-  recordStart,
-  type RotationSize,
+  recordUsage,
+  PLAYOFF_REST_STARTER,
+  type PitcherUsage,
   type RotationState,
 } from './rotation';
 
@@ -313,7 +314,7 @@ export function seedPlayoffs(
     records,
     series: buildBracket(),
     managedId,
-    rotation: createRotation((season.rotation?.size ?? 5) as RotationSize),
+    rotation: createRotation(),
     managedGames: 0,
     bat: {},
     pit: {},
@@ -371,7 +372,6 @@ export function recordManagedGame(
   result: GameResult,
   teams: Team[],
   base: number,
-  starterId?: string,
 ): PlayoffState {
   const next = clone(ps);
   const s = managedSeries(next);
@@ -384,11 +384,16 @@ export function recordManagedGame(
   accumulateInto(next.bat, next.pit, result.homeStats);
   accumulateInto(next.bat, next.pit, result.awayStats);
 
-  // Rotazione playoff: registra la partenza del partente scelto/della gestita.
+  // Rotazione playoff: registra l'USO dei lanciatori della gestita (partente col
+  // riposo playoff più corto). L'indice-gara della gestita fa da "giorno".
   const managedHome = result.home.id === next.managedId;
   const myPitching = (managedHome ? result.homeStats : result.awayStats).pitching;
-  const sp = starterId ?? myPitching[0]?.id;
-  if (sp) next.rotation = recordStart(next.rotation, sp, next.managedGames);
+  const usage: PitcherUsage[] = myPitching.map((pl, i) => ({
+    id: pl.id,
+    outs: pl.outs,
+    started: i === 0,
+  }));
+  next.rotation = recordUsage(next.rotation, usage, next.managedGames, PLAYOFF_REST_STARTER);
   next.managedGames += 1;
 
   const teamById = new Map(teams.map((t) => [t.id, t]));
@@ -446,7 +451,7 @@ function clone(ps: PlayoffState): PlayoffState {
     series: Object.fromEntries(
       Object.entries(ps.series).map(([k, s]) => [k, { ...s, games: [...s.games] }]),
     ),
-    rotation: { ...ps.rotation, lastStart: { ...ps.rotation.lastStart } },
+    rotation: { availableFrom: { ...ps.rotation.availableFrom } },
     bat: cloneStats(ps.bat, emptyBat),
     pit: cloneStats(ps.pit, emptyPit),
   };

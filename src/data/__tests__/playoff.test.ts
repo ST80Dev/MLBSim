@@ -12,6 +12,13 @@ import {
   hostsHigh,
   type PlayoffState,
 } from '../playoff';
+import {
+  createRotation,
+  recordUsage,
+  isAvailable,
+  PLAYOFF_REST_STARTER,
+  REST_STARTER,
+} from '../rotation';
 
 const BASE = 4242;
 
@@ -24,6 +31,20 @@ function syntheticSeason(seed = 1) {
   const season: SeasonState = { ...createSeason(1), records };
   return { teams, season, records };
 }
+
+describe('playoff — rotazione accorciata (asso Gara 1 → Gara 4)', () => {
+  it('col riposo playoff il partente rientra 2 gare dopo (non prima)', () => {
+    const rot = recordUsage(createRotation(), [{ id: 'ace', outs: 18, started: true }], 0, PLAYOFF_REST_STARTER);
+    expect(isAvailable(rot, 'ace', 2)).toBe(false); // Gara 3: ancora a riposo
+    expect(isAvailable(rot, 'ace', 3)).toBe(true); // Gara 4: di nuovo disponibile
+  });
+  it('in regular season lo stesso partente riposa di più (4 gare)', () => {
+    const rot = recordUsage(createRotation(), [{ id: 'ace', outs: 18, started: true }], 0);
+    expect(REST_STARTER).toBe(4);
+    expect(isAvailable(rot, 'ace', 4)).toBe(false);
+    expect(isAvailable(rot, 'ace', 5)).toBe(true);
+  });
+});
 
 describe('playoff — soglie e casa', () => {
   it('winsNeeded', () => {
@@ -141,7 +162,7 @@ describe('playoff — flusso della squadra gestita', () => {
     expect(Object.keys(ps.bat).length).toBeGreaterThan(0);
     expect(Object.keys(ps.pit).length).toBeGreaterThan(0);
     expect(ps.managedGames).toBeGreaterThan(0);
-    // Rotazione playoff: registrate le partenze della gestita.
-    expect(Object.keys(ps.rotation.lastStart).length).toBeGreaterThan(0);
+    // Rotazione playoff: registrato l'uso dei lanciatori della gestita.
+    expect(Object.keys(ps.rotation.availableFrom).length).toBeGreaterThan(0);
   });
 });

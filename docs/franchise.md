@@ -5,6 +5,67 @@ di un GM manager completo. Tutto ciò che segue è **design per fasi successive*
 (non ancora implementato in Fase 0); i campi base esistono già nel modello
 (`CareerProfile`: `age`, `potential`, `salary`, `retired`, `twoWay`).
 
+## Piano di esecuzione Fase 5 — cosa è costruibile ORA (5A) vs dopo (5B)
+
+**Decisione di design.** Il layer franchigia è **quasi tutto logica pura** e si
+disaccoppia dalla Fase 4 grazie a una cucitura già presente nel motore:
+`advanceSeasonBatter/Pitcher(…, perf = 0)` accetta un segnale d'impiego opzionale,
+oggi **neutro**. Quindi tutta la meccanica franchigia si costruisce con `perf = 0`
+e si collega il `perf` reale (box score reali per la squadra gestita, `projection.ts`
+per le 29 CPU) **quando** la Fase 4 chiuderà il rollover di stagione — **senza**
+toccarne la struttura.
+
+**Fase 5A — motore franchigia (puro, testabile, ZERO dipendenza da Fase 4):**
+
+1. **`playerValue`** — l'atomo comune a scambi e cap (vedi § sotto). *(fatto/in corso)*
+2. **Cap enforce + margine ε** — `effectiveCap(seed, teamId, year) = base × (1+ε)`,
+   ε **seedato** e deterministico (niente stato da salvare), con piccola componente
+   persistente di franchigia (vedi § Salary cap).
+3. **Pool di free agent + riconciliazione** — funzione pura: sopra il *proprio*
+   tetto si scarica a valore crescente-dal-basso, sotto si ripesca (vedi §
+   Riconciliazione).
+4. **Draft inverso** — generazione classe prospetti (`generator` + `projectPotential`,
+   tetto *possibile* non certo) + assegnazione a ordine di classifica inversa
+   (accetta una qualsiasi mappa di record W-L).
+5. **Valutazione scambi** — `evaluateTrade(give, get, capCtx) → sì/no` (equità +
+   rispetto cap bilaterale). Motore ora, UI dopo.
+6. **`runOffseason(league, seed, year, perf?)`** — orchestratore che cuce 1–5 con
+   `perf` di default 0. È la **metà franchigia** del "rollover di stagione" (l'altra
+   metà, stagione→scorsa→carriera, resta di Fase 4).
+
+**Fase 5B — UI + accoppiamento con la stagione (RICHIEDE prima la Fase 4):**
+
+- **Finestra di gestione tra le partite** (dove si toccano roster/scambi): dipende
+  dal loop di calendario.
+- **UI scambi** (proponi → *una* CPU valuta) e **UI draft / riepilogo off-season**.
+- **Collegamento del `perf` reale** e **normalizzazione PA battitori**
+  (`Σ squadra ≈ 6.180`, vedi § Normalizzazione PA).
+
+**Persistenza (schema v3).** Il multi-anno introduce **stato che diverge dal
+seed**: appena c'è aging + uno scambio umano, la lega non è più ri-derivabile da
+`seed`. Scelta: **persistere le rose complete** dopo ogni off-season (`GameSave`
+schema v3), robusto agli scambi umani. ε resta seedato (niente finanza da salvare);
+il pool di free agent è transitorio (si consuma nell'off-season, non si salva).
+
+### `playerValue` — l'atomo (punti overall-equivalenti)
+
+Mix dei tre ingredienti di § Scambi, in un'unica scala interpretabile (punti di
+overall), così che l'ordinamento serva **sia** gli scambi **sia** lo scarico da cap:
+
+```
+valore = overall                                    // forza attuale (segnale dominante)
+       + upsideWeight(età) × max(0, potential−overall)  // prospettiva/potenziale per età
+       − SALARY_WEIGHT × salary                     // freno stipendio (tiebreak secondario)
+
+upsideWeight(età): 1.0 a ≤22  →  0 a ≥30 (lineare in mezzo)
+```
+
+Conseguenze: una stella batte uno scarso (l'overall domina); a **pari overall** un
+giovane con headroom o un contratto economico vale di più; un veterano maturo e caro
+scende. Ordinando dal valore **più basso** si scaricano prima i maturi cari senza
+prospettiva, **mai** i giovani-affare (che ai deboli arrivano via pool/draft). Puro:
+niente RNG, non muta il giocatore. Vive in `engine/value.ts`.
+
 ## Finestra di gestione (tra le partite di calendario)
 
 Il gioco gestisce **una sola squadra** (quella dell'utente). Roster e
@@ -14,6 +75,29 @@ di Fase 0). Le altre squadre avanzano da sole, **simulate giorno per giorno**.
 
 Quindi la persistenza di formazione/schieramento appartiene a **questo** momento:
 si prepara la squadra, si conferma, si gioca la partita, poi di nuovo gestione.
+
+### Riposo dei lanciatori e scelta del partente (`data/rotation.ts`)
+
+Non c'è un riquadro "4/5 uomini": la rotazione è semplicemente l'ordine della
+lista dei partenti nel Roster. Ogni lanciatore matura un **riposo in gare** in
+base all'**uso reale** dell'ultima partita (out lanciati), tracciato in
+`SeasonState.rotation.availableFrom`:
+
+- **partente / spot start** → 4 gare (un ciclo naturale a 5 uomini);
+- **rilievo da 2+ IP** (6+ out) → 1 gara; **sotto le 2 IP** → 0 (pronto la gara dopo).
+
+I rilievi restano quasi sempre disponibili (i bullpen sono corti): solo chi si
+carica di 2+ inning salta una gara, così non si resta a secco dopo una partita
+difficile. *(Nota: non c'è un tetto al numero di lanciatori attivi/bullpen in
+`validateArrangement` — serve solo ≥1 partente in rotazione.)*
+
+Nel Roster (tab lanciatori, pre-gara di regular season) due **colonne dedicate**:
+**RIP.** (badge `pronto` / `+N g`) e **PARTE** (pulsante “parte” sulle righe di
+rotazione). I partenti a riposo non sono eleggibili. Il **partente del giorno** è
+di default il **primo in ordine non a riposo** (`suggestedStarter`); si
+sceglie/conferma dalla colonna PARTE (per far partire una riserva la si
+**scambia** prima in rotazione). Portare un lanciatore da *Disponibili* agli
+attivi è sempre uno **swap** (la rosa attiva resta a taglia costante).
 
 ## Stipendi
 
@@ -206,16 +290,43 @@ reale (~9.000 vs **~6.180 PA** di una squadra da 162 gare da 9 inning), e
 
 La CPU rispetta il cap **al rollover** (fine stagione), non a metà anno; la
 ridistribuzione passa da un **pool di free agent**, **non** da un motore di
-matching a coppie. Sequenza di ogni off-season, per tutte e 30:
+matching a coppie. L'off-season ha una **fase deterministica una-tantum** seguita
+da un **mercato a più blocchi**:
+
+**Fase una-tantum (all'apertura dell'off-season):**
 
 1. **Aging + ri-derivo stipendi** (i payroll si spostano).
 2. **Ritiri** → buchi in rosa + monte liberato.
 3. **Draft inverso** → gioventù al minimo in ingresso.
-4. **Riconciliazione:** ogni squadra sopra il **suo** tetto (`cap_base × (1+ε)`)
-   **scarica** i contratti a *peggior valore* (overall-per-$ più basso = i
-   veterani strapagati, **non** i giovani economici) nel pool, finché rientra.
-5. **Le squadre sotto tetto** pescano dal pool per riempire i minimi/migliorarsi,
-   rispettando il proprio tetto.
+
+**Mercato a blocchi (rilasci e firme INTRECCIATI, non due passi chiusi):**
+
+> **Decisione di design.** Rilasciare e firmare **non** sono due fasi separate
+> ("scarica tutti, poi firma tutti"): sarebbe innaturale e toglierebbe scelta.
+> L'off-season è una **sequenza di blocchi-data** (finestre che simulano il
+> susseguirsi delle date reali di novembre→febbraio). In **ogni blocco** accadono
+> **entrambe le cose**, sia lato AI sia lato **utente**, e il **pool di free agent
+> resta osservabile fra un blocco e l'altro**. Così puoi **vedere chi è
+> disponibile prima** di rilasciare apposta un giocatore per far spazio — e
+> viceversa — in **più momenti**, invece che in un colpo solo.
+
+- Ogni blocco, ciascuna AI fa mosse **limitate** (al più un rilascio se sopra il
+  *suo* tetto/oltre la taglia rosa, al più una firma se sotto taglia e il pool
+  offre un upgrade **che rientra nel cap**): il mercato **si schiarisce nell'arco
+  dei blocchi**, non istantaneamente.
+- Il **pool è reattivo**: se firmi tu un free agent che un'AI puntava, al blocco
+  successivo l'AI **si adatta** (ricalcola sul pool aggiornato). È l'interazione
+  emergente voluta.
+- **Rilascio a peggior valore**: si scarica dal `playerValue` più **basso** (i
+  maturi cari senza prospettiva), **mai** i giovani-affare. **Firma per bisogno**:
+  si prende dal pool il `playerValue` più alto del **tipo mancante** (battitore o
+  lanciatore, verso le taglie 20/15) che **sta sotto il proprio tetto effettivo**.
+- **Taglie rosa**: 20 battitori + 15 lanciatori per squadra (9+5+6 / 5+6+4). I
+  rilasci non scendono sotto la taglia; le firme non la superano.
+- **L'utente agisce con le STESSE primitive** in qualunque blocco (rilascia/firma
+  sulla propria franchigia): la CPU è semplicemente l'automa che le applica alle
+  altre 29. Fine off-season → **ricomposizione** di lineup/rotazione dai set piatti
+  (via `autoLineup` + assegnazione ruoli, come il generatore).
 
 Conseguenze:
 
@@ -232,9 +343,51 @@ Conseguenze:
   verso il basso**: il muro le impedisce di ri-caricare, l'aging ne erode i
   veterani costosi, il draft inverso rifornisce le rivali. Quindi **no**, non
   mantiene il vantaggio "per anni e anni": lo perde, in modo credibile.
-- **Niente trade AI↔AI**, di proposito: il pool ottiene lo stesso riequilibrio
-  senza un motore di valutazione+ricerca su 29 squadre. Le trade a coppie restano
-  una feature **solo-umana** (tu proponi, *una* AI valuta sì/no).
+- **Trade AI↔AI: SOLO riallineamento leggero in off-season** (decisione rivista —
+  prima erano escluse). Servono a dare **varietà alle rose**, ma con guardrail che
+  evitano un trade-AI pesante (ricerca N×N, pacchetti, aste):
+  - **1-per-1** dello stesso tipo (bat↔bat, pit↔pit): niente pacchetti → niente
+    premio di consolidamento da modellare, niente esplosione di ricerca.
+  - **bilanciati per valore**: `|Δ playerValue| ≤ REALIGN_VALUE_TOL` (≈3 pt).
+  - **cap-legali per ENTRAMBE** dopo lo scambio (rispetto del tetto effettivo).
+  - **guidati dal bisogno posizionale**: A cede un **doppione** (ha un pari-ruolo
+    quasi equivalente) e riceve un **upgrade** dove è scoperta; B **simmetrico**.
+    Stesso valore, **fit migliore per entrambe** — è un riallineamento, non un
+    affare.
+  - **bounded & deterministico**: al più **una** trade AI↔AI per squadra per
+    blocco, ordine di scansione fisso, nessun RNG. Avviene **in parallelo** al
+    mercato FA nello stesso blocco.
+  - Il **pool** resta la valvola di parità principale (scarico dei forti → deboli);
+    le trade AI↔AI aggiungono solo **mescolamento** a parità di valore.
+- Le trade con l'**utente** restano una feature a sé (tu proponi, *una* AI valuta
+  sì/no), consentite **anche in stagione fino alla deadline** (vedi § Cadenza).
+
+### Cadenza del mercato: stagione vs off-season (decisione di design)
+
+Il mercato ha **due regimi distinti**, per tenere la gestione leggera:
+
+- **Durante la stagione → SOLO scambi** (umano → *una* AI valuta sì/no), fino a una
+  **trade deadline a ~gara 103** su 162 (i ~2/3, come la deadline reale di fine
+  luglio; `TRADE_DEADLINE_GAME` in `schedule.ts`). Dopo la deadline le rose sono
+  **congelate agli scambi** fino all'off-season. **Nessuna firma dal pool FA in
+  stagione** e **nessun trade AI↔AI**: il colpo di metà stagione è lo scambio, non
+  il mercato dei free agent.
+- **A fine anno → off-season** (fase una-tantum + mercato FA a blocchi, §
+  Riconciliazione): è qui che avviene la vera ristrutturazione e il riequilibrio
+  di parità via pool.
+
+### Draft → depth, non → rosa attiva (niente overfill)
+
+**Decisione di design.** Le scelte del draft inverso entrano nella **profondità**
+(`reserveBatters`/`reservePitchers`), **non** nei 25 attivi: sono giocatori reali
+*contati* nella franchigia, ma **acquisire ≠ schierare**. Durante l'off-season la
+rosa piatta **può sforare** la taglia 20/15 (draft + ripescaggi); la taglia si
+**riconcilia solo alla fine**, nel passo **`finalize`** — **è lì che "si decidono
+gli X della rosa"**, sia le AI (automatico, per `playerValue`) sia l'utente
+(scelta). L'eccedenza (peggior valore) viene tagliata → **pool**; i buchi si
+riempiono. Conseguenza sul mercato a blocchi: il trigger di rilascio dell'AI è
+**"sopra il cap OPPURE sopra la taglia"**, così la profondità in eccesso dal draft
+**defluisce nel pool** durante i blocchi invece di restare bloccata.
 
 ### C'è spazio aggregato? Sì, per costruzione
 
@@ -264,10 +417,39 @@ pavimento = gli stipendi-minimo di rosa.
   del cap da entrambe le parti).
 - Niente aste complesse: proposta → valutazione → sì/no.
 
+### `playerValue` è additivo → il "premio di consolidamento" (regola di `evaluateTrade`)
+
+**Decisione di design (emersa provando scambi reali).** `playerValue` è **puramente
+additivo** e ha un **pavimento** (il valore minimo di un singolo giocatore è ~il
+pavimento dell'overall, ~48-50). Conseguenza: **due giocatori sommano quasi sempre
+più di uno**, quindi un vero **2-per-1 "stella ⇄ pacchetto" non risulta MAI
+bilanciato** a somma-valore. Non è un difetto dell'atomo (che resta pulito e
+serve intatto al cap): è il **decisore** `evaluateTrade` che deve modellare ciò
+che `playerValue` non vede — gli **slot roster sono finiti**. Concentrare valore in
+un giocatore **libera uno slot** (bene per un contender a rosa piena); frammentarlo
+ne **occupa** di più. Quindi `evaluateTrade`:
+
+- applica un **premio di consolidamento** a chi **riduce** il numero di giocatori
+  in rosa (riceve meno teste di quante ne cede), e uno **sconto** a chi la
+  frammenta;
+- il premio scala con quanto la rosa del ricevente è **piena/competitiva** (un
+  contender lo paga, un ricostruttore no — a lui i pezzi multipli servono);
+- così un 2-per-1 può chiudersi anche con Δ-somma-valore **a favore** di chi cede
+  la stella: è il prezzo dello slot, non uno squilibrio.
+
+Resta una regola del **solo decisore** (scambi umano→1 CPU): la riconciliazione
+del cap via **pool** non ne ha bisogno (là il valore additivo è esattamente ciò
+che serve per lo scarico).
+
 ## Draft
 
-- **Semplificato**: un ingresso di giovani nel pool, senza le complicazioni di un
-  draft annuale a più giri con scouting profondo.
+- **Semplificato**: un ingresso di giovani, senza le complicazioni di un draft
+  annuale a più giri con scouting profondo.
+- **Ordine inverso** alla classifica (la peggiore sceglie per prima → prospetti
+  migliori ai deboli): è l'"handicap" strutturale del riequilibrio.
+- **I prospetti entrano nella DEPTH** (`reserveBatters`/`reservePitchers`), non nei
+  25 attivi (vedi § Draft → depth): niente overfill, la taglia si riconcilia al
+  `finalize`.
 - Budget squadra basilare.
 
 ### Draft storico — prospetti con tetto *possibile*, non *certo*

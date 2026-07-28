@@ -72,8 +72,8 @@ import {
   addPit,
 } from '../data/season';
 import type { SeasonState, SeasonBat, SeasonPit, WLRecord } from '../data/season';
-import { suggestedStarter, withStarterId, setSize, starterOptions, PLAYOFF_REST_MIN, REST_MIN_DAYS } from '../data/rotation';
-import type { RotationSize, RotationState } from '../data/rotation';
+import { suggestedStarter, withStarterId, restInfo } from '../data/rotation';
+import type { RotationState } from '../data/rotation';
 import { withRotationStarter, potentialRole } from '../data/generator';
 import {
   seedPlayoffs,
@@ -322,15 +322,14 @@ export function App() {
   const teams = useMemo(() => {
     const base = applyArrangement(managedTeam, arrangement);
     // In regular season la rotazione GIRA col riposo (partente = scelta di oggi o
-    // il consigliato dal ciclo). Nei PLAYOFF vale la rotazione playoff col riposo
-    // più corto (`PLAYOFF_REST_MIN`, indice = gare di playoff giocate). Prestagione:
-    // parte l'asso (rotation[0]).
+    // il consigliato dal ciclo). Nei PLAYOFF vale la rotazione playoff (riposo del
+    // partente più corto, già scontato in `availableFrom`; indice = gare di playoff
+    // giocate). Prestagione: parte l'asso (rotation[0]).
     const rotIds = base.rotation.map((p) => p.id);
     const starterId = isRegularGame
       ? todayStarter ?? suggestedStarter(season.rotation, rotIds, season.day)
       : isPlayoffGame && playoff
-        ? todayStarter ??
-          suggestedStarter(playoff.rotation, rotIds, playoff.managedGames, PLAYOFF_REST_MIN)
+        ? todayStarter ?? suggestedStarter(playoff.rotation, rotIds, playoff.managedGames)
         : base.rotation[0]?.id;
     const applied = starterId ? withStarterId(base, starterId) : base;
     // L'avversario ruota anch'esso il partente. Nei playoff col n° di gara nella
@@ -393,15 +392,6 @@ export function App() {
   useEffect(() => {
     setTodayStarter(null);
   }, [season.day, activeGame]);
-
-  // Cambia il numero di uomini della rotazione (4/5) e persiste.
-  const changeRotationSize = (size: RotationSize) => {
-    setSeason((s) => {
-      const ns = { ...s, rotation: setSize(s.rotation, size) };
-      persist(arrangements, ns);
-      return ns;
-    });
-  };
 
   // Seme di gara deterministico dalla partita di calendario scelta.
   const gnum = activeGame
@@ -875,7 +865,7 @@ export function App() {
           playoffRot={isPlayoffGame && playoff ? { rotation: playoff.rotation, day: playoff.managedGames } : null}
           todayStarter={todayStarter}
           onPickStarter={setTodayStarter}
-          onRotationSize={changeRotationSize}
+          canPickStarter={isRegularGame}
           onApply={applyManaged}
           onSave={saveManaged}
           onStart={() => setView('game')}
@@ -3422,7 +3412,7 @@ function RosterPage({
   playoffRot,
   todayStarter,
   onPickStarter,
-  onRotationSize,
+  canPickStarter,
   onApply,
   onSave,
   onStart,
@@ -3436,7 +3426,8 @@ function RosterPage({
   playoffRot?: { rotation: RotationState; day: number } | null;
   todayStarter: string | null;
   onPickStarter: (id: string | null) => void;
-  onRotationSize: (size: RotationSize) => void;
+  /** Vero in pre-gara di regular season: si sceglie il partente e conta il riposo. */
+  canPickStarter: boolean;
   onApply: (arr: MatchArrangement) => void;
   onSave: (arr: MatchArrangement) => Promise<void>;
   onStart: () => void;
@@ -3454,6 +3445,23 @@ function RosterPage({
   const pitchers = rosterPitchers(team);
   const bById = new Map(batters.map((b) => [b.id, b]));
   const pById = new Map(pitchers.map((p) => [p.id, p]));
+  // Riposo per-lanciatore (badge nelle liste) e partente effettivo del giorno.
+  // Nei playoff vale la rotazione playoff (riposo del partente più corto); in
+  // regular season quella di stagione. `rotDay` è l'indice-gara di riferimento.
+  const rot = playoffRot ? playoffRot.rotation : season.rotation;
+  const rotDay = playoffRot ? playoffRot.day : season.day;
+  const rotLabel = playoffRot ? `playoff · gara ${rotDay + 1}` : `giornata ${season.day}`;
+  const restById = new Map(
+    restInfo(rot, pitchers.map((p) => p.id), rotDay).map((r) => [r.id, r]),
+  );
+  const suggestedSp = suggestedStarter(rot, arr.rotation, rotDay);
+  const effectiveStarter =
+    todayStarter && arr.rotation.includes(todayStarter) && restById.get(todayStarter)?.available
+      ? todayStarter
+      : suggestedSp;
+  // "scelto" = l'utente ha confermato/scelto esplicitamente (todayStarter valido);
+  // altrimenti si mostra il consigliato. Confermare = fissare todayStarter.
+  const starterChosen = todayStarter != null && todayStarter === effectiveStarter;
   const lineup = arr.order.map((id) => bById.get(id)).filter(Boolean) as Batter[];
   const starterIds = new Set(arr.order);
   // Riserve = non-titolari, ORDINATE secondo la preferenza salvata (benchOrder):
@@ -3611,6 +3619,23 @@ function RosterPage({
       setDrag(null);
       return;
     }
+    // Riserva -> attivi = SWAP (mai append): il lanciatore entra al posto del
+    // target (o dell'ultimo se rilasciato sull'area vuota) e il rimpiazzato torna
+    // in riserva. Cosi' la rosa attiva (rotazione+bullpen) resta a taglia costante.
+    if (drag.from === 'avail' && toList !== 'avail') {
+      const destList = toList === 'rotation' ? arr.rotation : arr.bullpen;
+      if (destList.length === 0) {
+        update(toList === 'rotation' ? { rotation: [id] } : { bullpen: [id] });
+        setDrag(null);
+        return;
+      }
+      const outId = targetId && destList.includes(targetId) ? targetId : destList[destList.length - 1];
+      const newDest = destList.map((x) => (x === outId ? id : x));
+      const closerId = arr.closerId === outId ? undefined : arr.closerId; // il rimpiazzato perde CL
+      update(toList === 'rotation' ? { rotation: newDest, closerId } : { bullpen: newDest, closerId });
+      setDrag(null);
+      return;
+    }
     let rotation = arr.rotation.filter((x) => x !== id);
     let bullpen = arr.bullpen.filter((x) => x !== id);
     const insert = (list: string[]) => {
@@ -3709,7 +3734,11 @@ function RosterPage({
   const pitCols = ratingsMode ? PIT_RATING_COLS : PIT_COLS;
 
   // Riga pitcher riusabile per Rotazione / Bullpen / Disponibili.
-  const pitcherRow = (p: Pitcher, from: string, i: number, tag?: string) => (
+  const pitcherRow = (p: Pitcher, from: string, i: number) => {
+    const ri = restById.get(p.id);
+    const resting = ri ? ri.restRemaining > 0 : false;
+    const available = ri ? ri.available : true;
+    return (
     <tr
       key={p.id}
       className={`drow${drag?.id === p.id ? ' dragging' : ''}`}
@@ -3725,8 +3754,34 @@ function RosterPage({
       <td className="n">{from === 'avail' ? '' : i + 1}</td>
       <td className="l grip">
         ⠿ <PlayerLink player={p}>{p.name}</PlayerLink>
-        {tag && <span className="tag">{tag}</span>}
       </td>
+      {canPickStarter && (
+        <td className="rest-col">
+          <span
+            className={`rest-badge${resting ? ' resting' : ' ready'}`}
+            title={resting ? `A riposo: ${ri!.restRemaining} gare` : 'Pronto a lanciare'}
+          >
+            {resting ? `+${ri!.restRemaining}g` : 'pronto'}
+          </span>
+        </td>
+      )}
+      {canPickStarter && (
+        <td className="pick-col">
+          {from === 'rotation' && (
+            <button
+              type="button"
+              className={`start-pick${effectiveStarter === p.id ? ' sel' : ''}`}
+              disabled={!available}
+              onClick={() => onPickStarter(p.id)}
+              title={
+                available ? 'Fai partire oggi questo lanciatore' : 'A riposo: non può partire oggi'
+              }
+            >
+              {effectiveStarter === p.id ? '✓ parte' : 'parte'}
+            </button>
+          )}
+        </td>
+      )}
       <td>{p.age}</td>
       <td className="roles">
         <span
@@ -3755,7 +3810,8 @@ function RosterPage({
       <PotCell id={p.id} overall={pitcherOverall(p.ratings)} potential={p.potential} age={p.age} />
       {pitStatCells(p)}
     </tr>
-  );
+    );
+  };
 
   const pitTable = (
     title: string,
@@ -3777,6 +3833,8 @@ function RosterPage({
             <tr>
               <th className="n">#</th>
               <th className="l">Lanciatore</th>
+              {canPickStarter && <th className="rest-col" title="Riposo residuo prima di poter rilanciare">RIP.</th>}
+              {canPickStarter && <th className="pick-col" title="Partente del giorno (scegli nella rotazione)">PARTE</th>}
               <th title="Età">ETÀ</th>
               <th>RUOLO</th>
               <th title="Valore totale">OVR</th>
@@ -3788,12 +3846,10 @@ function RosterPage({
             </tr>
           </thead>
           <tbody>
-            {rows.map((p, i) =>
-              pitcherRow(p, list, i, list === 'rotation' && i === 0 ? 'parte' : undefined),
-            )}
+            {rows.map((p, i) => pitcherRow(p, list, i))}
             {rows.length === 0 && (
               <tr>
-                <td className="l" colSpan={7 + pitCols.length}>
+                <td className="l" colSpan={(canPickStarter ? 9 : 7) + pitCols.length}>
                   {list === 'avail' ? 'Nessun disponibile.' : 'Trascina qui un lanciatore.'}
                 </td>
               </tr>
@@ -4208,85 +4264,43 @@ function RosterPage({
         )
       ) : (
         <>
-          {(() => {
-            const rotIds = arr.rotation.map((id) => id);
-            // Nei playoff vale la rotazione playoff col riposo più corto.
-            const rot = playoffRot ? playoffRot.rotation : season.rotation;
-            const rotDay = playoffRot ? playoffRot.day : season.day;
-            const restMin = playoffRot ? PLAYOFF_REST_MIN : REST_MIN_DAYS;
-            const opts = starterOptions(rot, rotIds, rotDay, restMin);
-            const effective =
-              todayStarter && rotIds.includes(todayStarter)
-                ? todayStarter
-                : suggestedStarter(rot, rotIds, rotDay, restMin);
-            return (
-              <div className="card rotation-day">
-                <div className="card-title">
-                  Rotazione del giorno{' '}
-                  <span className="card-sub">
-                    {playoffRot
-                      ? `playoff · riposo minimo ${PLAYOFF_REST_MIN} gare · gara ${rotDay + 1}`
-                      : `riposo obbligatorio ${REST_MIN_DAYS} giornate · giornata ${season.day}`}
-                  </span>
-                </div>
-                <div className="rot-controls">
-                  <span className="rot-label">Uomini:</span>
-                  <div className="seg">
-                    {([4, 5] as RotationSize[]).map((sz) => (
-                      <button
-                        key={sz}
-                        className={`seg-btn${season.rotation.size === sz ? ' active' : ''}`}
-                        onClick={() => onRotationSize(sz)}
-                        title={sz === 4 ? 'Ciclo stretto: l’asso parte ogni 4 partite' : 'L’asso riposa un giorno in più'}
-                      >
-                        {sz}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="rot-starters">
-                  {opts.map((o) => {
-                    const p = pById.get(o.id);
-                    if (!p) return null;
-                    const rest = o.restDays === Infinity ? 'pronto' : `${o.restDays} gg`;
-                    return (
-                      <button
-                        key={o.id}
-                        className={`rot-sp${effective === o.id ? ' sel' : ''}${o.available ? '' : ' off'}`}
-                        disabled={!o.available}
-                        onClick={() => onPickStarter(o.id)}
-                        title={
-                          o.inCycle ? 'Nel ciclo' : 'Fuori dal ciclo (spot start): dà riposo extra all’asso'
-                        }
-                      >
-                        <span className="rot-sp-name">{p.lastName}</span>
-                        <span className="rot-sp-meta">
-                          {rest}
-                          {o.inCycle ? '' : ' · extra'}
-                          {o.available ? '' : ' · riposa'}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="rot-hint">
-                  {effective && pById.get(effective)
-                    ? `Oggi parte: ${pById.get(effective)!.lastName}${
-                        todayStarter && rotIds.includes(todayStarter) ? ' (scelto)' : ' (consigliato)'
-                      }`
-                    : 'Nessun partente disponibile'}
-                  {todayStarter && (
-                    <button className="rot-reset" onClick={() => onPickStarter(null)}>
-                      ↺ consigliato
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
+          {canPickStarter && (
+            <div className="card starter-bar">
+              <span className="sb-label">
+                Oggi parte:{' '}
+                <b>{pById.get(effectiveStarter)?.lastName ?? '—'}</b>{' '}
+                <span className="card-sub">
+                  {starterChosen ? '(scelto)' : '(consigliato)'} · {rotLabel} · scegli
+                  dall’elenco con “parte oggi”
+                </span>
+              </span>
+              <span className="sb-actions">
+                {!starterChosen && pById.get(effectiveStarter) && (
+                  <button
+                    className="btn small"
+                    onClick={() => onPickStarter(effectiveStarter)}
+                    title="Conferma il partente consigliato"
+                  >
+                    ✓ Conferma
+                  </button>
+                )}
+                {todayStarter && (
+                  <button
+                    className="btn small ghost"
+                    onClick={() => onPickStarter(null)}
+                    title="Torna al partente consigliato (primo in ordine non a riposo)"
+                  >
+                    ↺ consigliato
+                  </button>
+                )}
+              </span>
+            </div>
+          )}
           {pitTable(
             'Rotazione',
-            'ordine degli starter · il primo parte',
+            canPickStarter
+              ? 'ordine · riposo a lato · “parte oggi” per scegliere il partente'
+              : 'ordine degli starter · il primo parte',
             'rotation',
             arr.rotation.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
           )}
@@ -4296,7 +4310,7 @@ function RosterPage({
             'bullpen',
             arr.bullpen.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
           )}
-          {pitTable('Disponibili', 'trascina in rotazione o bullpen', 'avail', availP)}
+          {pitTable('Disponibili', 'trascina in rotazione o bullpen (fa uno scambio)', 'avail', availP)}
         </>
       )}
 

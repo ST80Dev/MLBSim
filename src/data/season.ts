@@ -3,8 +3,8 @@ import type { GameResult, TeamGameStats } from '../engine/game';
 import { createLiveGame, quickSim, toGameResult } from '../engine/game';
 import { makeRng } from '../engine/rng';
 import { withRotationStarter } from './generator';
-import type { RotationState } from './rotation';
-import { createRotation, recordStart } from './rotation';
+import type { RotationState, PitcherUsage } from './rotation';
+import { createRotation, recordUsage } from './rotation';
 
 // Stato di STAGIONE: il cuore del principio "gli anni gestiti dall'utente hanno
 // statistiche REALI, non derivate dai rating". Qui vivono:
@@ -79,7 +79,7 @@ export interface SeasonState {
 }
 
 export function createSeason(year = 1): SeasonState {
-  return { year, day: 0, records: {}, bat: {}, pit: {}, results: {}, rotation: createRotation(5) };
+  return { year, day: 0, records: {}, bat: {}, pit: {}, results: {}, rotation: createRotation() };
 }
 
 /**
@@ -89,7 +89,10 @@ export function createSeason(year = 1): SeasonState {
  */
 export function ensureSeason(s?: SeasonState): SeasonState {
   if (!s) return createSeason();
-  return s.rotation ? s : { ...s, rotation: createRotation(5) };
+  // Save precedenti al modello di riposo per-uso hanno rotation assente o nel
+  // vecchio formato {size,lastStart}: si riparte da uno stato pulito (tutti pronti).
+  const hasNewRotation = s.rotation && typeof (s.rotation as RotationState).availableFrom === 'object';
+  return hasNewRotation ? s : { ...s, rotation: createRotation() };
 }
 
 export const emptyBat = (): SeasonBat => ({
@@ -211,11 +214,17 @@ export function advanceWithResult(
     them: managedHome ? result.final.away : result.final.home,
   };
 
-  // Registra la partenza del partente della squadra gestita (il 1° lanciatore
-  // usato) per far scattare il suo riposo. Robusto ai vecchi save senza rotation.
+  // Registra l'USO di TUTTI i lanciatori della squadra gestita per far scattare
+  // il riposo di ognuno (il partente riposa di piu', il rilievo secondo il carico
+  // di out). Il 1° lanciatore usato e' il partente. Robusto ai vecchi save.
   const myPitching = (managedHome ? result.homeStats : result.awayStats).pitching;
-  const rot0 = season.rotation ?? createRotation(5);
-  next.rotation = myPitching.length ? recordStart(rot0, myPitching[0].id, season.day) : rot0;
+  const rot0 = season.rotation ?? createRotation();
+  const usage: PitcherUsage[] = myPitching.map((pl, i) => ({
+    id: pl.id,
+    outs: pl.outs,
+    started: i === 0,
+  }));
+  next.rotation = usage.length ? recordUsage(rot0, usage, season.day) : rot0;
 
   // Resto della lega: quick-sim per una classifica reale.
   const busy = new Set([result.home.id, result.away.id]);

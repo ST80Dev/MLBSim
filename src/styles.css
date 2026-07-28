@@ -2753,70 +2753,69 @@ table {
   margin-left: 6px;
 }
 
-/* Pannello "Rotazione del giorno": scelta 4/5 uomini + partente del giorno. */
-.rotation-day .rot-controls {
+/* Barra "Oggi parte": riepilogo del partente del giorno + conferma/reset. */
+.starter-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 6px 0 10px;
-}
-.rotation-day .rot-label {
-  font-size: 12px;
-  color: var(--muted);
-}
-.rot-starters {
-  display: flex;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
 }
-.rot-sp {
+.starter-bar .sb-label {
+  font-size: 14px;
+}
+.starter-bar .sb-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 6px 10px;
+  gap: 6px;
+}
+/* Colonne dedicate "RIP." (riposo) e "PARTE" (scelta partente) nel Roster. */
+.roster-tbl th.rest-col,
+.roster-tbl td.rest-col,
+.roster-tbl th.pick-col,
+.roster-tbl td.pick-col {
+  text-align: center;
+  white-space: nowrap;
+}
+/* Badge di riposo nella colonna RIP. delle liste del Roster. */
+.rest-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.rest-badge.ready {
+  color: #6fd08a;
+  background: rgba(111, 208, 138, 0.12);
+}
+.rest-badge.resting {
+  color: #f0a08a;
+  background: rgba(240, 160, 138, 0.12);
+}
+/* Pulsante "parte" nella colonna PARTE della rotazione (scelta del partente). */
+.start-pick {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
   border: 1px solid var(--line, #2a3550);
-  border-radius: 8px;
   background: var(--panel, #131c30);
   color: var(--text, #dbe4f5);
   cursor: pointer;
-  min-width: 92px;
+  vertical-align: middle;
 }
-.rot-sp:hover:not(:disabled) {
+.start-pick:hover:not(:disabled) {
   border-color: var(--accent, #4f8cff);
 }
-.rot-sp.sel {
+.start-pick.sel {
   border-color: var(--accent, #4f8cff);
-  box-shadow: inset 0 0 0 1px var(--accent, #4f8cff);
+  background: var(--accent, #4f8cff);
+  color: #fff;
 }
-.rot-sp.off {
-  opacity: 0.5;
+.start-pick:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
-}
-.rot-sp-name {
-  font-weight: 600;
-  font-size: 13px;
-}
-.rot-sp-meta {
-  font-size: 11px;
-  color: var(--muted);
-}
-.rot-hint {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.rot-reset {
-  background: none;
-  border: 1px solid var(--line, #2a3550);
-  border-radius: 6px;
-  color: var(--text, #dbe4f5);
-  font-size: 11px;
-  padding: 2px 8px;
-  cursor: pointer;
 }
 
 /* Ruolo POTENZIALE swingman "SP/RP": evidenziato (può fare partente e rilievo). */
@@ -4160,6 +4159,10 @@ table {
 }
 .btn.ghost {
   background: transparent;
+}
+.btn.small {
+  padding: 4px 10px;
+  font-size: 12px;
 }
 .td-strength {
   display: flex;
