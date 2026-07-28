@@ -188,22 +188,27 @@ scambiano di posto, gli altri restano fermi — mai inserimento a scorrimento);
   lista è variabile: nessuna casella fissa), `placePitcher` distingue i due casi
   da `drag.from` vs lista di destinazione.
 
-### Colonne OVR bar e MAX (potenziale)
+### Colonne OVR bar e MAX (prospettiva "nebbiosa")
 
 Ogni elenco del roster ha, subito dopo la colonna **OVR**, due **colonne
 dedicate a larghezza fissa** (allineate verticalmente riga per riga — niente
 info impilate nella stessa cella, quindi zero disallineamenti):
 
 - **Barra OVR** (`OvrBarCell`/`OvrBar`, header vuoto): riempimento colorato =
-  overall corrente (`ratingColor`); se il **potenziale** supera l'overall, il
-  tratto fino al tetto resta come segmento più chiaro = *spazio di crescita*.
-  Scala 40-100 → 0-100% (`ratingPct`).
-- **MAX** (`PotCell`, potenziale = tetto di crescita 40-100): mostra **sempre un
-  numero**. Con margine → `▲<pot>` in verde tenue; **al tetto** (`potential ≤
-  overall`) → lo **stesso numero dell'OVR** in grigio neutro. Formato distinto
-  dal badge OVR (niente pill piena, più piccolo) per non confonderlo a colpo
-  d'occhio. Non esiste una "forma" da game-log: il potenziale è l'unica
-  prospettiva reale nei dati. NB: l'etichetta è `MAX`, non `POT`, perché in
+  overall corrente (`ratingColor`); se c'è **upside**, il tratto fino al bordo
+  **alto della fascia stimata** (`hi`, *non* il potenziale esatto) resta come
+  segmento più chiaro = *spazio di crescita*. Scala 40-100 → 0-100% (`ratingPct`).
+- **MAX** (`PotCell`): **non mostra più il potenziale nudo** (svelava il futuro).
+  Al suo posto una **fascia direzionale "da scout"** (`growthOutlook`), stabile
+  per giocatore (seed sull'id) ma volutamente imprecisa — vedi
+  `docs/players-and-ratings.md` § *Nebbia di scouting*:
+  - **giovane con margine** → `▲lo-hi` verde (la fascia *contiene* il potenziale
+    vero senza rivelarlo; si allarga con gioventù e margine);
+  - **picco / nessun margine** → **numero secco** dell'OVR in grigio neutro;
+  - **veterano (> 30)** → `▼lo-hi` ambrato, **inferiore all'attuale** (declino
+    stimato dalla curva d'età): la tensione è "quanto in fretta cala?".
+  Formato distinto dal badge OVR (niente pill piena, più piccolo) per non
+  confonderlo a colpo d'occhio. NB: l'etichetta è `MAX`, non `POT`, perché in
   modalità *Caratteristiche* `POT` è già la **Potenza** del battitore.
 
 Presente in tutti gli elenchi (Ordine di battuta, Disponibili, Per posizione,
