@@ -1481,13 +1481,18 @@ function shortName(full: string): string {
 }
 
 function buildTeamStats(side: SideState): TeamGameStats {
+  // Copie: `GameResult` è uno SNAPSHOT immutabile, non una finestra sullo stato
+  // vivo. Le BattingLine/PitchingLine sono mutate in place dal motore a ogni
+  // turno; senza copiarle, un risultato "congelato" dalla UI (es. lo scoreboard
+  // ritardato al verdetto della cronaca) verrebbe comunque mutato PRIMA del
+  // reveal. Gli oggetti riga sono piatti (solo primitivi): copia shallow basta.
   return {
     runs: side.runs,
     hits: side.hits,
     errors: 0,
     lineByInning: side.lineByInning.slice(),
-    batting: side.battingOrder.map((id) => side.battingLines.get(id)!),
-    pitching: side.pitchersUsed.map((p) => side.pitchingLines.get(p.id)!),
+    batting: side.battingOrder.map((id) => ({ ...side.battingLines.get(id)! })),
+    pitching: side.pitchersUsed.map((p) => ({ ...side.pitchingLines.get(p.id)! })),
   };
 }
 
