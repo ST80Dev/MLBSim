@@ -75,6 +75,11 @@ spostano gli aggregati di lega.
   (`playOffense`): `autoStep`/`quickSim` non li chiamano mai, quindi l'aggregato di
   lega e la calibrazione restano invariati. Spegnibili con
   `LiveGame.microEvents = false` (usato nelle misurazioni controllate dei test).
+  *Taratura*: `wpBase 0.019` (era `0.032`) → un lanciatore di **Controllo** medio
+  concede il lancio pazzo nel ~1,9 % dei turni-con-corridori (~0,3/partita, in
+  linea con la MLB, prima era ~0,5), scarso ~3,5 %, ottimo verso `wpMin`. Ridotti
+  in proporzione anche palla passata (`pbBase 0.009`) e balk (`balk 0.003`) per
+  non farli diventare l'evento dominante una volta abbassati i lanci pazzi.
 - **Cambio lanciatore** (`changePitcher` manuale / `autoManagePitcher` per la CPU)
   — porta in pedana un rilievo e ne registra `enteredDiff` (per i save).
 

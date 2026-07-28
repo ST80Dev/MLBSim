@@ -2122,14 +2122,25 @@ function strengthColor(v: number): string {
   return `hsl(${Math.round(t * 125)} 60% 46%)`;
 }
 
-/** Colore d'affaticamento per la stima lanci, calibrato sul ruolo (SP vs rilievo). */
-function pitchTone(pitches: number, role?: string): string | undefined {
-  const reliever = role === 'RP' || role === 'CL';
-  const amber = reliever ? 22 : 90;
-  const red = reliever ? 32 : 105;
-  if (pitches >= red) return '#ff6b6b';
-  if (pitches >= amber) return '#ffcf5c';
-  return undefined; // sotto soglia: colore normale
+/**
+ * Stato d'affaticamento del lanciatore, ancorato alla vera meccanica del motore:
+ * la soglia è la **Resistenza** (`pitcher.stamina`, in battitori affrontabili),
+ * non i lanci stimati. Il malus ai peripherals scatta appena i battitori
+ * affrontati superano la soglia (`fatigueFactor`); il cambio automatico avviene
+ * a soglia + margine (SP +4, rilievo +2, come `autoManagePitcher`).
+ *  - `fresh`  : ampio margine, nessun malus
+ *  - `tiring` : entro 2 battitori dalla soglia o appena oltre → affaticamento in corso
+ *  - `spent`  : oltre la soglia di cambio automatico
+ */
+function pitcherFatigue(
+  role: string | undefined,
+  stamina: number,
+  bf: number,
+): { state: 'fresh' | 'tiring' | 'spent'; tone?: string } {
+  const margin = role === 'SP' ? 4 : 2;
+  if (bf >= stamina + margin) return { state: 'spent', tone: '#ff6b6b' };
+  if (bf >= stamina - 2) return { state: 'tiring', tone: '#ffcf5c' };
+  return { state: 'fresh' };
 }
 
 function LineupSide({
@@ -2211,6 +2222,9 @@ function LineupSide({
             const label = pitLabels[idx];
             const isCur = idx === lastPitIdx && sit.status === 'live';
             const pt = estimatedPitches(pl);
+            const fat = p ? pitcherFatigue(p.role, p.stamina, pl.bf) : undefined;
+            const stateWord =
+              fat?.state === 'spent' ? 'esausto' : fat?.state === 'tiring' ? 'in calo' : 'fresco';
             return (
               <div className={`ls-pit${isCur ? ' cur' : ''}`} key={pl.id}>
                 <span className="ls-pit-tag">{idx === 0 ? 'LANC.' : '↳'}</span>
@@ -2220,11 +2234,20 @@ function LineupSide({
                 <span className="ls-pit-stat">{formatIp(pl.outs)} IP</span>
                 <span
                   className="ls-pit-stat"
-                  style={{ color: pitchTone(pt, p?.role) }}
+                  style={{ color: fat?.tone }}
                   title="Lanci (stima): cresce con battitori affrontati, valide, BB e SO — rende l'affaticamento"
                 >
                   {pt} PT
                 </span>
+                {p && (
+                  <span
+                    className="ls-pit-stat"
+                    style={{ color: fat?.tone }}
+                    title={`Battitori affrontati / Resistenza (${stateWord}). La Resistenza è la soglia oltre la quale scatta l'affaticamento (peggiora BB/valide/HR, cala negli SO); superata di ${p.role === 'SP' ? 4 : 2} il lanciatore verrebbe cambiato d'ufficio.`}
+                  >
+                    {pl.bf}/{p.stamina} BF
+                  </span>
+                )}
                 <span className="ls-pit-stat">{pl.so} SO</span>
                 <span className="ls-pit-stat">{pl.er} ER</span>
                 {pl.dec && <span className={`dec dec-${pl.dec}`}>{decLabel(pl.dec)}</span>}
