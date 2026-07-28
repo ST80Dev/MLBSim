@@ -191,8 +191,10 @@ function FielderLabel({
       <circle cx={x} cy={y - 1.6} r={3} fill="rgba(255,255,255,0.55)" />
       <g transform={`translate(${lx}, ${ly})`}>
         <rect x={-w / 2} y={0} width={w} height={17} rx={5} fill="rgba(6,12,24,0.82)" stroke="var(--fld2)" strokeWidth={0.7} />
-        <text x={0} y={12.5} textAnchor="middle" fontSize={11} fontWeight={700} fill="#eaf1ff" fontFamily="system-ui, sans-serif">
-          {label}
+        {/* Ruolo (sigla) più piccolo e attenuato del cognome, per distinguerli. */}
+        <text x={0} y={12.5} textAnchor="middle" fontWeight={700} fill="#eaf1ff" fontFamily="system-ui, sans-serif">
+          <tspan fontSize={8.5} fontWeight={800} fill="#9fb2d6">{pos}</tspan>
+          <tspan fontSize={11} dx={3}>{lastNameOf(name)}</tspan>
         </text>
       </g>
     </g>

@@ -1057,6 +1057,9 @@ function TeamStatSide({
     ['DIF', synth.def],
     ['LAN', lan],
   ];
+  // Doti del giocatore del turno (battitore o lanciatore): stesse chip colorate,
+  // così durante il match si valuta il DUELLO (non solo la forza di squadra).
+  const playerRatings = subRatingChips(player);
   return (
     <div className={`team-stat ${side}${win ? ' win' : ''}`} style={{ ['--tc' as string]: team.primaryColor }}>
       <div className="ts-head">
@@ -1089,6 +1092,16 @@ function TeamStatSide({
           </PlayerLink>
         </span>
         <StatsToggle mode={mode} setMode={setMode} />
+      </div>
+      <div className="ts-ratings" title="Doti del giocatore in azione">
+        {playerRatings.map(([k, v]) => (
+          <span key={k} className="ts-rat">
+            <span className="ts-rat-k">{k}</span>
+            <span className="ts-rat-v" style={{ background: ratingColor(v) }}>
+              {v}
+            </span>
+          </span>
+        ))}
       </div>
       <div className="ts-line">
         {items.map((it) => (
