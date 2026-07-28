@@ -221,6 +221,104 @@ describe('Difendi le righe — meno extrabase, più singoli', () => {
 });
 
 // --------------------------------------------------------------------------
+describe('Cerca fly ball — volata di sacrificio dalla terza', () => {
+  const { away, home } = generateMatchup(41);
+  const b = away.lineup[4];
+  const p = home.rotation[0];
+
+  it('scriptato: volata profonda → il corridore in terza segna (SF)', () => {
+    const bases: (Runner | null)[] = [null, null, { batter: away.lineup[7], pitcherId: p.id }];
+    let scored = 0;
+    // [flyShare=true (elevata), sacflyConv=true (segna)]
+    const res = resolveInPlayOut(
+      { batter: b, pitcherId: p.id },
+      bases,
+      0,
+      scriptedRng([true, true]),
+      () => {
+        scored++;
+      },
+      newBattingLine(b),
+      newPitchingLine(p),
+      false,
+      false,
+      true, // seekFly
+    );
+    expect(res.detail).toBe('sacfly');
+    expect(res.outsAdded).toBe(1);
+    expect(scored).toBe(1);
+    expect(bases[2]).toBeNull(); // la terza si è svuotata (punto)
+  });
+
+  it('scriptato: elevazione mancata → pop, il corridore resta fermo', () => {
+    const runner3: Runner = { batter: away.lineup[7], pitcherId: p.id };
+    const bases: (Runner | null)[] = [null, null, runner3];
+    let scored = 0;
+    // [flyShare=false → pop]
+    const res = resolveInPlayOut(
+      { batter: b, pitcherId: p.id },
+      bases,
+      0,
+      scriptedRng([false]),
+      () => {
+        scored++;
+      },
+      newBattingLine(b),
+      newPitchingLine(p),
+      false,
+      false,
+      true,
+    );
+    expect(res.ball).toBe('popup');
+    expect(scored).toBe(0);
+    expect(bases[2]).toBe(runner3); // il corridore tiene la terza
+  });
+
+  it('statistico: cercare il fly porta a casa il corridore in 3ª molto più spesso', () => {
+    function scoreRate(seekFly: boolean) {
+      const rng = makeRng(7777);
+      let scored = 0;
+      const N = 4000;
+      for (let i = 0; i < N; i++) {
+        const bases: (Runner | null)[] = [null, null, { batter: away.lineup[7], pitcherId: p.id }];
+        let s = 0;
+        resolveInPlayOut(
+          { batter: b, pitcherId: p.id },
+          bases,
+          0,
+          rng,
+          () => {
+            s++;
+          },
+          newBattingLine(b),
+          newPitchingLine(p),
+          false,
+          false,
+          seekFly,
+        );
+        scored += s;
+      }
+      return scored / N;
+    }
+    const normal = scoreRate(false);
+    const fly = scoreRate(true);
+    expect(fly).toBeGreaterThan(normal + 0.2); // netto salto nella conversione del punto
+  });
+
+  it('integrazione: playOffense("flyball") consuma una battuta e resta coerente', () => {
+    const live = cpuBattingGame(43);
+    live.microEvents = false;
+    live.bases[2] = { batter: live.away.lineup[6], pitcherId: 'p' };
+    const before = situation(live);
+    const nPlays = toGameResult(live).play.length;
+    playOffense(live, 'flyball');
+    const after = situation(live);
+    expect(toGameResult(live).play.length).toBe(nPlays + 1); // un'azione prodotta
+    expect(after.batter.id).not.toBe(before.batter.id); // la battuta è stata consumata
+  });
+});
+
+// --------------------------------------------------------------------------
 describe('AI tattica della CPU (small-ball)', () => {
   it('un corridore veloce in prima ruba quando le chance sono buone', () => {
     const live = cpuBattingGame(31);

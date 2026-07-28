@@ -73,6 +73,16 @@ spostano gli aggregati di lega.
   scelta difensiva, niente punto); `pop` → **doppio gioco al piatto** (pop preso,
   corridore doppiato sulla terza). Alto rischio/rendimento: distinto dal sac bunt
   perché l'obiettivo è il punto, ma un bunt sbagliato brucia il corridore.
+- **Cerca fly ball** (`flyBallAtBat`, tattica `'flyball'`) — complemento offensivo
+  dello squeeze, disponibile **solo col corridore in terza** e `<2 out`. Il
+  battitore **eleva** per la volata di sacrificio: il turno può ancora dare valida
+  / BB / strikeout, ma parte del contatto valido è sacrificata per l'aria
+  (`flyBall.singleToFly` .35 / `extraBaseToFly` .20) e **ogni out in gioco è
+  spinto in aria** (`flyBall.flyShare` .78; il resto è un pop mancato, corridore
+  fermo) con conversione SF alta (`flyBall.sacflyConv` .82, contro il .35 base).
+  Netto: il punto dalla terza arriva ~2× più spesso di uno swing, al costo di meno
+  valide. Il flag `seekFly` è passato **solo** da `flyBallAtBat`: il quick-sim non
+  lo usa mai → Fase 0 invariata.
 - **Base intenzionale** (`intentionalWalk`) — avanzamento forzato deterministico
   (nessun RNG); conta come BB.
 - **Interni a doppio gioco** (`setDpDepth`, flag `LiveGame.dpDepth`) — difensiva,
@@ -90,9 +100,11 @@ spostano gli aggregati di lega.
 - **AI tattica della CPU** (`cpuOffenseTurn`, `cpuTryTactic`) — nel **solo gioco
   interattivo** (quando l'umano difende, bottone "Lancia ▸") la CPU può fare
   *small-ball*: **rubata** (corridore veloce, buone chance, più probabile a fine
-  gara equilibrata, rara in blowout), **bunt di sacrificio** (0 out, corridore in
-  1ª/2ª, battitore debole, gara in bilico), **hit-and-run** (corridore in 1ª, 2ª
-  libera, battitore con buon contatto). Soglie in `TUNING.cpuTactics`. **Non è mai
+  gara equilibrata, rara in blowout), **cerca fly** (corridore in 3ª, <2 out, gara
+  in bilico, battitore non-slugger → incassa il punto con la volata), **bunt di
+  sacrificio** (0 out, corridore in 1ª/2ª, battitore debole, gara in bilico),
+  **hit-and-run** (corridore in 1ª, 2ª libera, battitore con buon contatto).
+  Soglie in `TUNING.cpuTactics`. **Non è mai
   chiamata da `autoStep`/`quickSim`**: la Fase 0 e le sim di lega/stagione/playoff
   restano *swing puro* e byte-identiche (guardia nel test `tactics.test.ts`).
 - **Micro-eventi pre-lancio** (`prePitchEvent`) — coi **corridori in base**, prima

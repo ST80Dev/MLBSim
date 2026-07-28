@@ -183,6 +183,22 @@ export const TUNING = {
   },
 
   /**
+   * Tattica offensiva "cerca fly ball": col corridore in terza e <2 out il
+   * battitore ELEVA per la volata di sacrificio. La palla va quasi sempre in aria
+   * (`flyShare`); una volata profonda porta a casa il corridore con conversione
+   * alta (`sacflyConv`, ben sopra il `runnerScoresFromThirdOnOut` base .35). Il
+   * costo dell'elevazione: parte del contatto "buono" diventa un out in aria
+   * (`singleToFly` / `extraBaseToFly`) — meno valide, ma il punto arriva. Azione
+   * one-shot INTERATTIVA: mai chiamata dal quick-sim (Fase 0 invariata).
+   */
+  flyBall: {
+    flyShare: 0.78, // quota di palle davvero elevate (resto = pop mancato, corridore fermo)
+    sacflyConv: 0.82, // conversione volata di sacrificio (3ª -> casa)
+    singleToFly: 0.35, // singoli sacrificati per l'elevazione
+    extraBaseToFly: 0.2, // costo minore sui doppi/tripli (drive genuino, li tieni piu' spesso)
+  },
+
+  /**
    * AI tattica minima della CPU in attacco (small-ball). Attiva SOLO nei turni
    * interattivi (quando l'umano difende): il quick-sim / Fase 0 restano swing
    * puro e NON consumano questo RNG. Le probabilita' sono guidate dalle doti
@@ -204,6 +220,9 @@ export const TUNING = {
     // Hit-and-run (corridore in 1ª, 2ª libera, buon contatto)
     hnrMinContact: 68,
     hnrProb: 0.18,
+    // Cerca fly ball (corridore in 3ª, <2 out): incassa il punto con la volata
+    flyProb: 0.3,
+    flySkipPower: 78, // gli slugger tentano il colpo, non il fly di servizio
   },
 
   /**

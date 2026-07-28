@@ -103,8 +103,9 @@ Regioni, dall'alto in basso:
     (malus ai peripherals attivo) e al **rosso** oltre la soglia di cambio
     automatico (Resistenza +4 SP / +2 rilievo), via `pitcherFatigue`.
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
-    in attacco Battuta / Bunt / **Squeeze** (se corridore in 3ª e <2 out) / Ruba /
-    **Mob & corri** (hit-and-run, se corridore in 1ª e 2ª libera) / **Pinch-hit** /
+    in attacco Battuta / Bunt / **Squeeze** e **Cerca fly** (se corridore in 3ª e
+    <2 out) / Ruba / **Mob & corri** (hit-and-run, se corridore in 1ª e 2ª libera)
+    / **Pinch-hit** /
     **Pinch-run** (se c'è un corridore); in difesa Lancia / Base int. /
     **Interni dentro** (se corridore in 3ª e <2 out) / **Interni a DP** (se
     corridore in 1ª e <2 out) / **Difendi le righe** (anti-extrabase) /

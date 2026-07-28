@@ -1810,6 +1810,15 @@ function ActionBar({
           Squeeze
         </button>
       )}
+      {sit.canFlyBall && (
+        <button
+          className="btn sm"
+          onClick={() => act((g) => playOffense(g, 'flyball'))}
+          title="Cerca fly: il battitore eleva per la volata di sacrificio. Segna il corridore dalla terza, ma meno valide"
+        >
+          Cerca fly
+        </button>
+      )}
       {sit.stealFrom.includes(1) && (
         <button
           className="btn sm"

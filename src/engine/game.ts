@@ -149,7 +149,7 @@ const currentPitcher = (s: SideState): Pitcher => s.pitchers[s.pitcherIdx];
 // ---------------------------------------------------------------------------
 
 /** Tattica offensiva scelta per il turno corrente. */
-export type OffenseTactic = 'swing' | 'bunt' | 'squeeze';
+export type OffenseTactic = 'swing' | 'bunt' | 'squeeze' | 'flyball';
 
 export interface LiveGame {
   away: Team;
@@ -607,6 +607,76 @@ function squeezeAtBat(l: LiveGame): void {
   afterPlay(l, runsScored);
 }
 
+/** Condizione per la "cerca fly ball": corridore in terza e meno di 2 out. */
+export function canFlyBall(l: LiveGame): boolean {
+  return l.status === 'live' && !!l.bases[2] && l.outs < 2;
+}
+
+/**
+ * Cerca fly ball: col corridore in terza (<2 out) il battitore ELEVA per la
+ * volata di sacrificio. Il turno si risolve normalmente (puo' ancora fare valida,
+ * BB o strikeout), ma parte del contatto "buono" viene sacrificato per l'aria
+ * (un doppio/singolo diventa un out in volata) e ogni out in gioco e' spinto in
+ * aria con conversione SF alta -> il punto dalla terza arriva molto piu' spesso,
+ * a costo di meno valide. One-shot interattiva: consuma l'RNG solo qui.
+ */
+function flyBallAtBat(l: LiveGame): void {
+  const off = offense(l);
+  const def = defense(l);
+  const pitcher = currentPitcher(def);
+  const batter = off.team.lineup[off.battingIndex];
+  off.battingIndex = (off.battingIndex + 1) % off.team.lineup.length;
+
+  def.battersFacedByCurrent += 1;
+  const pLine = def.pitchingLines.get(pitcher.id)!;
+  pLine.bf += 1;
+  const bLine = off.battingLines.get(batter.id)!;
+
+  const { event } = resolveAtBat(
+    batter,
+    pitcher,
+    def.battersFacedByCurrent,
+    l.rng,
+    fieldingSigma(def),
+  );
+
+  // Sell-out per l'elevazione: parte del contatto valido diventa un out in aria
+  // (ma il corridore in terza segna). Strikeout e basi restano invariati.
+  const F = TUNING.flyBall;
+  let ev = event;
+  if ((ev === '2B' || ev === '3B') && l.rng.chance(F.extraBaseToFly)) ev = 'IPO';
+  else if (ev === '1B' && l.rng.chance(F.singleToFly)) ev = 'IPO';
+
+  const runsBefore = off.runs;
+  const res = applyEvent(
+    ev,
+    batter,
+    pitcher.id,
+    l.bases,
+    l.outs,
+    l.rng,
+    makeScoreRunner(l, off, def),
+    bLine,
+    pLine,
+    false, // infieldIn
+    false, // dpDepth
+    true, // seekFly
+  );
+  l.outs += res.outsAdded;
+  if (res.hit) off.hits += 1;
+  const runsScored = off.runs - runsBefore;
+
+  pushPlay(
+    l,
+    describe(ev, batter, runsScored, res),
+    runsScored,
+    classifyEvent(ev, res),
+    shortName(batter.name),
+    outInfoFrom(res),
+  );
+  afterPlay(l, runsScored);
+}
+
 /** Basi (1 o 2) da cui un corridore puo' tentare la rubata in questa situazione. */
 export function stealableBases(l: LiveGame): number[] {
   if (l.status !== 'live') return [];
@@ -1058,6 +1128,7 @@ export function playOffense(l: LiveGame, tactic: OffenseTactic): void {
   if (prePitchEvent(l)) return;
   if (tactic === 'bunt') buntAtBat(l);
   else if (tactic === 'squeeze') squeezeAtBat(l);
+  else if (tactic === 'flyball') flyBallAtBat(l);
   else swingAtBat(l);
 }
 
@@ -1111,7 +1182,16 @@ function cpuTryTactic(l: LiveGame): boolean {
     }
   }
 
-  // 2) Bunt di sacrificio: 0 out, corridore in 1ª/2ª, battitore debole, gara in
+  // 2) Cerca fly ball: corridore in terza, <2 out, gara in bilico. Gli slugger
+  //    tentano il colpo (swing), i battitori normali cercano il fly di servizio.
+  if (l.bases[2] && l.outs < 2 && close && batter.ratings.power < T.flySkipPower) {
+    if (l.rng.chance(T.flyProb)) {
+      flyBallAtBat(l);
+      return true;
+    }
+  }
+
+  // 3) Bunt di sacrificio: 0 out, corridore in 1ª/2ª, battitore debole, gara in
   //    bilico (muovere il corridore vale il costo dell'out).
   if (canSacBunt(l) && close) {
     const hitter = (batter.ratings.power + batter.ratings.contact) / 2;
@@ -1121,7 +1201,7 @@ function cpuTryTactic(l: LiveGame): boolean {
     }
   }
 
-  // 3) Hit-and-run: corridore in 1ª, 2ª libera, <2 out, battitore con buon
+  // 4) Hit-and-run: corridore in 1ª, 2ª libera, <2 out, battitore con buon
   //    contatto (protegge il corridore lanciato).
   if (canHitAndRun(l) && batter.ratings.contact >= T.hnrMinContact) {
     if (l.rng.chance(T.hnrProb)) return hitAndRun(l);
@@ -1283,6 +1363,7 @@ export interface LiveSituation {
   canBunt: boolean;
   canHitAndRun: boolean;
   canSqueeze: boolean;
+  canFlyBall: boolean;
   bench: Batter[];
   infieldIn: boolean;
   dpDepth: boolean;
@@ -1324,6 +1405,7 @@ export function situation(l: LiveGame): LiveSituation {
     canBunt: l.outs < 2,
     canHitAndRun: canHitAndRun(l),
     canSqueeze: canSqueeze(l),
+    canFlyBall: canFlyBall(l),
     bench: off.team.bench,
     infieldIn: l.infieldIn,
     dpDepth: l.dpDepth,
@@ -1415,6 +1497,7 @@ function applyEvent(
   pLine: PitchingLine,
   infieldIn = false,
   dpDepth = false,
+  seekFly = false,
 ): EventResult {
   const runner: Runner = { batter, pitcherId };
 
@@ -1533,7 +1616,7 @@ function applyEvent(
       return { outsAdded: 0, hit: true };
     }
     case 'IPO':
-      return resolveInPlayOut(runner, bases, outsBefore, rng, scoreRunner, bLine, pLine, infieldIn, dpDepth);
+      return resolveInPlayOut(runner, bases, outsBefore, rng, scoreRunner, bLine, pLine, infieldIn, dpDepth, seekFly);
   }
 }
 
@@ -1555,10 +1638,39 @@ export function resolveInPlayOut(
   pLine: PitchingLine,
   infieldIn: boolean,
   dpDepth = false,
+  seekFly = false,
 ): EventResult {
   bLine.ab += 1;
   const canAct = outsBefore < 2; // avanzamenti/DP/SF solo con meno di 2 out
   const O = TUNING.outField;
+
+  // Cerca fly ball (tattica offensiva, corridore in terza): il battitore ELEVA.
+  // La palla va quasi sempre in aria; una volata profonda porta a casa il
+  // corridore (conversione SF alta). One-shot interattiva: il quick-sim non passa
+  // mai seekFly, quindi Fase 0 e sim di lega restano invariate.
+  if (seekFly) {
+    pLine.outs += 1;
+    const F = TUNING.flyBall;
+    if (!rng.chance(F.flyShare)) {
+      // Elevazione mancata: presa comoda d'interno, i corridori restano fermi.
+      return { outsAdded: 1, hit: false, ball: 'popup', advanced: false };
+    }
+    let advanced = false;
+    let detail: OutDetail | undefined;
+    if (bases[2] && canAct && rng.chance(F.sacflyConv)) {
+      scoreRunner(bases[2]);
+      bases[2] = null;
+      bLine.rbi += 1;
+      advanced = true;
+      detail = 'sacfly';
+    }
+    if (bases[1] && !bases[2] && canAct && rng.chance(O.tagUpSecondToThirdOnFly)) {
+      bases[2] = bases[1];
+      bases[1] = null;
+      advanced = true;
+    }
+    return { outsAdded: 1, hit: false, ball: 'fly', advanced, detail };
+  }
 
   // Interni dentro (corridore in terza, <2 out): più buchi ma taglia il punto.
   if (infieldIn && bases[2] && canAct) {
