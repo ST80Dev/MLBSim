@@ -15,7 +15,7 @@ import {
 export type Half = 'top' | 'bottom';
 
 /** Un corridore in base, col lanciatore responsabile (per gli ER). */
-interface Runner {
+export interface Runner {
   batter: Batter;
   pitcherId: string;
 }
@@ -1327,7 +1327,7 @@ function applyEvent(
  * e groundout RBI dalla 3ª, tag-up 2ª→3ª sulle volate profonde. Le probabilità
  * stanno in TUNING.outField e sono tarate sui test di realismo.
  */
-function resolveInPlayOut(
+export function resolveInPlayOut(
   runner: Runner,
   bases: (Runner | null)[],
   outsBefore: number,
@@ -1385,21 +1385,32 @@ function resolveInPlayOut(
       bases[0] = runner;
       return { outsAdded: 1, hit: false, detail: 'fc', ball: 'ground', advanced: false };
     }
-    // Groundout RBI: punto dalla 3ª (contatto), poi eventuali avanzamenti.
+    // Battitore eliminato in prima: avanzamenti dei corridori (solo <2 out — col
+    // 3° out l'azione si chiude e nulla conta). Distinguiamo i corridori FORZATI
+    // dal battitore-corridore (avanzano SEMPRE se la base davanti è libera) da
+    // quelli non forzati (out "produttivo", solo con una certa probabilità).
     let advanced = false;
-    if (bases[2] && canAct && rng.chance(TUNING.runnerScoresFromThirdOnOut)) {
-      scoreRunner(bases[2]);
-      bases[2] = null;
-      bLine.rbi += 1;
-      advanced = true;
-    }
-    // Out produttivo: i corridori avanzano di una base se quella davanti è libera.
-    if (canAct && rng.chance(O.productiveAdvanceOnGrounder)) {
-      if (bases[1] && !bases[2]) {
+    if (canAct) {
+      const on1 = !!bases[0];
+      const on2 = !!bases[1];
+      const on3 = !!bases[2];
+      const forced2 = on2 && on1; // la 2ª è forzata se la 1ª è occupata
+      const forced3 = on3 && on1 && on2; // la 3ª è forzata a basi piene
+      // 3ª base: segna se forzata (basi piene) o su contatto/concessione (~prob).
+      if (bases[2] && (forced3 || rng.chance(TUNING.runnerScoresFromThirdOnOut))) {
+        scoreRunner(bases[2]);
+        bases[2] = null;
+        bLine.rbi += 1;
+        advanced = true;
+      }
+      // 2ª → 3ª: se la 3ª è libera, forzata (deterministica) o produttiva (~prob).
+      if (bases[1] && !bases[2] && (forced2 || rng.chance(O.productiveAdvanceOnGrounder))) {
         bases[2] = bases[1];
         bases[1] = null;
         advanced = true;
       }
+      // 1ª → 2ª: il corridore in 1ª è SEMPRE forzato dal battitore eliminato in
+      // prima; avanza se la 2ª è libera (prima restava fermo ~2 volte su 3: bug).
       if (bases[0] && !bases[1]) {
         bases[1] = bases[0];
         bases[0] = null;
