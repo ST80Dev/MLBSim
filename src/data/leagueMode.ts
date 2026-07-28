@@ -1,4 +1,5 @@
 import type { Team } from '../engine/types';
+import { makeRng, clamp } from '../engine/rng';
 
 // ---------------------------------------------------------------------------
 // Modalita' di lega e politica del salary cap.
@@ -124,4 +125,82 @@ export function capZone(payroll: number, mode: LeagueMode): CapZone {
   const base = mode.cap.amount;
   if (payroll <= base) return 'under';
   return payroll <= outerWall(base) ? 'tax' : 'over';
+}
+
+// ---------------------------------------------------------------------------
+// CAP ENFORCE + MARGINE ε SEEDATO (Fase 5A)
+//
+// Il tetto EFFETTIVO di una squadra NON e' una costante globale: e'
+//   tetto_effettivo(team, anno) = cap_base × (1 + ε)
+// con ε margine stocastico ma DETERMINISTICO (seedato) e limitato. Cosi' la
+// riconciliazione al rollover fa rientrare ogni squadra sotto il *suo* tetto, non
+// sotto il cap base: ogni anno alcune stanno in "fascia tassa" e il tessuto non
+// collassa in omogeneita'. Puro e SENZA STATO da salvare (niente soldi/multe):
+// ε si ricalcola da (seed, teamId, anno). Vedi docs/franchise.md § Margine ε.
+// ---------------------------------------------------------------------------
+
+/** Limiti di ε. Il massimo coincide con `CAP_OVERAGE`: il tetto effettivo non
+ *  supera MAI il muro esterno rigido (nessun runaway). */
+export const EPS_MIN = -0.1;
+export const EPS_MAX = CAP_OVERAGE; // 0.25
+
+/** Hash FNV-1a di una stringa → uint32 (per foldare il teamId nel seed). */
+function strHash(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Uniforme [0,1) deterministica da (seed, teamId, salt). Salt distingue gli
+ *  stream (componente persistente vs transitoria). */
+function unit(seed: number, teamId: string, salt: number): number {
+  const s = (seed ^ Math.imul(strHash(teamId) ^ (salt | 0), 2654435761)) >>> 0;
+  return makeRng(s).next();
+}
+
+const lerp = (u: number, lo: number, hi: number): number => lo + u * (hi - lo);
+
+/**
+ * Margine di sforamento ε ∈ [EPS_MIN, EPS_MAX] per (squadra, anno). Somma di:
+ *   - **transitoria** (dominante): rumore per-anno → stagioni-splurge occasionali,
+ *     mobilita' piena. Varia con l'anno.
+ *   - **persistente** (piccola): profilo di franchigia → accenno di identita'
+ *     grande/piccolo mercato. Stabile negli anni (NON dipende dall'anno).
+ * Il persistente e' piccolo apposta: da' colore, non destino (draft inverso +
+ * aging garantiscono comunque il ricambio). Deterministico, nessuno stato salvato.
+ */
+export function capOverageMargin(seed: number, teamId: string, year: number): number {
+  const persistent = lerp(unit(seed, teamId, 0x9e3779b1), -0.03, 0.07); // identita' franchigia
+  const transient = lerp(unit(seed, teamId, Math.imul(year + 1, 0x85ebca6b)), -0.09, 0.18); // rumore anno
+  return clamp(Math.round((persistent + transient) * 1000) / 1000, EPS_MIN, EPS_MAX);
+}
+
+/**
+ * Tetto EFFETTIVO (milioni) di una squadra per l'anno dato: `base × (1 + ε)`.
+ * Cap `off` → `Infinity` (nessun tetto). Per costruzione il risultato sta in
+ * `[base × (1+EPS_MIN), muro esterno]`: non sfonda mai il muro.
+ */
+export function effectiveCap(mode: LeagueMode, seed: number, teamId: string, year: number): number {
+  if (mode.cap.mode === 'off') return Infinity;
+  const eps = capOverageMargin(seed, teamId, year);
+  return Math.round(mode.cap.amount * (1 + eps) * 10) / 10;
+}
+
+/**
+ * Sforamento del tetto EFFETTIVO (0 se sotto o cap `off`): l'eccedenza che la
+ * riconciliazione al rollover dovra' scaricare nel pool di free agent. E' la
+ * primitiva di enforce che consumeranno gli step 3 (pool) e 6 (offseason) di 5A.
+ */
+export function overEffectiveCap(
+  payroll: number,
+  mode: LeagueMode,
+  seed: number,
+  teamId: string,
+  year: number,
+): number {
+  const cap = effectiveCap(mode, seed, teamId, year);
+  return cap === Infinity ? 0 : Math.max(0, Math.round((payroll - cap) * 10) / 10);
 }

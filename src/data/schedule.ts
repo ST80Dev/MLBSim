@@ -36,6 +36,14 @@ export interface Schedule {
 export const PRESEASON_GAMES = 10;
 export const REGULAR_GAMES = 162;
 
+/**
+ * Trade deadline (indice 1-based della gara di regular season): dopo, le rose sono
+ * congelate agli scambi fino all'off-season. ~2/3 di stagione, come la deadline
+ * reale di fine luglio. In stagione si fanno SOLO scambi (nessuna firma dal pool
+ * FA, che e' evento di off-season). Vedi docs/franchise.md § Cadenza del mercato.
+ */
+export const TRADE_DEADLINE_GAME = 103;
+
 /** Turni di playoff come slot potenziali (best-of), avversario da determinare. */
 const PLAYOFF_ROUNDS: Array<{ round: string; games: number }> = [
   { round: 'Wild Card', games: 3 },
