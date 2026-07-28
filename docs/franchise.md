@@ -5,6 +5,67 @@ di un GM manager completo. Tutto ciò che segue è **design per fasi successive*
 (non ancora implementato in Fase 0); i campi base esistono già nel modello
 (`CareerProfile`: `age`, `potential`, `salary`, `retired`, `twoWay`).
 
+## Piano di esecuzione Fase 5 — cosa è costruibile ORA (5A) vs dopo (5B)
+
+**Decisione di design.** Il layer franchigia è **quasi tutto logica pura** e si
+disaccoppia dalla Fase 4 grazie a una cucitura già presente nel motore:
+`advanceSeasonBatter/Pitcher(…, perf = 0)` accetta un segnale d'impiego opzionale,
+oggi **neutro**. Quindi tutta la meccanica franchigia si costruisce con `perf = 0`
+e si collega il `perf` reale (box score reali per la squadra gestita, `projection.ts`
+per le 29 CPU) **quando** la Fase 4 chiuderà il rollover di stagione — **senza**
+toccarne la struttura.
+
+**Fase 5A — motore franchigia (puro, testabile, ZERO dipendenza da Fase 4):**
+
+1. **`playerValue`** — l'atomo comune a scambi e cap (vedi § sotto). *(fatto/in corso)*
+2. **Cap enforce + margine ε** — `effectiveCap(seed, teamId, year) = base × (1+ε)`,
+   ε **seedato** e deterministico (niente stato da salvare), con piccola componente
+   persistente di franchigia (vedi § Salary cap).
+3. **Pool di free agent + riconciliazione** — funzione pura: sopra il *proprio*
+   tetto si scarica a valore crescente-dal-basso, sotto si ripesca (vedi §
+   Riconciliazione).
+4. **Draft inverso** — generazione classe prospetti (`generator` + `projectPotential`,
+   tetto *possibile* non certo) + assegnazione a ordine di classifica inversa
+   (accetta una qualsiasi mappa di record W-L).
+5. **Valutazione scambi** — `evaluateTrade(give, get, capCtx) → sì/no` (equità +
+   rispetto cap bilaterale). Motore ora, UI dopo.
+6. **`runOffseason(league, seed, year, perf?)`** — orchestratore che cuce 1–5 con
+   `perf` di default 0. È la **metà franchigia** del "rollover di stagione" (l'altra
+   metà, stagione→scorsa→carriera, resta di Fase 4).
+
+**Fase 5B — UI + accoppiamento con la stagione (RICHIEDE prima la Fase 4):**
+
+- **Finestra di gestione tra le partite** (dove si toccano roster/scambi): dipende
+  dal loop di calendario.
+- **UI scambi** (proponi → *una* CPU valuta) e **UI draft / riepilogo off-season**.
+- **Collegamento del `perf` reale** e **normalizzazione PA battitori**
+  (`Σ squadra ≈ 6.180`, vedi § Normalizzazione PA).
+
+**Persistenza (schema v3).** Il multi-anno introduce **stato che diverge dal
+seed**: appena c'è aging + uno scambio umano, la lega non è più ri-derivabile da
+`seed`. Scelta: **persistere le rose complete** dopo ogni off-season (`GameSave`
+schema v3), robusto agli scambi umani. ε resta seedato (niente finanza da salvare);
+il pool di free agent è transitorio (si consuma nell'off-season, non si salva).
+
+### `playerValue` — l'atomo (punti overall-equivalenti)
+
+Mix dei tre ingredienti di § Scambi, in un'unica scala interpretabile (punti di
+overall), così che l'ordinamento serva **sia** gli scambi **sia** lo scarico da cap:
+
+```
+valore = overall                                    // forza attuale (segnale dominante)
+       + upsideWeight(età) × max(0, potential−overall)  // prospettiva/potenziale per età
+       − SALARY_WEIGHT × salary                     // freno stipendio (tiebreak secondario)
+
+upsideWeight(età): 1.0 a ≤22  →  0 a ≥30 (lineare in mezzo)
+```
+
+Conseguenze: una stella batte uno scarso (l'overall domina); a **pari overall** un
+giovane con headroom o un contratto economico vale di più; un veterano maturo e caro
+scende. Ordinando dal valore **più basso** si scaricano prima i maturi cari senza
+prospettiva, **mai** i giovani-affare (che ai deboli arrivano via pool/draft). Puro:
+niente RNG, non muta il giocatore. Vive in `engine/value.ts`.
+
 ## Finestra di gestione (tra le partite di calendario)
 
 Il gioco gestisce **una sola squadra** (quella dell'utente). Roster e
