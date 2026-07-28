@@ -1111,6 +1111,7 @@ table {
   border-top: 1px solid var(--line);
   flex: 0 0 auto;
   overflow-y: auto;
+  position: relative;
 }
 .ls-pit {
   display: flex;
@@ -1603,8 +1604,12 @@ table {
   min-height: 0;
   flex: 1 1 auto;
 }
+/* Lista lanciatori ad altezza FISSA con scroll interno: aggiungendo rilievi il
+   riquadro NON cresce più verso l'alto (sotto la cronaca); si scorre e resta
+   centrata sul lanciatore attuale (vedi auto-scroll in LineupSide). */
 .lineup-corner .ls-pits {
-  max-height: 42%;
+  height: 60px;
+  flex: 0 0 auto;
 }
 .lineup-corner .ls-table {
   font-size: 12px;

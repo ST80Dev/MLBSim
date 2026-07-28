@@ -832,7 +832,7 @@ export function App() {
                 onRecap={() => setRecapOpen(true)}
               />
             ) : (
-              <ActionBar live={live} sit={sit} act={act} />
+              <ActionBar live={live} sit={sit} act={act} onSub={revealField} />
             )
           }
         />
@@ -1766,10 +1766,16 @@ function ActionBar({
   live,
   sit,
   act,
+  onSub,
 }: {
   live: LiveGame;
   sit: LiveSituation;
   act: (fn: (g: LiveGame) => void) => void;
+  // Chiamata SUBITO dopo una sostituzione confermata (cambio lanc./difensore,
+  // pinch-hit/run): una sostituzione non è una "giocata" con verdetto, quindi
+  // deve rivelare immediatamente marker/testata/boxscore invece di aspettare il
+  // verdetto della telecronaca del turno successivo.
+  onSub?: () => void;
 }) {
   // Modale di sostituzione (popup a tutto schermo): rimpiazza i vecchi menu a
   // discesa che restavano nascosti dietro la barra comandi.
@@ -1886,7 +1892,17 @@ function ActionBar({
   return (
     <>
       {bar}
-      {sub && <SubModal live={live} mode={sub} act={act} onClose={() => setSub(null)} />}
+      {sub && (
+        <SubModal
+          live={live}
+          mode={sub}
+          act={(fn) => {
+            act(fn);
+            onSub?.(); // sostituzione = aggiornamento UI immediato (no attesa verdetto)
+          }}
+          onClose={() => setSub(null)}
+        />
+      )}
     </>
   );
 }
@@ -2287,6 +2303,18 @@ function LineupSide({
   // solo quello in pedana: così il box tiene traccia dei 3/5/7 cambi.
   const lastPitIdx = stats.pitching.length - 1;
   const pitLabels = disambiguateLastNames(stats.pitching.map((p) => p.name));
+  // Lista lanciatori ad altezza fissa: la teniamo scrollata sul lanciatore
+  // ATTUALE (l'ultimo entrato), centrandolo, così un nuovo rilievo compare senza
+  // far crescere il riquadro verso l'alto.
+  const pitsRef = useRef<HTMLDivElement>(null);
+  const curPitRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = pitsRef.current;
+    const row = curPitRef.current;
+    if (box && row) {
+      box.scrollTop = Math.max(0, row.offsetTop - (box.clientHeight - row.offsetHeight) / 2);
+    }
+  }, [lastPitIdx]);
   return (
     <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>
       <div className="ls-head">
@@ -2330,7 +2358,7 @@ function LineupSide({
         </table>
       </div>
       {stats.pitching.length > 0 && (
-        <div className="ls-pits">
+        <div className="ls-pits" ref={pitsRef}>
           {stats.pitching.map((pl, idx) => {
             const p = pitById.get(pl.id);
             const label = pitLabels[idx];
@@ -2340,7 +2368,11 @@ function LineupSide({
             const stateWord =
               fat?.state === 'spent' ? 'esausto' : fat?.state === 'tiring' ? 'in calo' : 'fresco';
             return (
-              <div className={`ls-pit${isCur ? ' cur' : ''}`} key={pl.id}>
+              <div
+                className={`ls-pit${isCur ? ' cur' : ''}`}
+                key={pl.id}
+                ref={idx === lastPitIdx ? curPitRef : undefined}
+              >
                 <span className="ls-pit-tag">{idx === 0 ? 'LANC.' : '↳'}</span>
                 <span className="ls-pit-name">
                   {p ? <PlayerLink player={p}>{label}</PlayerLink> : upperLast(label)}
