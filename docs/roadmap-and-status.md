@@ -129,9 +129,11 @@
     cucitura `advanceSeasonBatter/Pitcher(…, perf = 0)` (segnale d'impiego oggi
     neutro, collegabile al `perf` reale a rollover Fase 4 pronto).
   - **5A — motore franchigia (puro, testabile, NIENTE dipendenza da Fase 4):**
-    1) `playerValue` (atomo scambi+cap, `engine/value.ts`) — **avviato**;
-    2) cap enforce + ε seedato; 3) pool free agent + riconciliazione;
-    4) draft inverso; 5) valutazione scambi; 6) `runOffseason` (perf=0).
+    1) `playerValue` (atomo scambi+cap, `engine/value.ts`) — **FATTO**;
+    2) cap enforce + ε seedato (`leagueMode.ts`: `capOverageMargin`/`effectiveCap`/
+    `overEffectiveCap`) — **FATTO**; 3) pool free agent + riconciliazione;
+    4) draft inverso; 5) valutazione scambi (con **premio di consolidamento**,
+    vedi `franchise.md § playerValue è additivo`); 6) `runOffseason` (perf=0).
   - **5B — UI + accoppiamento stagione (dopo Fase 4):** finestra di gestione fra le
     partite, UI scambi/draft/off-season, `perf` reale, normalizzazione PA battitori.
   - **Persistenza:** `GameSave` schema **v3** con **rose persistite** (il multi-anno

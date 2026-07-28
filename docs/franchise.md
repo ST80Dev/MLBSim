@@ -325,6 +325,30 @@ pavimento = gli stipendi-minimo di rosa.
   del cap da entrambe le parti).
 - Niente aste complesse: proposta → valutazione → sì/no.
 
+### `playerValue` è additivo → il "premio di consolidamento" (regola di `evaluateTrade`)
+
+**Decisione di design (emersa provando scambi reali).** `playerValue` è **puramente
+additivo** e ha un **pavimento** (il valore minimo di un singolo giocatore è ~il
+pavimento dell'overall, ~48-50). Conseguenza: **due giocatori sommano quasi sempre
+più di uno**, quindi un vero **2-per-1 "stella ⇄ pacchetto" non risulta MAI
+bilanciato** a somma-valore. Non è un difetto dell'atomo (che resta pulito e
+serve intatto al cap): è il **decisore** `evaluateTrade` che deve modellare ciò
+che `playerValue` non vede — gli **slot roster sono finiti**. Concentrare valore in
+un giocatore **libera uno slot** (bene per un contender a rosa piena); frammentarlo
+ne **occupa** di più. Quindi `evaluateTrade`:
+
+- applica un **premio di consolidamento** a chi **riduce** il numero di giocatori
+  in rosa (riceve meno teste di quante ne cede), e uno **sconto** a chi la
+  frammenta;
+- il premio scala con quanto la rosa del ricevente è **piena/competitiva** (un
+  contender lo paga, un ricostruttore no — a lui i pezzi multipli servono);
+- così un 2-per-1 può chiudersi anche con Δ-somma-valore **a favore** di chi cede
+  la stella: è il prezzo dello slot, non uno squilibrio.
+
+Resta una regola del **solo decisore** (scambi umano→1 CPU): la riconciliazione
+del cap via **pool** non ne ha bisogno (là il valore additivo è esattamente ciò
+che serve per lo scarico).
+
 ## Draft
 
 - **Semplificato**: un ingresso di giovani nel pool, senza le complicazioni di un
