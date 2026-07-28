@@ -44,8 +44,9 @@ Regioni, dall'alto in basso:
     motore via `PlayEvent.kind` (metadato puramente descrittivo, non tocca la
     simulazione né l'RNG). Non interattivo (`pointer-events:none`).
   - **Cronaca laterale** (`CronacaTeam`, angoli **alti** sx/dx per ospite/casa):
-    a fine turno la giocata resta **sintetizzata in una riga** (`PlayEvent.text`)
-    nella timeline della squadra in attacco. Davanti al testo, un **chip col
+    a fine turno la giocata resta **sintetizzata in una riga** (`commentary.logLine`,
+    con la stessa varietà narrativa del banner) nella timeline della squadra in
+    attacco. Davanti al testo, un **chip col
     codice da segnapunti** (`scoreCode` in `src/ui/scorecode.ts`): `6-4-3 DP`
     (doppio gioco SS→2B→1B), `F7` (eliminato al volo, LF), `K`/`ꓘ` (strikeout),
     `CS 2-6` (eliminato in rubata), `3U` (rimbalzo non assistito in 1ª), ecc.,
@@ -56,12 +57,68 @@ Regioni, dall'alto in basso:
     motore, **niente RNG, determinismo invariato**. Quando la difesa sarà
     simulata (fase futura) i ruoli reali sostituiranno la sintesi senza cambiare
     la UI. Coperto da test (`src/ui/__tests__/scorecode.test.ts`).
+  - **Varietà narrativa pesata sulle frequenze MLB** (`commentary.ts`): banner e
+    log laterale hanno **4-5+ modi diversi** per lo stesso esito, scelti in modo
+    **deterministico** (hash dell'evento, niente RNG). Due sorgenti di sottotipo:
+    - **Valide e strikeout** (il motore non dice *com'è* la battuta): un
+      **sottotipo pesato** sul mix reale MLB — singolo a terra/in linea/bloop/
+      interno (46/34/13/7), doppio gap/linea/muro/angolo (42/26/18/14), strikeout
+      a vuoto/guardato (72/28), più HR netto/profondo/di un soffio. Su tante azioni
+      la *distribuzione dei testi* rispecchia il gioco reale.
+    - **Out su palla in gioco**: la forma NON è inventata — viene dalla **verità
+      del motore** `inPlayOutShape(ev)` (`ev.outInfo.ball`: rimbalzo/volata/presa);
+      il testo varia solo la resa. Così banner, log laterale e codice da segnapunti
+      restano **coerenti** fra loro e con gli avanzamenti reali dei corridori.
+    Test: `src/ui/__tests__/commentary.test.ts` (determinismo, convergenza ai pesi,
+    coerenza con `outInfo`).
+    - **Coerenza cronaca ↔ codice.** Per l'out su palla in gioco (`inplayout`)
+      la categoria (rimbalzo / volata / presa) NON è più scelta due volte in
+      modo indipendente: viene da un'unica fonte, `inPlayOutShape(ev)` in
+      `commentary.ts`, usata sia dal verdetto del banner sia dal codice. Così
+      non capita più "out in prima" (rimbalzo) con un codice di volata `F8`.
+    - **Testate d'inning impilabili.** Testate (`cr-inhead`) ed eventi sono
+      figli **diretti** di `.crt-body`: ogni testata è `position: sticky` con
+      `top = --crh * indice`, così scorrendo gli inning passati collassano alla
+      loro testata e queste si **accumulano fisse** in cima (1°/2°/3°…). Se
+      restassero annidate in un box per-inning scorrerebbero via una per volta.
+  - **Marker sulle basi a rivelazione ritardata.** I marker del diamante (basi +
+    corridori) NON si spostano appena eseguito il turno: si aggiornano al
+    **verdetto** della telecronaca di quel turno (callback `onReveal` dal
+    `PlayBanner`, sincronizzata con l'ultima fase). Così non si vede il corridore
+    già in base prima di averne letto l'esito. Fuori dalla telecronaca (ripresa
+    partita, quick-sim, cambio) i marker si allineano subito. Stato in `App`
+    (`shownField`), passato a `Diamond`/`BaseDiamond`; il motore e i controlli
+    restano sullo stato reale (`sit`), solo i marker sono in ritardo.
   - **Lineup** delle due squadre negli **angoli in basso** (ordine + stat live,
-    battitore corrente evidenziato, lanciatore in pedana).
+    battitore corrente evidenziato, lanciatori usati in pedana). Il riquadro
+    lanciatori elenca **ogni lanciatore impiegato** (il partente con tag `LANC.`,
+    i rilievi con `↳`), ciascuno con **IP / PT / BF / SO / ER**: **PT = stima
+    lanci** (`estimatedPitches`, formula di Tango `3.3·BF + 1.5·SO + 2.2·BB`) —
+    stima DETERMINISTICA (nessun RNG, nessun impatto sulla calibrazione) che cresce
+    con battitori affrontati, valide, BB e SO, così si percepisce l'affaticamento.
+    **BF = battitori affrontati / Resistenza** (`pl.bf` / `pitcher.stamina`): è il
+    **raffronto esplicito** sulla durata sul monte, ancorato alla *vera* meccanica
+    del motore (l'affaticamento va a battitori, non a lanci). Sia PT sia BF virano
+    all'**ambra** quando i battitori si avvicinano/superano la soglia di Resistenza
+    (malus ai peripherals attivo) e al **rosso** oltre la soglia di cambio
+    automatico (Resistenza +4 SP / +2 rilievo), via `pitcherFatigue`.
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
     in attacco Battuta / Bunt / Ruba / **Mob & corri** (hit-and-run, se corridore
-    in 1ª e 2ª libera) / **Pinch-hit** (menu panchina); in difesa Lancia / Base
-    int. / **Interni dentro** (se corridore in 3ª e <2 out) / Cambio lanc.
+    in 1ª e 2ª libera) / **Pinch-hit** / **Pinch-run** (se c'è un corridore); in
+    difesa Lancia / Base int. / **Interni dentro** (se corridore in 3ª e <2 out) /
+    **Cambio lanc.** / **Cambio dif.**
+  - **Sostituzioni — modale in stile roster** (`SubModal`). I vecchi menu a
+    discesa (nascosti dietro la barra) sono sostituiti da un **popup ad hoc** che
+    mostra il pool giusto con **OVR e caratteristiche** (come una mini-scheda
+    roster) e i nomi cliccabili aprono la scheda giocatore:
+    - **Pinch-hit** (`pinchHit`): panchina → battitore corrente.
+    - **Pinch-run** (`pinchRun`): scegli il corridore in base → panchina.
+    - **Cambio lanc.** (`changePitcher`): bullpen (rilievi disponibili).
+    - **Cambio dif.** (`substituteFielder`): scegli il difensore che esce →
+      panchina; il sostituto ne eredita ruolo e slot in battuta.
+    Cambio lanciatore e difensore sono disponibili **per tutta la fase difensiva**
+    (non solo appena prima del lancio). Le sostituzioni non consumano il turno.
+    Motore in `engine/game.ts`; test in `engine/__tests__/live.test.ts`.
   - A partita finita, **overlay del risultato** con Recap/Nuova partita.
 
 Il campo generato disegna **solo il terreno di gioco** (niente tribune/cielo
@@ -75,6 +132,13 @@ la foto manca, resta lo sfondo scuro.
 
 **Etichette dei marker**: sopra il marker per tutti tranne **lanciatore,
 ricevitore e battitore** (in basso nella foto), che le hanno sotto.
+
+**Cognomi in MAIUSCOLO**: ovunque compaia un nome di giocatore (lineup, campo,
+cronaca, roster, schede, sostituzioni…) il **cognome** è reso in maiuscolo per
+riconoscerlo a colpo d'occhio (es. "Aaron VISSER", "O. LEWIS"). Helper di
+presentazione `upperLast` (`format.ts`) applicato ai punti di render (in primis
+`PlayerLink` e le etichette del `Diamond`); la cronaca lo eredita da `shortName`
+nel motore. Solo visuale: i nomi nei dati/motore restano invariati.
 
 **Toggle stat** (`StatsToggle`, tre stati): **Partita** (dato reale) ·
 **Stagione** (proiezione dalle doti, `player.stats`, ~650 PA / 1000 BF) ·
@@ -116,6 +180,83 @@ variante compatta `.modal.player` (max ~560px).
 
 - **Scheda "Rose & caratteristiche"**: doti 40-100 colorate per lineup e rotazione,
   con OVR a stelle e lo scambio difensivo (seconda posizione).
+
+### Editor schieramento — drag&drop (Roster)
+
+Regola unica: **muovere dentro la stessa ripartizione è uno SWAP** (i due si
+scambiano di posto, gli altri restano fermi — mai inserimento a scorrimento);
+**passare fra ripartizioni è una sostituzione/spostamento**.
+
+- **Battuta / Difesa titolari.** Trascinare un titolare su un altro **scambia**
+  i due slot: nell'ordine di battuta scambia i numeri (la difesa resta), nella
+  vista difesa scambia le caselle (`setSlot`). Un **titolare trascinato su una
+  riserva** lo **scarica** (swap titolare↔riserva, tiene la casella;
+  `substitute`), valido sia dalla lista battuta sia dalla difesa
+  (`dropBenchRow` accetta qualunque id attualmente in `arr.order`).
+- **Riserve.** Una **riserva su un'altra riserva** le **riordina**: l'ordine
+  scelto è persistito in `MatchArrangement.benchOrder` (id preferiti in testa,
+  gli altri in coda via `orderByPref`). Campo **opzionale**, ignorato dal motore
+  (`buildManagedTeam`/`validateArrangement` non lo usano) e retrocompatibile coi
+  salvataggi che ne sono privi; un titolare appena scaricato finisce in coda.
+- **Lanciatori.** Riordino dentro Rotazione o Bullpen = **swap**; il drop fra
+  Rotazione / Bullpen / Disponibili resta uno **spostamento** (il numero per
+  lista è variabile: nessuna casella fissa), `placePitcher` distingue i due casi
+  da `drag.from` vs lista di destinazione.
+
+### Colonne OVR bar e MAX (prospettiva "nebbiosa")
+
+Ogni elenco del roster ha, subito dopo la colonna **OVR**, due **colonne
+dedicate a larghezza fissa** (allineate verticalmente riga per riga — niente
+info impilate nella stessa cella, quindi zero disallineamenti):
+
+- **Barra OVR** (`OvrBarCell`/`OvrBar`, header vuoto): riempimento colorato =
+  overall corrente (`ratingColor`); se c'è **upside**, il tratto fino al bordo
+  **alto della fascia stimata** (`hi`, *non* il potenziale esatto) resta come
+  segmento più chiaro = *spazio di crescita*. Scala 40-100 → 0-100% (`ratingPct`).
+- **MAX** (`PotCell`): **non mostra più il potenziale nudo** (svelava il futuro).
+  Al suo posto una **fascia direzionale "da scout"** (`growthOutlook`), stabile
+  per giocatore (seed sull'id) ma volutamente imprecisa — vedi
+  `docs/players-and-ratings.md` § *Nebbia di scouting*:
+  - **giovane con margine** → `▲lo-hi` verde (la fascia *contiene* il potenziale
+    vero senza rivelarlo; si allarga con gioventù e margine);
+  - **picco / nessun margine** → **numero secco** dell'OVR in grigio neutro;
+  - **veterano (> 30)** → `▼lo-hi` ambrato, **inferiore all'attuale** (declino
+    stimato dalla curva d'età): la tensione è "quanto in fretta cala?".
+  Formato distinto dal badge OVR (niente pill piena, più piccolo) per non
+  confonderlo a colpo d'occhio. NB: l'etichetta è `MAX`, non `POT`, perché in
+  modalità *Caratteristiche* `POT` è già la **Potenza** del battitore.
+
+Presente in tutti gli elenchi (Ordine di battuta, Disponibili, Per posizione,
+Riserve, tabelle lanciatori); l'overall usato è quello della riga (in Difesa è
+rivalutato sulla casella via `ratingsAtPosition`, come il badge). La **posizione
+secondaria** non ha una colonna propria: è già nella colonna **RUOLI**
+(`rolesOf` → `SS/3B`). Fuori scope il menu Pinch-hit in partita.
+
+**Ordine colonne**: `# · Giocatore · ETÀ · RUOLI · OVR · barra · MAX · stat…`
+(l'età sta **a sinistra** del ruolo).
+
+### Larghezza tabella e celle rating
+
+Le card colorate dei rating (`.rat`) hanno **larghezza fissa** (~34px, quasi
+quadrate) scoped a `.roster-tbl`. La tabella NON si stira più a tutta larghezza:
+`.roster-tbl { width:auto; margin-inline:auto }` la dimensiona sul **contenuto**
+e la **centra** nel contenitore — così su desktop largo non resta un enorme vuoto
+fra i nomi e le stat, e la tabella è sempre centrata (con molte colonne, se
+supera il contenitore, `.roster-scroll` scrolla). La colonna **Giocatore** è a
+larghezza-contenuto (non più `width:100%`).
+
+### Legenda sigle (icona «i»)
+
+A fianco della testata di ogni tabella del roster c'è un'iconcina **`i`**
+(`InfoDot`) che apre un modale-legenda (`StatLegend`) con la spiegazione delle
+sigle **di quella sezione**: attacco (`bat`), difesa (`def`) o lancio (`pit`).
+Fonte unica `GLOSSARY` (in `App.tsx`): per ogni voce distingue **doti** (rating
+40-100, descrizione = *su cosa influiscono* nel motore, allineata a
+`docs/players-and-ratings.md`) e **statistiche** (descrizione = cosa
+rappresentano). Copre sia la modalità *Ratings* sia le modalità statistiche,
+così una sola «i» per sezione basta a chiarire tutte le colonne visibili.
+Chiudibile con ✕, backdrop o Esc, come gli altri modali. Se aggiungi/rinomini
+una colonna (`*_COLS`), aggiorna la voce corrispondente in `GLOSSARY`.
 
 La partita interattiva (`LiveGame`) è **mutabile** e vive tra i render: `App`
 la tiene in un `useRef` con chiave `teamSeed|gara|squadra`, ricreandola solo al

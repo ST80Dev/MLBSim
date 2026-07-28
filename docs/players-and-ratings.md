@@ -44,18 +44,37 @@ fast-slugger passano dal 4.4% allo **0.8%**, i "5-tool" dal 3.6% allo 0.8%.
 così), finesse/pitch-to-contact (pochi BB e valide, pochi K), sinkerballer (palla
 a terra), **flamethrower selvaggio** (stoffa elite ma tante BB), ace completo
 (RARO), equilibrato. Anche una squadra **scarsa** ha così il suo power-arm, il
-finesse, il long-man — non 5 cloni allineati all'OVR (spread medio interno alle
-doti-skill ~25 punti). La **Resistenza è indipendente** dalla bravura (base di
-ruolo + varianza ampia sd 11, non tocca il talento): un partente forte di stoffa
-può avere resistenza da long-reliever (corr overall↔resistenza ≈ 0).
+finesse — non 5 cloni allineati all'OVR (spread medio interno alle doti-skill ~25
+punti). La **Resistenza è un rating INTRINSECO**, indipendente da bravura *e*
+ruolo: centrata sulla media con varianza ampia (sd 14) → dai bracci da 1 ripresa
+(~45) ai cavalli (~95). La **difesa del lanciatore** è centrata **sotto** la media
+(~57, non ~70): un lanciatore non difende come un interno; solo qualche Maddux
+supera 80.
 
-### Ruolo/resistenza seguono lo SLOT, non la generazione
+### Un solo pool di bracci → i migliori CON resistenza partono
 
-`buildManagedTeam` ora **ri-assegna ruolo e ricalcola la resistenza** (`asRole` →
-`deriveStamina(rating, ruolo)`) secondo dove schieri il lanciatore: un long-reliever
-con Resistenza alta spostato in **rotazione** diventa un **vero SP** (regge una
-partenza intera), un partente in bullpen accorcia. L'endurance dipende dal *rating*,
-non dai battitori-soglia fissati alla generazione.
+Niente più pool SP e pool RP separati (davano reliever più forti dei titolari,
+"tanto vale spostarli"). Si genera **un unico pool** di 15 bracci; la **rotazione**
+sono i 5 con la migliore *attitudine a partire* = `pitcherOverall + 0.9·(resistenza
+− media)` (chi non regge non parte); il **closer** è il miglior braccio rimasto
+orientato al dominio; poi bullpen e profondità. Effetti:
+- la rotazione ha **varianza vera di resistenza** (cavalli da 30+ battitori e
+  partenti corti), non tutti allineati a ~72;
+- i bracci **top-stoffa ma poco durevoli** finiscono in bullpen (dove esplodono in
+  1 ripresa), non sprecati come 5° partente debole;
+- ruolo ed endurance sono assegnati dallo **slot** (`setPitcherRole` /
+  `deriveStamina`), coerenti per squadra gestita e CPU.
+
+### Swingman (doppio ruolo SP/RP)
+
+`swingCapable(ratings)` marca i bracci con **resistenza da partenza + qualità da
+rilievo** (resistenza 60-82, overall ≥ 52): possono fare **entrambi**. In UI
+mostrano un chip **SP/RP** (tabella lanciatori e popup), così il giocatore sa chi
+può spostare tra rotazione e bullpen. `buildManagedTeam` **ri-assegna ruolo e
+ricalcola la resistenza** (`asRole` → `deriveStamina(rating, ruolo)`) secondo lo
+slot: un long-reliever forte messo in rotazione diventa un **vero SP** (regge una
+partenza intera), un partente in bullpen accorcia — l'endurance segue il *rating*,
+non i battitori-soglia della generazione.
 
 ### Età alla generazione (`makeAge`)
 
@@ -243,11 +262,46 @@ In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
   Dominio, Resistenza, Braccio) e **poi le tecniche** (Contatto, Occhio,
   Controllo, Movimento, Difesa).
 - **Ritiro** automatico quando età alta + overall crollato.
-- Ogni giocatore ha un solo **potenziale** (tetto 40-100). Dopo l'evoluzione le
-  statistiche vengono ri-derivate dalle nuove caratteristiche.
+- Dopo l'evoluzione le statistiche vengono ri-derivate dalle nuove caratteristiche.
 - Lo **stipendio** viene ri-derivato con `salaryFor(overall, età)`: cala coi
   veterani in declino, sale coi giovani che maturano (doppia spinta overall +
   youthFactor).
+
+### Potenziale DINAMICO (`driftPotential`)
+
+Il **potenziale non è più un verdetto scolpito alla nascita**: galleggia di anno
+in anno, così il futuro resta aperto e non lo si "legge" dalla rosa fin dal
+primo giorno. `driftPotential` (in `aging.ts`) muove il tetto **senza consumare
+RNG** (drift = funzione deterministica della coda già estratta + segnale di
+rendimento), per non disturbare calibrazione né stream degli avanzamenti:
+- **Breakout** → il soffitto si alza (talento emerso oltre le attese);
+  **bust/crollo** → si abbassa (il prospetto che non sboccia). Deriva dallo
+  `shift` di `developmentTail`, che ora ritorna `{ shift, kind }`.
+- **`perf`** — parametro opzionale (default `0` = neutro): segnale di
+  rendimento/utilizzo stagionale, **simmetrico** tra squadra umana (dai box score
+  reali, `data/season.ts`) e 29 CPU (dalla stagione proiettata, `data/projection.ts`),
+  **standardizzato e clampato a [−2, +2]** perché nessun lato oscilli più
+  dell'altro. `perf > 0` (sopra le attese / molto impiegato) alza il tetto;
+  `perf < 0` (sotto le attese o "non usato") lo abbassa — "use it or lose it".
+  La coda breakout/bust resta **identica per tutti e 30 i club** (stesso codice,
+  stesse probabilità). *Nota:* l'offseason che chiamerà `advanceSeason*` passando
+  `perf` è **fase futura**; oggi (solo test) `perf` resta 0 e a muovere il tetto
+  è la sola coda breakout/bust.
+- **Veterani (> 30)**: il tetto **converge verso l'overall** (erosione ≥1/anno),
+  niente soffitti alti fantasma su chi è già in discesa.
+- **Invariante**: il tetto non scende mai sotto l'overall corrente (un soffitto
+  già superato non ha senso) e resta in scala 40-100.
+
+### "Nebbia di scouting" in rosa — nessun tetto nudo
+
+La UI **non mostra più il numero di potenziale nudo** (che svelava il futuro): al
+suo posto una **fascia direzionale stimata** (`growthOutlook` in `ui/App.tsx`),
+stabile per giocatore (seed sull'id) ma volutamente imprecisa:
+- **giovane con margine** → `▲lo-hi` (upside, ampiezza cresce con gioventù e
+  margine; la fascia *contiene* il potenziale vero senza rivelarlo);
+- **picco / nessun margine** → numero secco;
+- **veterano (> 30)** → `▼lo-hi` **inferiore all'attuale**, stimato dalla curva di
+  declino di `seasonDelta`: la tensione si sposta sul "quanto in fretta cala?".
 
 ### Impiego → crescita (design Fase 4, non ancora attivo)
 

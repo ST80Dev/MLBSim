@@ -49,11 +49,15 @@ export function batterStatLine(
     const avg = s.h / ab;
     const obp = (s.h + s.bb + s.hbp) / Math.max(1, s.pa);
     const slg = (singles + 2 * s.double + 3 * s.triple + 4 * s.hr) / ab;
+    // RBI: risultato di contesto, non un peripheral. Stima coerente con la
+    // proiezione del motore (data/projection.ts): fuoricampo + quota da valide.
+    const rbi = Math.round(s.hr * 1.65 + (s.h - s.hr) * 0.3);
     return [
       { k: 'AVG', v: formatAvg(avg) },
       { k: 'OBP', v: formatAvg(obp) },
       { k: 'SLG', v: formatAvg(slg) },
       { k: 'HR', v: String(s.hr) },
+      { k: 'RBI', v: String(rbi) },
       { k: 'BB', v: String(s.bb) },
       { k: 'SO', v: String(s.so) },
       { k: 'SB', v: String(s.sb) },
