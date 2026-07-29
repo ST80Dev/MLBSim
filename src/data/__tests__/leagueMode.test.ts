@@ -17,8 +17,15 @@ describe('leagueMode / salary cap', () => {
   it('teamPayroll somma gli stipendi ed e\' positivo', () => {
     const payroll = teamPayroll(bos);
     expect(payroll).toBeGreaterThan(0);
-    // Coincide con la somma diretta dei giocatori presenti.
-    const manual = [...bos.lineup, ...bos.rotation, ...bos.bullpen].reduce((s, p) => s + p.salary, 0);
+    // Coincide con la somma diretta di TUTTI i giocatori (attivi + profondità).
+    const manual = [
+      ...bos.lineup,
+      ...bos.bench,
+      ...bos.rotation,
+      ...bos.bullpen,
+      ...bos.reserveBatters,
+      ...bos.reservePitchers,
+    ].reduce((s, p) => s + p.salary, 0);
     expect(payroll).toBeCloseTo(Math.round(manual * 10) / 10, 1);
   });
 
