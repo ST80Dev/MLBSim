@@ -77,6 +77,17 @@
     (`data/historical/freeAgents1999.ts`) — dati pronti per il mercato/draft di
     Fase 5 (aggancio UI ancora da fare). Gli omonimi reali (playerID diversi)
     restano correttamente distinti.
+  - **Stima rating multi-annata — FATTO:** l'abilità NON si stima da una singola
+    stagione (che ingabbierebbe un giocatore in un'annata storta o pre-sbocciatura)
+    ma da una **finestra Marcel anno-dominante 3/2/1** (anno di gioco + due
+    precedenti, pesati anche per minutaggio, riscalati sul minutaggio dell'anno di
+    gioco). Un ROOKIE senza pregresso ricade sul solo anno di debutto. Sopra ci
+    sono: **regressione per campione** (i micro-campioni — rilievi da pochi BF,
+    panchinari da poche PA — tornano verso la media: niente più sconosciuti sopra
+    gli assi) e un **boost affidabilità/vittoria** per i partenti (carico di lavoro
+    IP × prevenzione ERA: gli assi-workhorse spiccano). La finestra guarda SOLO il
+    passato: **nessuna preveggenza** (il potenziale resta una stima cieca; non sai
+    in anticipo chi diventerà campione — vedi `players-and-ratings.md`).
 
 ## Roadmap
 - **Fase 2 — Costruzione squadra & import storico** *(quasi completa)*

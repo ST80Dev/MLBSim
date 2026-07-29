@@ -137,9 +137,14 @@ function ageOf(person, year) {
 const batHand = (b) => (b === 'B' ? 'S' : b === 'L' ? 'L' : 'R');
 const throwHand = (t) => (t === 'L' ? 'L' : 'R');
 
-// Finestra Marcel: l'anno di gioco pesa di più, i due precedenti danno il
-// "pregresso". Include YEAR così i rookie (senza anni prima) ricadono sul solo
-// anno di debutto, senza buchi. I pesi replicano l'idea Marcel (5/4/3).
+// Finestra Marcel (abilità ATTUALE da più stagioni, per non ingabbiare un
+// giocatore in una singola annata storta). Pesi ANNO-DOMINANTI 3/2/1: l'anno di
+// gioco è metà del peso, così le stelle del 1999 restano riconoscibili (i picchi
+// non si spengono) mentre uno slump del veterano è cuscinettato dal biennio
+// precedente. Include YEAR → un ROOKIE (senza anni prima) ricade sul solo anno di
+// debutto, tarato sulle sue stats del 1999 (+ regressione per campione), poi
+// evolve libero. NON guarda il FUTURO: nessuna preveggenza (docs/players-and-
+// ratings.md § Potenziale come STIMA incerta — non sai in anticipo chi sboccerà).
 const MARCEL = [
   { y: YEAR, w: 3 },
   { y: YEAR - 1, w: 2 },
