@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { importHistoricalTeam } from '../import';
 import { SEASON_1999 } from '../season1999';
-import { buildHistoricalLeague } from '../league';
+import {
+  buildHistoricalLeague,
+  HISTORICAL_SEASONS,
+  HISTORICAL_YEARS,
+} from '../league';
 import { SAMPLE_CLE_1999, SAMPLE_BOS_1999 } from './fixtures';
 import { simulateGame } from '../../../engine/game';
 import { batterOverall } from '../../../engine/ratings';
@@ -147,4 +151,51 @@ describe('SEASON_1999 (dataset Lahman, 30 squadre)', () => {
     // L'identità è stabile e derivata dal playerID Lahman.
     expect(ids.every((id) => id.startsWith('hist-'))).toBe(true);
   });
+});
+
+describe('Annate storiche multiple (1997/1998/1999/2000)', () => {
+  it('espone gli anni giocabili in ordine crescente', () => {
+    expect(HISTORICAL_YEARS).toEqual([1997, 1998, 1999, 2000]);
+  });
+
+  // Conteggi reali: dal 1998 la MLB ha 30 squadre; il 1997 ne aveva 28
+  // (Arizona e Tampa Bay debuttano nel 1998).
+  it.each([
+    [1997, 28],
+    [1998, 30],
+    [1999, 30],
+    [2000, 30],
+  ])('la stagione %i copre %i franchigie distinte', (year, count) => {
+    const dataset = HISTORICAL_SEASONS[year];
+    expect(dataset).toHaveLength(count);
+    expect(new Set(dataset.map((t) => t.franchiseId)).size).toBe(count);
+    for (const h of dataset) {
+      expect(FRANCHISES.some((f) => f.id === h.franchiseId)).toBe(true);
+    }
+  });
+
+  it('il 1997 non contiene le franchigie non ancora esistite (ARI/TBR)', () => {
+    const ids = new Set(HISTORICAL_SEASONS[1997].map((t) => t.franchiseId));
+    expect(ids.has('ARI')).toBe(false);
+    expect(ids.has('TBR')).toBe(false);
+  });
+
+  it.each(HISTORICAL_YEARS)(
+    'buildHistoricalLeague(%i) produce roster validi e senza doppioni',
+    (year) => {
+      const league = buildHistoricalLeague(year);
+      expect(league.length).toBe(HISTORICAL_SEASONS[year].length);
+      const ids: string[] = [];
+      for (const t of league) {
+        expect(t.lineup, `${t.abbrev} lineup`).toHaveLength(9);
+        expect(new Set(t.lineup.map((b) => b.position)).size).toBe(9);
+        expect(t.rotation.length, `${t.abbrev} rotation`).toBeGreaterThanOrEqual(3);
+        for (const p of [...t.lineup, ...t.bench, ...t.rotation, ...t.bullpen,
+          ...t.reserveBatters, ...t.reservePitchers]) ids.push(p.id);
+      }
+      // Dedup per persona: ogni giocatore reale una sola volta nell'intera lega.
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids.every((id) => id.startsWith('hist-'))).toBe(true);
+    },
+  );
 });

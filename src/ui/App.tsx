@@ -64,6 +64,7 @@ import {
 import {
   buildHistoricalLeague,
   DEFAULT_HISTORICAL_YEAR,
+  HISTORICAL_YEARS,
 } from '../data/historical/league';
 import { generateSchedule, REGULAR_GAMES } from '../data/schedule';
 import type { ScheduleGame, Schedule } from '../data/schedule';
@@ -311,8 +312,11 @@ export function App() {
   // STORICA le 30 rose reali dell'annata sostituiscono quelle procedurali
   // (snapshot fisso, indipendente dal seed).
   const league = useMemo(
-    () => (source === 'historical' ? buildHistoricalLeague() : generateLeague(leagueSeed)),
-    [leagueSeed, source],
+    () =>
+      source === 'historical'
+        ? buildHistoricalLeague(season.year)
+        : generateLeague(leagueSeed),
+    [leagueSeed, source, season.year],
   );
   const myId = managedId || league[0].id;
   const managedTeam = teamById(league, myId) ?? league[0];
@@ -367,7 +371,7 @@ export function App() {
           const seas = ensureSeason(pl.season);
           const leagueForPreview =
             pl.source === 'historical'
-              ? buildHistoricalLeague()
+              ? buildHistoricalLeague(seas.year)
               : typeof pl.seed === 'number'
                 ? generateLeague(pl.seed)
                 : undefined;
@@ -534,15 +538,15 @@ export function App() {
 
   // Dall'hub: avvia una NUOVA carriera con la sorgente scelta e vai alla
   // panoramica per scegliere la squadra da gestire.
-  const startNewLeague = (src: LeagueSource) => {
+  const startNewLeague = (src: LeagueSource, histYear = DEFAULT_HISTORICAL_YEAR) => {
     setSource(src);
     setLeagueSeed(newRandomSeed());
     setManagedId('');
     setArrangements({});
     setActiveGame(null);
-    // La modalita' storica parte dall'annata reale (es. "Anno 1999"); la generata
+    // La modalita' storica parte dall'annata scelta (es. "Anno 1999"); la generata
     // dal contatore relativo "Anno 1".
-    setSeason(createSeason(src === 'historical' ? DEFAULT_HISTORICAL_YEAR : 1));
+    setSeason(createSeason(src === 'historical' ? histYear : 1));
     setPlayoff(null);
     setPlayoffCtx(null);
     setCurrentSlot(''); // lo slot nasce alla conferma della squadra
@@ -726,7 +730,7 @@ export function App() {
         onLoad={loadSave}
         onDelete={deleteSave}
         onNewGenerated={() => startNewLeague('generated')}
-        onNewHistorical={() => startNewLeague('historical')}
+        onNewHistorical={(year) => startNewLeague('historical', year)}
       />
     );
   }
@@ -5424,6 +5428,14 @@ function SavedGameCard({
 }
 
 /** Hub iniziale: continua una partita salvata (caricamento) o iniziane una nuova. */
+/** Occhiello (una riga) per ciascuna annata storica giocabile. */
+const HISTORICAL_YEAR_BLURB: Record<number, string> = {
+  1997: 'Griffey Jr. da 56 HR e Larry Walker MVP, Roger Clemens di nuovo Cy Young. Solo 28 squadre: Arizona e Tampa Bay debuttano nel 1998.',
+  1998: "L'estate dei fuoricampo: McGwire 70, Sosa 66. Arrivano Diamondbacks e Devil Rays, gli Yankees vincono 114 gare.",
+  1999: "L'attacco da 1009 punti di Cleveland, il Pedro Martinez da 2.07/313K, e tutti gli altri.",
+  2000: 'Offesa alle stelle e il Pedro Martinez da 1.74 di ERA: forse la miglior stagione da lanciatore dell\'epoca.',
+};
+
 function StartScreen({
   savedGames,
   onLoad,
@@ -5435,8 +5447,12 @@ function StartScreen({
   onLoad: (g: SavedGame) => void;
   onDelete: (slot: string) => void;
   onNewGenerated: () => void;
-  onNewHistorical: () => void;
+  onNewHistorical: (year: number) => void;
 }) {
+  const [histYear, setHistYear] = useState<number>(DEFAULT_HISTORICAL_YEAR);
+  const blurb =
+    HISTORICAL_YEAR_BLURB[histYear] ??
+    `Le rose reali del ${histYear} dall'archivio (rose sbilanciate, cap morbido).`;
   return (
     <div className="app start-app">
       <div className="start-hero">
@@ -5470,14 +5486,31 @@ function StartScreen({
               confini, evoluzione negli anni.
             </div>
           </button>
-          <button className="start-card" onClick={onNewHistorical}>
+          <div className="start-card start-card--historical">
             <div className="sc-icon">📜</div>
-            <div className="sc-title">Stagione storica 1999</div>
-            <div className="sc-desc">
-              Le 30 rose reali del 1999 dall'archivio (rose sbilanciate, cap morbido): l'attacco da
-              1009 punti di Cleveland, il Pedro Martinez da 2.07/313K, e tutti gli altri.
+            <div className="sc-title">Stagione storica {histYear}</div>
+            <div className="sc-year-picker" role="group" aria-label="Scegli l'annata">
+              {HISTORICAL_YEARS.map((y) => (
+                <button
+                  key={y}
+                  type="button"
+                  className={`sc-year${y === histYear ? ' is-active' : ''}`}
+                  aria-pressed={y === histYear}
+                  onClick={() => setHistYear(y)}
+                >
+                  {y}
+                </button>
+              ))}
             </div>
-          </button>
+            <div className="sc-desc">{blurb}</div>
+            <button
+              type="button"
+              className="sc-start-btn"
+              onClick={() => onNewHistorical(histYear)}
+            >
+              Inizia il {histYear} →
+            </button>
+          </div>
         </div>
       </section>
     </div>

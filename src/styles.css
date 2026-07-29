@@ -3985,6 +3985,59 @@ table {
   font-size: 13px;
   line-height: 1.45;
 }
+/* La card storica è un contenitore (non un bottone): niente cursor/lift sull'intera card. */
+.start-card--historical {
+  display: flex;
+  flex-direction: column;
+  cursor: default;
+}
+.start-card--historical:hover {
+  border-color: var(--line);
+  transform: none;
+}
+.sc-year-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+.sc-year {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.sc-year:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.sc-year.is-active {
+  color: #0b0f14;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.sc-start-btn {
+  margin-top: 12px;
+  align-self: flex-start;
+  font-weight: 800;
+  font-size: 14px;
+  color: #0b0f14;
+  background: var(--accent);
+  border: none;
+  border-radius: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: transform 0.1s, filter 0.15s;
+}
+.sc-start-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
 .badge-soon {
   font-size: 10px;
   font-weight: 700;

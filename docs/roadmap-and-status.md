@@ -63,11 +63,18 @@
     (ε, riconciliazione al rollover via pool) resta design di Fase 4/5. Vedi
     `docs/franchise.md`.
   - **Pipeline Lahman — FATTO:** `scripts/build-historical.mjs` genera
-    `data/historical/season1999.ts` (30 rose reali) dal Baseball Databank; la
+    `data/historical/season<ANNO>.ts` (rose reali) dal Baseball Databank; la
     modalità storica ora costruisce la lega da quelle rose
     (`data/historical/league.ts`, `buildHistoricalLeague`) invece che
-    procedurale. L'annata parte da "Anno 1999". Rigenerabile per altre annate
-    (`--year`). Dettaglio sotto.
+    procedurale. Dettaglio sotto.
+  - **Annate multiple giocabili — FATTO:** importate **1997, 1998, 1999, 2000**
+    (`HISTORICAL_SEASONS` / `HISTORICAL_YEARS`), selezionabili dalla schermata
+    iniziale (picker d'annata sulla card storica). Il 1997 è a **28 squadre**
+    (Arizona e Tampa Bay debuttano nel 1998): la lega tollera l'organico ridotto
+    (calendario con pad/trim a 162, division 4×). Ogni annata ha la sua finestra
+    Marcel (es. il 2000 usa 2000/99/98) e il suo pool free agent. La lega storica
+    è costruita da `season.year` (fissato all'avvio, persistito nel salvataggio).
+    L'alias `ML4→MIL` copre Milwaukee pre-1998 (teamID Lahman storico).
   - **Dedup + identità stabile — FATTO:** ogni giocatore reale compare UNA volta
     (niente doppioni in classifica né tra le rose), con `id` = playerID Lahman
     (identità stabile negli anni). I giocatori con spezzoni su più squadre sono
@@ -111,8 +118,8 @@
     all'import (`projectPotential`) con code bust/breakout in `aging.ts` (lo
     sviluppo futuro dal seed NON replica la realtà). Verifica: round-trip fedele,
     i **campioni** escono campioni e gli **scarsi** affondano, aggregati
-    closed-loop nell'epoca. **Manca:** **UI di selezione dell'annata** (oggi il
-    dataset attivo è 1999; la pipeline è già multi-annata via `--year`).
+    closed-loop nell'epoca. **UI di selezione dell'annata — FATTO:** picker
+    1997/1998/1999/2000 sulla card storica (default 1999).
   - **Editor squadra — FATTO (motore/dati + UI):** roster **25 attivi + ~10
     depth**, split **14/11**, **sempre DH**, posizioni **libere con malus**
     (`engine/lineup.ts`: `autoLineup` + `validateFieldSet`). La **UI** è la
