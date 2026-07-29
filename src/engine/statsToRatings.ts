@@ -38,6 +38,20 @@ export function ratingFromMult(mult: number, perSigma: number): number {
   return RATING_AVG + (10 * Math.log(mult)) / Math.log(perSigma);
 }
 
+// Regressione verso la media di lega in base al CAMPIONE. Un rate osservato,
+// espresso come `mult` (rapporto vs lega, 1 = media), viene avvicinato a 1 con
+// peso w = n/(n+prior): campioni piccoli (rilievi da pochi BF, panchinari da
+// poche PA) tornano verso la media, stagioni piene restano quasi intatte. Serve
+// a evitare che rate estremi su MICRO-campioni (un rilievo da 12 inning) diventino
+// rating da fuoriclasse — mentre gli elite a stagione piena non ne risentono.
+export const REGRESS_PRIOR_BAT = 250; // "PA di prior" per i battitori
+export const REGRESS_PRIOR_PIT = 250; // "BF di prior" per i lanciatori
+
+export function regressMult(mult: number, n: number, prior: number): number {
+  const w = n / (n + prior);
+  return 1 + (mult - 1) * w;
+}
+
 /** Difesa/Braccio non deducibili dal tabellino: default per archetipo di ruolo. */
 const POS_DEFENSE: Record<string, { field: number; arm: number }> = {
   C: { field: 8, arm: 10 },
@@ -71,25 +85,28 @@ export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
   // Occhio dai BB (per PA). Gli esiti da AB (SO, battute valide) vanno divisi per
   // la base-AB, coerente con la forward (deriveBatterStats scala sugli AB): base =
   // ab·AB_SCALE, con ab = pa − BB − HBP osservati.
-  const eye = ratingFromMult(s.bb / pa / LEAGUE.bb, 1.24);
+  // Regressione per campione (PA): normalizza i rate su micro-campioni.
+  const reg = (mult: number): number => regressMult(mult, pa, REGRESS_PRIOR_BAT);
+
+  const eye = ratingFromMult(reg(s.bb / pa / LEAGUE.bb), 1.24);
   const ab = Math.max(1, pa - s.bb - (s.hbp ?? 0));
   const abBase = ab * AB_SCALE;
 
-  const powerHr = ratingFromMult(s.hr / abBase / LEAGUE.hr, 1.34);
-  const powerDbl = ratingFromMult(s.double / abBase / LEAGUE.double, 1.11);
+  const powerHr = ratingFromMult(reg(s.hr / abBase / LEAGUE.hr), 1.34);
+  const powerDbl = ratingFromMult(reg(s.double / abBase / LEAGUE.double), 1.11);
   const power = 0.8 * powerHr + 0.2 * powerDbl;
 
-  const contactSingle = ratingFromMult(single / abBase / LEAGUE.single, 1.1);
+  const contactSingle = ratingFromMult(reg(single / abBase / LEAGUE.single), 1.1);
   // SO forward: abBase*so*mult(contact,0.88)*mult(eye,0.97). Isola la parte contact.
   const eyeSoMult = Math.pow(0.97, (eye - RATING_AVG) / 10);
-  const contactSo = ratingFromMult(s.so / abBase / LEAGUE.so / eyeSoMult, 0.88);
+  const contactSo = ratingFromMult(reg(s.so / abBase / LEAGUE.so / eyeSoMult), 0.88);
   const contact = 0.5 * contactSingle + 0.5 * contactSo;
 
   // Velocita: SB e' la leva diretta (invertendo la formula lineare di sb);
   // i tripli confermano (data la Potenza gia' stimata).
   const speedSb = (RATING_AVG - 5) + (s.sb / 30) * 35;
   const powerTriMult = Math.pow(0.9, (power - RATING_AVG) / 10);
-  const speedTri = ratingFromMult(s.triple / abBase / LEAGUE.triple / powerTriMult, 1.6);
+  const speedTri = ratingFromMult(reg(s.triple / abBase / LEAGUE.triple / powerTriMult), 1.6);
   const speed = 0.6 * speedSb + 0.4 * speedTri;
 
   const def = POS_DEFENSE[s.position ?? 'LF'] ?? { field: 0, arm: 0 };
@@ -123,13 +140,17 @@ export function ratingsFromPitcherStats(s: PitcherImportInput): PitcherRatings {
   const bf = Math.max(1, s.bf);
   const role: PitcherRole = s.role ?? 'SP';
 
-  const stuff = ratingFromMult(s.so / bf / LEAGUE.so, 1.21);
-  const control = ratingFromMult(s.bb / bf / LEAGUE.bb, 0.78);
-  const groundball = ratingFromMult(s.hr / bf / LEAGUE.hr, 0.72);
+  // Regressione per campione (BF): un rilievo da pochi battitori affrontati non
+  // diventa un fuoriclasse per un rate estremo su micro-campione.
+  const reg = (mult: number): number => regressMult(mult, bf, REGRESS_PRIOR_PIT);
+
+  const stuff = ratingFromMult(reg(s.so / bf / LEAGUE.so), 1.21);
+  const control = ratingFromMult(reg(s.bb / bf / LEAGUE.bb), 0.78);
+  const groundball = ratingFromMult(reg(s.hr / bf / LEAGUE.hr), 0.72);
 
   const nonHrHits = Math.max(0, s.h - s.hr);
   const leagueNonHr = LEAGUE.single + LEAGUE.double + LEAGUE.triple;
-  const movement = ratingFromMult(nonHrHits / bf / leagueNonHr, 0.9);
+  const movement = ratingFromMult(reg(nonHrHits / bf / leagueNonHr), 0.9);
 
   // Resistenza: inverte deriveStamina per gli SP (24 + sigma*3 battitori/start).
   let stamina: number;

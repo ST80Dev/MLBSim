@@ -35,8 +35,9 @@ describe('importHistoricalTeam (fixture CLE/BOS 1999)', () => {
     // Omar Vizquel: contatto/velocita' alti, potenza scarsa.
     expect(cb.get('Omar Vizquel')!.ratings.power).toBeLessThanOrEqual(55);
     expect(cb.get('Omar Vizquel')!.ratings.speed).toBeGreaterThanOrEqual(85);
-    // Darren Lewis: potenza da fondo scala.
-    expect(bb.get('Darren Lewis')!.ratings.power).toBeLessThanOrEqual(50);
+    // Darren Lewis: potenza sotto la media (con la regressione per campione i
+    // valori estremi rientrano verso 70, ma resta chiaramente sotto-media).
+    expect(bb.get('Darren Lewis')!.ratings.power).toBeLessThanOrEqual(60);
 
     // Pedro Martinez: dominio da asso, controllo alto.
     const pedro = bos.team.rotation.find((p) => p.name === 'Pedro Martinez')!;
