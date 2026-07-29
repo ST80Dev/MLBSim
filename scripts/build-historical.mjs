@@ -137,13 +137,94 @@ function ageOf(person, year) {
 const batHand = (b) => (b === 'B' ? 'S' : b === 'L' ? 'L' : 'R');
 const throwHand = (t) => (t === 'L' ? 'L' : 'R');
 
+// Finestra Marcel: l'anno di gioco pesa di più, i due precedenti danno il
+// "pregresso". Include YEAR così i rookie (senza anni prima) ricadono sul solo
+// anno di debutto, senza buchi. I pesi replicano l'idea Marcel (5/4/3).
+const MARCEL = [
+  { y: YEAR, w: 3 },
+  { y: YEAR - 1, w: 2 },
+  { y: YEAR - 2, w: 1 },
+];
+
 function main() {
   const teams = loadCsv('Teams').filter((t) => num(t.yearID) === YEAR);
-  const batting = loadCsv('Batting').filter((r) => num(r.yearID) === YEAR);
-  const pitching = loadCsv('Pitching').filter((r) => num(r.yearID) === YEAR);
+  const battingAll = loadCsv('Batting');
+  const pitchingAll = loadCsv('Pitching');
+  const batting = battingAll.filter((r) => num(r.yearID) === YEAR);
+  const pitching = pitchingAll.filter((r) => num(r.yearID) === YEAR);
   const appear = loadCsv('Appearances').filter((r) => num(r.yearID) === YEAR);
   const peopleRows = loadCsv('People');
   const people = new Map(peopleRows.map((p) => [p.playerID, p]));
+
+  // Totali per (playerID, anno) sull'intera finestra Marcel, per battuta e
+  // lancio. Servono a stimare il TALENTO da più stagioni (non da un anno solo).
+  const winYears = new Set(MARCEL.map((m) => m.y));
+  const batByYear = new Map(); // pid -> Map(anno -> totali battuta)
+  for (const r of battingAll) {
+    const y = num(r.yearID);
+    if (!winYears.has(y)) continue;
+    const pid = r.playerID;
+    const m = batByYear.get(pid) ?? new Map();
+    const c = m.get(y) ?? { ab: 0, h: 0, d: 0, t: 0, hr: 0, bb: 0, so: 0, hbp: 0, sb: 0, cs: 0, sf: 0, sh: 0 };
+    c.ab += num(r.AB); c.h += num(r.H); c.d += num(r['2B']); c.t += num(r['3B']);
+    c.hr += num(r.HR); c.bb += num(r.BB); c.so += num(r.SO); c.hbp += num(r.HBP);
+    c.sb += num(r.SB); c.cs += num(r.CS); c.sf += num(r.SF); c.sh += num(r.SH);
+    m.set(y, c); batByYear.set(pid, m);
+  }
+  const pitByYear = new Map(); // pid -> Map(anno -> totali lancio)
+  for (const r of pitchingAll) {
+    const y = num(r.yearID);
+    if (!winYears.has(y)) continue;
+    const pid = r.playerID;
+    const m = pitByYear.get(pid) ?? new Map();
+    const c = m.get(y) ?? { outs: 0, h: 0, er: 0, hr: 0, bb: 0, so: 0, hbp: 0 };
+    c.outs += num(r.IPouts); c.h += num(r.H); c.er += num(r.ER); c.hr += num(r.HR);
+    c.bb += num(r.BB); c.so += num(r.SO); c.hbp += num(r.HBP);
+    m.set(y, c); pitByYear.set(pid, m);
+  }
+
+  // Rate Marcel di un battitore (per PA, pesati 5/4/3 e per minutaggio), riscalati
+  // sul minutaggio dell'anno di gioco (pa99). Chi ha solo YEAR ricade su di esso.
+  const marcelBat = (pid, pa99) => {
+    const yt = batByYear.get(pid);
+    const acc = { h: 0, d: 0, t: 0, hr: 0, bb: 0, so: 0, hbp: 0, sb: 0, cs: 0 };
+    let denom = 0;
+    for (const { y, w } of MARCEL) {
+      const t = yt?.get(y);
+      if (!t) continue;
+      const pa = t.ab + t.bb + t.hbp + t.sf + t.sh;
+      if (pa <= 0) continue;
+      denom += w * pa;
+      for (const k of Object.keys(acc)) acc[k] += w * t[k];
+    }
+    if (denom <= 0) return null;
+    const s = (x) => Math.round((x / denom) * pa99);
+    const h = s(acc.h), d = s(acc.d), t = s(acc.t), hr = s(acc.hr);
+    // Coerenza: i singoli (h - extrabase) non possono essere negativi.
+    const extra = d + t + hr;
+    return {
+      pa: pa99, h: Math.max(h, extra), double: d, triple: t, hr,
+      bb: s(acc.bb), so: s(acc.so), hbp: s(acc.hbp), sb: s(acc.sb), cs: s(acc.cs),
+    };
+  };
+
+  // Rate Marcel di un lanciatore (per BF), riscalati sul BF dell'anno di gioco.
+  const marcelPit = (pid, bf99) => {
+    const yt = pitByYear.get(pid);
+    const acc = { h: 0, er: 0, hr: 0, bb: 0, so: 0, hbp: 0 };
+    let denom = 0;
+    for (const { y, w } of MARCEL) {
+      const t = yt?.get(y);
+      if (!t) continue;
+      const bf = t.outs + t.h + t.bb + t.hbp;
+      if (bf <= 0) continue;
+      denom += w * bf;
+      for (const k of Object.keys(acc)) acc[k] += w * t[k];
+    }
+    if (denom <= 0) return null;
+    const s = (x) => Math.round((x / denom) * bf99);
+    return { h: s(acc.h), er: s(acc.er), hr: s(acc.hr), bb: s(acc.bb), so: s(acc.so), hbp: s(acc.hbp) };
+  };
 
   // Appearances per (playerID, teamID): giochi per casella difensiva.
   const appByKey = new Map();
@@ -224,13 +305,18 @@ function main() {
     if (!teamID) continue;
     const p = people.get(pid) ?? {};
     const list = teamBatCand.get(teamID) ?? [];
+    // La riga stat riflette il TALENTO su finestra Marcel (riscalato sulle PA
+    // 1999): uno slump del 1999 è ribilanciato dal 1997/98. Il ruolo in rosa
+    // resta deciso dalle PA 1999 (`pa`). Fallback difensivo alla riga secca.
+    const line =
+      marcelBat(pid, pa) ?? { pa, h: s.h, double: s.d, triple: s.t, hr: s.hr, bb: s.bb, so: s.so, hbp: s.hbp, sb: s.sb, cs: s.cs };
     list.push({
       pid, pos, pa,
       gAt: appTot.get(pid) ?? {},
       name: `${p.nameFirst ?? ''} ${p.nameLast ?? ''}`.trim() || pid,
       bats: batHand(p.bats),
       age: ageOf(p, YEAR),
-      line: { pa, h: s.h, double: s.d, triple: s.t, hr: s.hr, bb: s.bb, so: s.so, hbp: s.hbp, sb: s.sb, cs: s.cs },
+      line,
     });
     teamBatCand.set(teamID, list);
   }
@@ -244,8 +330,12 @@ function main() {
     if (!teamID) continue;
     const p = people.get(pid) ?? {};
     const list = teamPitCand.get(teamID) ?? [];
+    // Talento su finestra Marcel: blend dei rate concessi (K/BB/HR/hit/ER)
+    // riscalati sui BF 1999. Carico (outs, gs) e record (w/l/sv) restano del 1999.
+    const bf99 = s.outs + s.h + s.bb + s.hbp;
+    const mb = marcelPit(pid, bf99);
     list.push({
-      pid, ...s,
+      pid, ...s, ...(mb ?? {}),
       name: `${p.nameFirst ?? ''} ${p.nameLast ?? ''}`.trim() || pid,
       throws: throwHand(p.throws),
       age: ageOf(p, YEAR),
