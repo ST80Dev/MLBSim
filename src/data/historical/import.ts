@@ -1,4 +1,4 @@
-import type { Batter, Pitcher, Team } from '../../engine/types';
+import type { Batter, Pitcher, PitcherRatings, Team } from '../../engine/types';
 import {
   ratingsFromBatterStats,
   ratingsFromPitcherStats,
@@ -11,10 +11,11 @@ import {
   pitcherOverall,
   salaryFor,
   projectPotential,
+  clampRating,
 } from '../../engine/ratings';
 import { splitName } from '../../engine/names';
 import { autoLineup } from '../../engine/lineup';
-import { makeRng, type Rng } from '../../engine/rng';
+import { makeRng, clamp, type Rng } from '../../engine/rng';
 import { FRANCHISES } from '../franchises';
 import type { HistBatLine, HistPitLine, HistTeam } from './season1999';
 
@@ -80,9 +81,45 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Boost "affidabilità/vittoria" (SCELTA DI PRODOTTO, solo import storico).
+// Oltre ai peripherals, un partente con TANTI inning ed ERA bassa sale un po',
+// anche se i K non lo giustificano: gli assi-workhorse (Lima 21-10, Colon 18-5)
+// spiccano sopra i comprimari. Usa CONSAPEVOLMENTE l'ERA — che per design è un
+// "risultato di contesto" (difesa/park/fortuna) — come compromesso accettato.
+// Non tocca i rilievi (pochi inning → workload ~0) né la lega generata (che non
+// passa da qui). Tarabile con LG_ERA_BASE / BOOST_MAX_PIT.
+// ---------------------------------------------------------------------------
+const LG_ERA_BASE = 4.6; // baseline ERA dell'epoca "alta offesa" (~1999)
+const BOOST_MAX_PIT = 8; // punti-rating massimi del boost
+
+/** Bonus (punti overall) da carico di lavoro (IP) × prevenzione punti (ERA). */
+function pitcherQualityBonus(l: HistPitLine): number {
+  const ip = l.outs / 3;
+  if (ip <= 0) return 0;
+  const era = (l.er * 9) / ip;
+  const workload = clamp((ip - 100) / 140, 0, 1); // 0 a 100 IP → 1 a 240 IP
+  const eraEdge = clamp((LG_ERA_BASE - era) / LG_ERA_BASE, -0.4, 0.5);
+  const factor = clamp(0.4 + eraEdge, 0, 1);
+  return BOOST_MAX_PIT * workload * factor;
+}
+
+/** Applica il bonus alle doti che pesano nell'overall (stuff/control/movement
+ *  pieno, groundball a metà): il partente diventa coerentemente più efficace. */
+function boostPitcher(r: PitcherRatings, bonus: number): PitcherRatings {
+  if (bonus <= 0) return r;
+  return {
+    ...r,
+    stuff: clampRating(r.stuff + bonus),
+    control: clampRating(r.control + bonus),
+    movement: clampRating(r.movement + bonus),
+    groundball: clampRating(r.groundball + bonus * 0.5),
+  };
+}
+
 function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
   const bf = pitcherBf(l);
-  const ratings = ratingsFromPitcherStats({
+  const raw = ratingsFromPitcherStats({
     bf,
     h: l.h,
     hr: l.hr,
@@ -92,6 +129,7 @@ function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
     role: l.role,
     gs: l.gs,
   });
+  const ratings = boostPitcher(raw, pitcherQualityBonus(l));
   const stats = derivePitcherStats(ratings, bf);
   const ovr = pitcherOverall(ratings);
   const nm = splitName(l.name);
