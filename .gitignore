@@ -8,6 +8,10 @@ dist-ssr
 .env
 .env.*
 
+# CSV Lahman scaricati dalla pipeline import storico (non si committano: sono
+# l'input grezzo, il dataset generato in src/data/historical/ è il deliverable).
+scripts/.lahman/
+
 # Foto-stadio: cartella tracciata (scelta esplicita dell'utente per il deploy
 # su GitHub Pages). Le immagini le aggiunge/committa l'utente in `public/stadiums/`
 # — vedi public/stadiums/README.md. Nota: il sito Pages e' pubblico anche da

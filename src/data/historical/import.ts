@@ -13,6 +13,7 @@ import {
   projectPotential,
 } from '../../engine/ratings';
 import { splitName } from '../../engine/names';
+import { autoLineup } from '../../engine/lineup';
 import { makeRng, type Rng } from '../../engine/rng';
 import { FRANCHISES } from '../franchises';
 import type { HistBatLine, HistPitLine, HistTeam } from './season1999';
@@ -132,25 +133,30 @@ export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
   const realBat = new Map<string, HistBatLine>();
   const realPit = new Map<string, HistPitLine>();
 
-  const lineup: Batter[] = h.batters.map((l, i) => {
-    const id = `${f.abbrev}${h.season}-B${i}`;
-    realBat.set(id, l);
-    return batterFrom(l, id, rng);
-  });
+  const mkBatters = (lines: HistBatLine[] | undefined, tag: string): Batter[] =>
+    (lines ?? []).map((l, i) => {
+      const id = `${f.abbrev}${h.season}-${tag}${i}`;
+      realBat.set(id, l);
+      return batterFrom(l, id, rng);
+    });
+  const mkPitchers = (lines: HistPitLine[], tag: string): Pitcher[] =>
+    lines.map((l, i) => {
+      const id = `${f.abbrev}${h.season}-${tag}${i}`;
+      realPit.set(id, l);
+      return pitcherFrom(l, id, rng);
+    });
 
-  const starters = h.pitchers.filter((p) => p.role === 'SP');
-  const relievers = h.pitchers.filter((p) => p.role !== 'SP');
+  // Il dataset elenca i titolari per casella difensiva; `autoLineup` li dispone
+  // in un ordine di battuta plausibile (posizioni invariate).
+  const lineup = autoLineup(mkBatters(h.batters, 'B'));
+  const bench = mkBatters(h.bench, 'BN');
+  const reserveBatters = mkBatters(h.reserveBatters, 'BR');
 
-  const rotation: Pitcher[] = starters.map((l, i) => {
-    const id = `${f.abbrev}${h.season}-SP${i}`;
-    realPit.set(id, l);
-    return pitcherFrom(l, id, rng);
-  });
-  const bullpen: Pitcher[] = relievers.map((l, i) => {
-    const id = `${f.abbrev}${h.season}-RP${i}`;
-    realPit.set(id, l);
-    return pitcherFrom(l, id, rng);
-  });
+  // Lo staff attivo si divide per ruolo: SP -> rotazione, RP/CL -> bullpen. I
+  // lanciatori di profondità restano fuori dai 25 attivi (role preservato).
+  const rotation = mkPitchers(h.pitchers.filter((p) => p.role === 'SP'), 'SP');
+  const bullpen = mkPitchers(h.pitchers.filter((p) => p.role !== 'SP'), 'RP');
+  const reservePitchers = mkPitchers(h.reservePitchers ?? [], 'PR');
 
   const team: Team = {
     id: f.id,
@@ -162,12 +168,12 @@ export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
     league: f.league,
     division: f.division,
     lineup,
-    bench: [],
+    bench,
     rotation,
     bullpen,
     usesDH: true,
-    reserveBatters: [],
-    reservePitchers: [],
+    reserveBatters,
+    reservePitchers,
   };
 
   return { team, realBat, realPit };

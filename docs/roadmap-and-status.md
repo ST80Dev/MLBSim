@@ -41,10 +41,11 @@
     fatta una volta all'avvio del gioco / in setup franchigia, non ripetuta ad
     ogni partita: la sostituzione avverrà con Fase 2/5 (vedi sotto).
 
-- **Fase 2 — Costruzione squadra & import storico: QUASI COMPLETA.**
+- **Fase 2 — Costruzione squadra & import storico: COMPLETA.**
   - Editor rosa con **UI drag&drop**, **foglio partita** che entra nella
     simulazione, **squadra gestita persistente**, **persistenza Supabase**,
-    **import storico** end-to-end (inversione stat→rating, prova 1999) e
+    **import storico** end-to-end (inversione stat→rating) con **pipeline Lahman
+    completa: le 30 rose reali 1999 cablate nella modalità storica** e
     **fondazione modalità lega + salary cap**. In più, anticipati dalla Fase 4:
     **calendario**, **classifiche**, **Leaderboard** e accumulo stat reali.
   - **Flusso d'ingresso — FATTO:** schermata iniziale (`StartScreen`: nuova lega
@@ -61,9 +62,12 @@
     confini (base soft + muro esterno) con `capZone` per l'indicatore. Enforce
     (ε, riconciliazione al rollover via pool) resta design di Fase 4/5. Vedi
     `docs/franchise.md`.
-  - **Manca per chiudere la fase:** pipeline Lahman completa (30 squadre ×
-    annata) per rendere davvero giocabile la modalità storica (oggi solo dataset
-    1999 di prova, esposta come **anteprima**). Dettaglio sotto.
+  - **Pipeline Lahman — FATTO:** `scripts/build-historical.mjs` genera
+    `data/historical/season1999.ts` (30 rose reali) dal Baseball Databank; la
+    modalità storica ora costruisce la lega da quelle rose
+    (`data/historical/league.ts`, `buildHistoricalLeague`) invece che
+    procedurale. L'annata parte da "Anno 1999". Rigenerabile per altre annate
+    (`--year`). Dettaglio sotto.
 
 ## Roadmap
 - **Fase 2 — Costruzione squadra & import storico** *(quasi completa)*
@@ -78,15 +82,17 @@
     rating 40-100* vive in `engine/statsToRatings.ts`
     (`ratingsFromBatterStats`/`ratingsFromPitcherStats`, inverse di
     `deriveBatterStats`/`derivePitcherStats`; vedi `docs/players-and-ratings.md`).
-    Dataset di prova (`data/historical/season1999.ts`, linee reali approssimate di
-    CLE e BOS 1999) + importatore (`data/historical/import.ts`) costruiscono
-    squadre pronte al motore con **stats ri-derivate dai rating stimati**. Nomi
+    Dataset completo (`data/historical/season1999.ts`, 30 rose reali generate
+    dalla pipeline Lahman; fixture curate CLE/BOS in `__tests__/fixtures.ts` per i
+    property test) + importatore (`data/historical/import.ts`, con panca/riserve e
+    `autoLineup`) costruiscono squadre pronte al motore con **stats ri-derivate dai
+    rating stimati**. Nomi
     reali separati nome/cognome (`engine/names.ts`); **potenziale stimato**
     all'import (`projectPotential`) con code bust/breakout in `aging.ts` (lo
     sviluppo futuro dal seed NON replica la realtà). Verifica: round-trip fedele,
     i **campioni** escono campioni e gli **scarsi** affondano, aggregati
-    closed-loop nell'epoca. **Manca:** pipeline Lahman completa (30 squadre ×
-    annata) e **UI di selezione stagione/sorgente**.
+    closed-loop nell'epoca. **Manca:** **UI di selezione dell'annata** (oggi il
+    dataset attivo è 1999; la pipeline è già multi-annata via `--year`).
   - **Editor squadra — FATTO (motore/dati + UI):** roster **25 attivi + ~10
     depth**, split **14/11**, **sempre DH**, posizioni **libere con malus**
     (`engine/lineup.ts`: `autoLineup` + `validateFieldSet`). La **UI** è la

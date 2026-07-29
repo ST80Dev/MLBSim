@@ -61,6 +61,10 @@ import {
   LEAGUE_LABEL,
   DIVISION_LABEL,
 } from '../data/league';
+import {
+  buildHistoricalLeague,
+  DEFAULT_HISTORICAL_YEAR,
+} from '../data/historical/league';
 import { generateSchedule, REGULAR_GAMES } from '../data/schedule';
 import type { ScheduleGame, Schedule } from '../data/schedule';
 import {
@@ -303,8 +307,13 @@ export function App() {
 
   // La lega (30 squadre) e' generata da un seed unico: calendario, classifiche e
   // leaderboard leggono tutti QUESTA stessa lega. La squadra gestita e' una
-  // franchigia; l'avversario esce dal calendario della gara scelta.
-  const league = useMemo(() => generateLeague(leagueSeed), [leagueSeed]);
+  // franchigia; l'avversario esce dal calendario della gara scelta. In modalita'
+  // STORICA le 30 rose reali dell'annata sostituiscono quelle procedurali
+  // (snapshot fisso, indipendente dal seed).
+  const league = useMemo(
+    () => (source === 'historical' ? buildHistoricalLeague() : generateLeague(leagueSeed)),
+    [leagueSeed, source],
+  );
   const myId = managedId || league[0].id;
   const managedTeam = teamById(league, myId) ?? league[0];
   const schedule = useMemo(
@@ -356,10 +365,15 @@ export function App() {
           if (!rec || !managedTeamId) return null;
           const pl = rec.payload;
           const seas = ensureSeason(pl.season);
-          const team =
-            typeof pl.seed === 'number'
-              ? teamById(generateLeague(pl.seed), managedTeamId)
-              : undefined;
+          const leagueForPreview =
+            pl.source === 'historical'
+              ? buildHistoricalLeague()
+              : typeof pl.seed === 'number'
+                ? generateLeague(pl.seed)
+                : undefined;
+          const team = leagueForPreview
+            ? teamById(leagueForPreview, managedTeamId)
+            : undefined;
           return {
             slot: m.slot,
             updatedAt: m.updatedAt,
@@ -526,7 +540,9 @@ export function App() {
     setManagedId('');
     setArrangements({});
     setActiveGame(null);
-    setSeason(createSeason());
+    // La modalita' storica parte dall'annata reale (es. "Anno 1999"); la generata
+    // dal contatore relativo "Anno 1".
+    setSeason(createSeason(src === 'historical' ? DEFAULT_HISTORICAL_YEAR : 1));
     setPlayoff(null);
     setPlayoffCtx(null);
     setCurrentSlot(''); // lo slot nasce alla conferma della squadra
@@ -5456,12 +5472,10 @@ function StartScreen({
           </button>
           <button className="start-card" onClick={onNewHistorical}>
             <div className="sc-icon">📜</div>
-            <div className="sc-title">
-              Stagione storica <span className="badge-soon">anteprima</span>
-            </div>
+            <div className="sc-title">Stagione storica 1999</div>
             <div className="sc-desc">
-              Seed d'archivio da un'annata reale (rose sbilanciate, cap morbido). Dataset ancora
-              limitato: pipeline completa in arrivo.
+              Le 30 rose reali del 1999 dall'archivio (rose sbilanciate, cap morbido): l'attacco da
+              1009 punti di Cleveland, il Pedro Martinez da 2.07/313K, e tutti gli altri.
             </div>
           </button>
         </div>
