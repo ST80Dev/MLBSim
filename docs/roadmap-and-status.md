@@ -68,6 +68,15 @@
     (`data/historical/league.ts`, `buildHistoricalLeague`) invece che
     procedurale. L'annata parte da "Anno 1999". Rigenerabile per altre annate
     (`--year`). Dettaglio sotto.
+  - **Dedup + identità stabile — FATTO:** ogni giocatore reale compare UNA volta
+    (niente doppioni in classifica né tra le rose), con `id` = playerID Lahman
+    (identità stabile negli anni). I giocatori con spezzoni su più squadre sono
+    assegnati alla squadra di **max minutaggio** con le stat di **tutta la
+    stagione** (rating dal campione più ampio); gli scambiati-cardine sono ~5 in
+    tutta la lega. Gli esclusi dalle rose confluiscono nel **pool free agent**
+    (`data/historical/freeAgents1999.ts`) — dati pronti per il mercato/draft di
+    Fase 5 (aggancio UI ancora da fare). Gli omonimi reali (playerID diversi)
+    restano correttamente distinti.
 
 ## Roadmap
 - **Fase 2 — Costruzione squadra & import storico** *(quasi completa)*

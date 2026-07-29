@@ -155,69 +155,110 @@ function main() {
     });
   }
 
-  // Somma degli "stint" (spezzoni) per giocatore in una squadra.
-  function accumBatting(teamID) {
-    const acc = new Map();
-    for (const r of batting) {
-      if (r.teamID !== teamID) continue;
-      const k = r.playerID;
-      const c = acc.get(k) ?? { ab: 0, h: 0, d: 0, t: 0, hr: 0, bb: 0, so: 0, hbp: 0, sb: 0, cs: 0, sf: 0, sh: 0 };
-      c.ab += num(r.AB); c.h += num(r.H); c.d += num(r['2B']); c.t += num(r['3B']);
-      c.hr += num(r.HR); c.bb += num(r.BB); c.so += num(r.SO); c.hbp += num(r.HBP);
-      c.sb += num(r.SB); c.cs += num(r.CS); c.sf += num(r.SF); c.sh += num(r.SH);
-      acc.set(k, c);
-    }
-    return acc;
-  }
-  function accumPitching(teamID) {
-    const acc = new Map();
-    for (const r of pitching) {
-      if (r.teamID !== teamID) continue;
-      const k = r.playerID;
-      const c = acc.get(k) ?? { w: 0, l: 0, g: 0, gs: 0, sv: 0, outs: 0, h: 0, er: 0, hr: 0, bb: 0, so: 0, hbp: 0 };
-      c.w += num(r.W); c.l += num(r.L); c.g += num(r.G); c.gs += num(r.GS);
-      c.sv += num(r.SV); c.outs += num(r.IPouts); c.h += num(r.H); c.er += num(r.ER);
-      c.hr += num(r.HR); c.bb += num(r.BB); c.so += num(r.SO); c.hbp += num(r.HBP);
-      acc.set(k, c);
-    }
-    return acc;
+  // --- DEDUP per PERSONA: un giocatore reale (playerID) = UNA voce -----------
+  // Le stat sono di TUTTA la stagione (somma degli spezzoni su ogni squadra); il
+  // giocatore è assegnato alla squadra dove ha giocato di più (PA per i
+  // battitori, outs per i lanciatori). Niente doppioni tra rose e leaderboard, e
+  // l'identità (playerID) resta stabile → gestibile anche negli anni successivi.
+
+  const batTot = new Map(); // pid -> totali battuta full-season
+  const batTeamPA = new Map(); // pid -> Map(teamID -> PA con quella squadra)
+  for (const r of batting) {
+    const pid = r.playerID;
+    const c = batTot.get(pid) ?? { ab: 0, h: 0, d: 0, t: 0, hr: 0, bb: 0, so: 0, hbp: 0, sb: 0, cs: 0, sf: 0, sh: 0 };
+    c.ab += num(r.AB); c.h += num(r.H); c.d += num(r['2B']); c.t += num(r['3B']);
+    c.hr += num(r.HR); c.bb += num(r.BB); c.so += num(r.SO); c.hbp += num(r.HBP);
+    c.sb += num(r.SB); c.cs += num(r.CS); c.sf += num(r.SF); c.sh += num(r.SH);
+    batTot.set(pid, c);
+    const pa = num(r.AB) + num(r.BB) + num(r.HBP) + num(r.SF) + num(r.SH);
+    const m = batTeamPA.get(pid) ?? new Map();
+    m.set(r.teamID, (m.get(r.teamID) ?? 0) + pa);
+    batTeamPA.set(pid, m);
   }
 
-  function primaryPos(playerID, teamID) {
-    const g = appByKey.get(`${playerID}|${teamID}`);
+  const pitTot = new Map();
+  const pitTeamOuts = new Map();
+  for (const r of pitching) {
+    const pid = r.playerID;
+    const c = pitTot.get(pid) ?? { w: 0, l: 0, g: 0, gs: 0, sv: 0, outs: 0, h: 0, er: 0, hr: 0, bb: 0, so: 0, hbp: 0 };
+    c.w += num(r.W); c.l += num(r.L); c.g += num(r.G); c.gs += num(r.GS);
+    c.sv += num(r.SV); c.outs += num(r.IPouts); c.h += num(r.H); c.er += num(r.ER);
+    c.hr += num(r.HR); c.bb += num(r.BB); c.so += num(r.SO); c.hbp += num(r.HBP);
+    pitTot.set(pid, c);
+    const m = pitTeamOuts.get(pid) ?? new Map();
+    m.set(r.teamID, (m.get(r.teamID) ?? 0) + num(r.IPouts));
+    pitTeamOuts.set(pid, m);
+  }
+
+  // Apparizioni sommate su tutte le squadre: posizione primaria robusta.
+  const appTot = new Map();
+  for (const a of appear) {
+    const pid = a.playerID;
+    const c = appTot.get(pid) ?? { C: 0, '1B': 0, '2B': 0, '3B': 0, SS: 0, LF: 0, CF: 0, RF: 0, DH: 0, P: 0 };
+    for (const s of [...POS_SLOTS, 'P']) c[s] += (appByKey.get(`${pid}|${a.teamID}`)?.[s] ?? 0);
+    appTot.set(pid, c);
+  }
+  // (appByKey ha già i giochi per casella per squadra; qui li ri-uso sommando.)
+
+  const primaryPosOf = (pid) => {
+    const g = appTot.get(pid);
     if (!g) return null;
     let best = null, bestG = -1;
-    for (const s of POS_SLOTS) {
-      if (g[s] > bestG) { bestG = g[s]; best = s; }
-    }
-    // Se ha giocato quasi solo da lanciatore -> non è un position player.
-    if (bestG <= 0) return null;
+    for (const s of [...POS_SLOTS, 'P']) if (g[s] > bestG) { bestG = g[s]; best = s; }
+    return bestG > 0 ? best : null;
+  };
+  const maxKey = (m) => {
+    let best = null, bv = -1;
+    for (const [k, v] of m) if (v > bv) { bv = v; best = k; }
     return best;
+  };
+
+  // Assegnazione unica alla squadra primaria.
+  const teamBatCand = new Map(); // teamID -> [cand battitore]
+  for (const [pid, s] of batTot) {
+    const pos = primaryPosOf(pid);
+    if (!pos || pos === 'P') continue; // lanciatore (anche se ha battuto in NL)
+    const pa = s.ab + s.bb + s.hbp + s.sf + s.sh;
+    if (pa < 1) continue;
+    const teamID = maxKey(batTeamPA.get(pid));
+    if (!teamID) continue;
+    const p = people.get(pid) ?? {};
+    const list = teamBatCand.get(teamID) ?? [];
+    list.push({
+      pid, pos, pa,
+      gAt: appTot.get(pid) ?? {},
+      name: `${p.nameFirst ?? ''} ${p.nameLast ?? ''}`.trim() || pid,
+      bats: batHand(p.bats),
+      age: ageOf(p, YEAR),
+      line: { pa, h: s.h, double: s.d, triple: s.t, hr: s.hr, bb: s.bb, so: s.so, hbp: s.hbp, sb: s.sb, cs: s.cs },
+    });
+    teamBatCand.set(teamID, list);
   }
 
+  const teamPitCand = new Map();
+  for (const [pid, s] of pitTot) {
+    if (s.outs < 1) continue;
+    const pos = primaryPosOf(pid);
+    if (pos && pos !== 'P') continue; // in realtà è un position player: non un lanciatore
+    const teamID = maxKey(pitTeamOuts.get(pid));
+    if (!teamID) continue;
+    const p = people.get(pid) ?? {};
+    const list = teamPitCand.get(teamID) ?? [];
+    list.push({
+      pid, ...s,
+      name: `${p.nameFirst ?? ''} ${p.nameLast ?? ''}`.trim() || pid,
+      throws: throwHand(p.throws),
+      age: ageOf(p, YEAR),
+    });
+    teamPitCand.set(teamID, list);
+  }
+
+  // Chi resta fuori da ogni rosa confluisce nel pool free agent (globale).
+  const faBat = [];
+  const faPit = [];
+
   function buildBatters(teamID) {
-    const acc = accumBatting(teamID);
-    const cand = [];
-    for (const [pid, s] of acc) {
-      const pa = s.ab + s.bb + s.hbp + s.sf + s.sh;
-      if (pa < 1) continue;
-      const pos = primaryPos(pid, teamID);
-      if (!pos) continue; // lanciatore che ha battuto (NL): escluso dal lineup
-      const p = people.get(pid) ?? {};
-      const g = appByKey.get(`${pid}|${teamID}`) ?? {};
-      cand.push({
-        pid, pos, pa,
-        gAt: g,
-        name: `${p.nameFirst ?? ''} ${p.nameLast ?? ''}`.trim() || pid,
-        bats: batHand(p.bats),
-        age: ageOf(p, YEAR),
-        line: {
-          pa, h: s.h, double: s.d, triple: s.t, hr: s.hr,
-          bb: s.bb, so: s.so, hbp: s.hbp, sb: s.sb, cs: s.cs,
-        },
-      });
-    }
-    cand.sort((a, b) => b.pa - a.pa);
+    const cand = (teamBatCand.get(teamID) ?? []).slice().sort((a, b) => b.pa - a.pa);
 
     const used = new Set();
     const pick = (pred) => {
@@ -257,34 +298,24 @@ function main() {
     // Eventuali caselle vuote (squadra atipica): riempi col miglior residuo.
     for (const slot of POS_SLOTS) if (!lineupSlots[slot]) lineupSlots[slot] = fillBest();
 
-    const lineup = POS_SLOTS.map((slot) => {
-      const c = lineupSlots[slot];
-      return { name: c.name, pos: slot, bats: c.bats, age: c.age, ...c.line };
-    });
+    const bLine = (c, pos) => ({ id: c.pid, name: c.name, pos: pos ?? c.pos, bats: c.bats, age: c.age, ...c.line });
+    const lineup = POS_SLOTS.map((slot) => bLine(lineupSlots[slot], slot));
 
     const rest = cand.filter((c) => !used.has(c.pid));
-    const bench = rest.slice(0, 5).map((c) => ({ name: c.name, pos: c.pos, bats: c.bats, age: c.age, ...c.line }));
-    const reserveBatters = rest.slice(5).filter((c) => c.pa >= 40).slice(0, 5)
-      .map((c) => ({ name: c.name, pos: c.pos, bats: c.bats, age: c.age, ...c.line }));
+    const bench = rest.slice(0, 5).map((c) => bLine(c));
+    const reserveBatters = rest.slice(5).filter((c) => c.pa >= 40).slice(0, 5).map((c) => bLine(c));
+
+    // Il resto (minutaggio reale ma fuori rosa) → pool free agent.
+    const rosteredIds = new Set([...lineup, ...bench, ...reserveBatters].map((b) => b.id));
+    for (const c of rest) if (!rosteredIds.has(c.pid) && c.pa >= 25) faBat.push(bLine(c));
 
     return { lineup, bench, reserveBatters };
   }
 
   function buildPitchers(teamID) {
-    const acc = accumPitching(teamID);
-    const cand = [];
-    for (const [pid, s] of acc) {
-      if (s.outs < 1) continue;
-      const p = people.get(pid) ?? {};
-      cand.push({
-        pid, ...s,
-        name: `${p.nameFirst ?? ''} ${p.nameLast ?? ''}`.trim() || pid,
-        throws: throwHand(p.throws),
-        age: ageOf(p, YEAR),
-      });
-    }
+    const cand = teamPitCand.get(teamID) ?? [];
     const line = (c, role) => ({
-      name: c.name, role, throws: c.throws, age: c.age,
+      id: c.pid, name: c.name, role, throws: c.throws, age: c.age,
       gs: c.gs, outs: c.outs, h: c.h, hr: c.hr, bb: c.bb, so: c.so,
       hbp: c.hbp, er: c.er, w: c.w, l: c.l, sv: c.sv,
     });
@@ -315,6 +346,10 @@ function main() {
       .sort((a, b) => b.outs - a.outs)
       .slice(0, 5)
       .map((c) => line(c, c.gs >= 10 ? 'SP' : 'RP'));
+    for (const c of reservePitchers) usedP.add(c.id);
+
+    // Il resto (outs reali ma fuori staff) → pool free agent.
+    for (const c of cand) if (!usedP.has(c.pid) && c.outs >= 30) faPit.push(line(c, c.gs >= 10 ? 'SP' : 'RP'));
 
     return { pitchers: [...rotation, ...bullpen], reservePitchers };
   }
@@ -335,18 +370,24 @@ function main() {
     built.push({ franchiseId: fid, lahmanTeam: teamID, lineup, bench, reserveBatters, pitchers, reservePitchers });
   }
 
-  writeFileSync(join(LAHMAN_DIR, `season${YEAR}.built.json`), JSON.stringify(built, null, 0));
+  // Ordina il pool per minutaggio (i più rilevanti in cima).
+  faBat.sort((a, b) => b.pa - a.pa);
+  faPit.sort((a, b) => b.outs - a.outs);
+
+  writeFileSync(join(LAHMAN_DIR, `season${YEAR}.built.json`), JSON.stringify({ built, faBat, faPit }, null, 0));
   emitTs(built);
+  emitFreeAgents(faBat, faPit);
+  console.log(`pool free agent: ${faBat.length} battitori + ${faPit.length} lanciatori`);
 }
 
 // --- serializzazione TS ----------------------------------------------------
 function q(s) { return `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`; }
 
 function batObj(b) {
-  return `{ name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs} }`;
+  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs} }`;
 }
 function pitObj(p) {
-  return `{ name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv} }`;
+  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv} }`;
 }
 
 function emitTs(built) {
@@ -382,9 +423,16 @@ function emitTs(built) {
 // logo/foto (marchi protetti): solo dati statistici fattuali. La rosa è una
 // APPROSSIMAZIONE (titolari per PA, ruoli da Appearances): prova di pipeline
 // end-to-end, non il roster-move esatto giorno per giorno.
+//
+// DEDUP: ogni giocatore reale compare UNA volta sola, con le stat di TUTTA la
+// stagione, sulla squadra dove ha giocato di più. \`id\` è il playerID Lahman:
+// identità stabile (niente doppioni in classifica, gestibile negli anni). I
+// giocatori fuori rosa confluiscono nel pool free agent (\`freeAgents${YEAR}.ts\`).
 // ---------------------------------------------------------------------------
 
 export interface HistBatLine {
+  /** playerID Lahman: identità reale stabile (namespaced dall'importatore). */
+  id?: string;
   name: string;
   pos: Position;
   bats: Hand;
@@ -402,6 +450,8 @@ export interface HistBatLine {
 }
 
 export interface HistPitLine {
+  /** playerID Lahman: identità reale stabile (namespaced dall'importatore). */
+  id?: string;
   name: string;
   role: PitcherRole;
   throws: ThrowHand;
@@ -442,6 +492,33 @@ ${teamBlocks.join(',\n')},
   const out = join(ROOT, 'src', 'data', 'historical', `season${YEAR}.ts`);
   writeFileSync(out, header);
   console.log(`scritto ${out} (${built.length} squadre)`);
+}
+
+function emitFreeAgents(faBat, faPit) {
+  const arr = (items, fn) => items.map((x) => `  ${fn(x)},`).join('\n');
+  const header = `import type { HistBatLine, HistPitLine } from './season${YEAR}';
+
+// ---------------------------------------------------------------------------
+// Pool FREE AGENT storico — stagione ${YEAR}. GENERATO da
+// \`scripts/build-historical.mjs\`: i giocatori reali con minutaggio significativo
+// che NON entrano nelle 30 rose attive (dedup: un giocatore = una squadra
+// primaria). Alimentano il mercato/draft della gestione (Fase 5): svincolati,
+// riserve di lega, ricambio. \`id\` = playerID Lahman (identità stabile).
+// ---------------------------------------------------------------------------
+
+/** Battitori disponibili sul mercato (ordinati per minutaggio). */
+export const FREE_AGENT_BATTERS_${YEAR}: HistBatLine[] = [
+${arr(faBat, batObj)}
+];
+
+/** Lanciatori disponibili sul mercato (ordinati per minutaggio). */
+export const FREE_AGENT_PITCHERS_${YEAR}: HistPitLine[] = [
+${arr(faPit, pitObj)}
+];
+`;
+  const out = join(ROOT, 'src', 'data', 'historical', `freeAgents${YEAR}.ts`);
+  writeFileSync(out, header);
+  console.log(`scritto ${out} (${faBat.length}+${faPit.length} free agent)`);
 }
 
 // --- entrypoint ------------------------------------------------------------

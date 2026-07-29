@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { importHistoricalTeam } from '../import';
 import { SEASON_1999 } from '../season1999';
+import { buildHistoricalLeague } from '../league';
 import { SAMPLE_CLE_1999, SAMPLE_BOS_1999 } from './fixtures';
 import { simulateGame } from '../../../engine/game';
 import { batterOverall } from '../../../engine/ratings';
@@ -131,5 +132,18 @@ describe('SEASON_1999 (dataset Lahman, 30 squadre)', () => {
     const a = importHistoricalTeam(SEASON_1999[0]).team;
     const b = importHistoricalTeam(SEASON_1999[1]).team;
     expect(simulateGame(a, b, 7).final).toEqual(simulateGame(a, b, 7).final);
+  });
+
+  it('nessun giocatore duplicato in tutta la lega (dedup per persona)', () => {
+    const league = buildHistoricalLeague();
+    const ids: string[] = [];
+    for (const t of league) {
+      for (const p of [...t.lineup, ...t.bench, ...t.rotation, ...t.bullpen,
+        ...t.reserveBatters, ...t.reservePitchers]) ids.push(p.id);
+    }
+    // Ogni giocatore reale compare una sola volta nell'intera lega.
+    expect(new Set(ids).size).toBe(ids.length);
+    // L'identità è stabile e derivata dal playerID Lahman.
+    expect(ids.every((id) => id.startsWith('hist-'))).toBe(true);
   });
 });

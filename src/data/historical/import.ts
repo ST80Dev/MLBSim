@@ -133,15 +133,18 @@ export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
   const realBat = new Map<string, HistBatLine>();
   const realPit = new Map<string, HistPitLine>();
 
+  // Id STABILE per persona: dal playerID Lahma (`hist-<id>`) così lo stesso
+  // giocatore reale mantiene lo stesso id tra rosa, pool e annate. Le fixture a
+  // mano (senza `id`) ricadono sullo schema per-squadra-indice.
   const mkBatters = (lines: HistBatLine[] | undefined, tag: string): Batter[] =>
     (lines ?? []).map((l, i) => {
-      const id = `${f.abbrev}${h.season}-${tag}${i}`;
+      const id = l.id ? `hist-${l.id}` : `${f.abbrev}${h.season}-${tag}${i}`;
       realBat.set(id, l);
       return batterFrom(l, id, rng);
     });
   const mkPitchers = (lines: HistPitLine[], tag: string): Pitcher[] =>
     lines.map((l, i) => {
-      const id = `${f.abbrev}${h.season}-${tag}${i}`;
+      const id = l.id ? `hist-${l.id}` : `${f.abbrev}${h.season}-${tag}${i}`;
       realPit.set(id, l);
       return pitcherFrom(l, id, rng);
     });
