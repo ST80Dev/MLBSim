@@ -84,14 +84,41 @@ export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
   return { pa, h, double, triple, hr, bb, so, hbp, sb, cs };
 }
 
+/**
+ * Compressione MORBIDA del lato SOTTO-media delle doti di lancio, prima di
+ * derivare i peripherals. `ratingMult` è convessa e SENZA pavimento: un
+ * lanciatore scarso (doti ~50-55) accumulava valide/BB/HR fuori scala e
+ * pochissimi K, e nel motore (odds-ratio) esplodeva a ERA 10-18 — irreale (un
+ * replacement-level MLB sta a ~6-7). Qui il DEFICIT sotto la media conta pieno
+ * per i primi `PIT_LOW_KNEE` punti, poi solo per `PIT_LOW_SLOPE`: i #4/#5
+ * restano "brutti ma vivi" senza toccare né la media di lega (dote 70 = no-op)
+ * né gli assi (sopra la media = intatti). Speculare al soft-cap sulla BA.
+ */
+// Sotto `PIT_LOW_START` la mappa è chirurgica: NON tocca la fascia 64-70 (dove
+// passa la maggior parte degli inning e la calibrazione era già giusta), così
+// l'aggregato di lega (BA/R/g) resta invariato; morde solo il sotto-media, dove
+// il deficit conta per `PIT_LOW_SLOPE` (il resto è "smaltito"). Basta a togliere
+// gli ERA irreali (13-18) dei partenti medio-bassi e a portare la fascia comune
+// dei #4/#5 (ovr 60-71) a ERA ~6-8, lasciando intatti media di lega e assi.
+const PIT_LOW_START = 64;
+const PIT_LOW_SLOPE = 0.5;
+export function pitchEff(rating: number): number {
+  if (rating >= PIT_LOW_START) return rating;
+  return PIT_LOW_START - (PIT_LOW_START - rating) * PIT_LOW_SLOPE;
+}
+
 /** Deriva le statistiche concesse da un lanciatore dalle sue caratteristiche. */
 export function derivePitcherStats(r: PitcherRatings, bf = 1000): PitcherStats {
-  const so = round(bf * LEAGUE.so * ratingMult(r.stuff, 1.21));
-  const bb = round(bf * LEAGUE.bb * ratingMult(r.control, 0.78));
+  const stuff = pitchEff(r.stuff);
+  const control = pitchEff(r.control);
+  const movement = pitchEff(r.movement);
+  const groundball = pitchEff(r.groundball);
+  const so = round(bf * LEAGUE.so * ratingMult(stuff, 1.21));
+  const bb = round(bf * LEAGUE.bb * ratingMult(control, 0.78));
   const hbp = round(bf * LEAGUE.hbp);
-  const hr = round(bf * LEAGUE.hr * ratingMult(r.groundball, 0.72));
+  const hr = round(bf * LEAGUE.hr * ratingMult(groundball, 0.72));
   const nonHrHitRate =
-    (LEAGUE.single + LEAGUE.double + LEAGUE.triple) * ratingMult(r.movement, 0.9);
+    (LEAGUE.single + LEAGUE.double + LEAGUE.triple) * ratingMult(movement, 0.9);
   const h = round(bf * nonHrHitRate) + hr;
   return { bf, h, hr, bb, so, hbp };
 }

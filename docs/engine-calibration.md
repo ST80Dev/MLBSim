@@ -202,12 +202,39 @@ palla in gioco), **mai** HR/BB/HBP/SO.
   lanciatore resta il fattore principale. Test in `engine/__tests__/defense.test.ts`.
 
 Curva ERA↔bravura **del motore** (Log5, gare complete), misurata simulando una
-stagione intera con rotazione piena (R/g ~5.4): ovr ~72→ERA ~6.3; ~80→~4.3;
-~84→~3.6; ~92→~2.2. Il motore **regredisce ogni sfida verso la media di lega**
-(il fenomeno affronta anche avversari forti), quindi comprime i totali: in tutta
-la lega restano **~3-6 partenti sotto il 3.00** e l'ERA sotto 2 è appannaggio dei
-soli assi. Questo è il **bersaglio** a cui la proiezione dev'essere allineata
-(vedi "Proiezione di lega").
+stagione intera con rotazione piena (R/g ~5.3): ovr ~60→ERA ~8.3; ~66→~7.0;
+~72→~5.5; ~80→~4.2; ~84→~3.6; ~92→~3.0. Il motore **regredisce ogni sfida verso
+la media di lega** (il fenomeno affronta anche avversari forti), quindi comprime
+i totali: in tutta la lega restano **~3-6 partenti sotto il 3.00** e l'ERA sotto
+2 è appannaggio dei soli assi. Questo è il **bersaglio** a cui la proiezione
+dev'essere allineata (vedi "Proiezione di lega").
+
+### Pavimento sulla coda bassa dei lanciatori (`pitchEff`)
+
+`ratingMult` è **convessa e senza pavimento**: un partente medio-basso (doti
+~50-58) accumulava valide/BB/HR fuori scala e pochi K, e nel motore (odds-ratio +
+affaticamento) esplodeva a **ERA 13-18** — irreale (un replacement-level MLB sta
+a ~6-7). `pitchEff` in `ratings.ts` **comprime solo il lato sotto-media** delle
+quattro doti di lancio prima di derivare i peripherals: sopra `PIT_LOW_START`
+(=64) è un **no-op** (media di lega e assi intatti), sotto conta il deficit per
+`PIT_LOW_SLOPE` (=0.5). Effetto misurato: la fascia comune dei #4/#5 (ovr 60-71,
+~50 partenti) scende a **ERA ~6-8** (prima 7.6-10), gli ERA assurdi 13-18 spariscono,
+la **media di lega non si muove** (la fascia 64-70 che tira la maggior parte degli
+inning non è toccata: R/g ~5.3, BA ~.258, HR/g ~1.3, dentro la banda d'epoca). I
+pochissimi bracci-scarto vicini al `ROT_FLOOR` (ovr 52-59, ~7 in tutta la lega)
+restano ~9-10: portarli a 6-8 richiederebbe di appiattire la scala del talento o
+deprimere l'offesa di lega sotto epoca. Guardato dai test in `ratings.test.ts` e
+dalla banda di realismo in `engine.test.ts`.
+
+> **Nota di generazione (diagnosi, non un bug del motore):** l'OVR lanciatore
+> (`pitcherOverall`) **esclude** la Resistenza, e il generatore sceglie i partenti
+> con `startScore = OVR + 0.9·(RES−70)`. Ne segue che un **rilievo** può avere OVR
+> più alto di un #4/#5 (ha barattato resistenza per qualità), e siccome la qualità
+> domina l'ERA più della resistenza, **portarlo in rotazione conviene quasi sempre**
+> (misurato: ΔERA ~−2 dopo il pavimento, era ~−6 prima). NON esiste invece il caso
+> di un rilievo che domini un partente su **entrambe** OVR **e** RES: `startScore`
+> (top-5 in rotazione) lo rende matematicamente impossibile. `buildManagedTeam`
+> ri-deriva correttamente la resistenza da SP quando si sposta un rilievo in rotazione.
 
 ## Come ri-calibrare (procedura)
 
