@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   deriveBatterStats,
   derivePitcherStats,
+  pitchEff,
   ratingMult,
   batterOverall,
   salaryFromOverall,
@@ -60,6 +61,35 @@ describe('derivazione dalle caratteristiche', () => {
       stuff: 70, control: 90, movement: 70, groundball: 70, stamina: 70, fielding: 70,
     });
     expect(high.bb).toBeLessThan(low.bb);
+  });
+
+  it('il pavimento sulla coda bassa non tocca media e assi (neutro sopra 64)', () => {
+    expect(pitchEff(64)).toBe(64);
+    expect(pitchEff(RATING_AVG)).toBe(RATING_AVG);
+    expect(pitchEff(85)).toBe(85);
+    expect(pitchEff(100)).toBe(100);
+  });
+
+  it('il pavimento risolleva il sotto-media senza azzerare le differenze', () => {
+    // un braccio scarso conta come qualcosa in (rating, 64): brutto ma non irreale
+    expect(pitchEff(50)).toBeGreaterThan(50);
+    expect(pitchEff(50)).toBeLessThan(64);
+    // resta monotona: dote peggiore -> efficace peggiore o uguale (mai migliore)
+    expect(pitchEff(45)).toBeLessThan(pitchEff(58));
+    expect(pitchEff(58)).toBeLessThan(64);
+  });
+
+  it('un lanciatore scarso concede molto MENO che con la mappa esponenziale nuda', () => {
+    const weak = { stuff: 50, control: 50, movement: 50, groundball: 50, stamina: 50, fielding: 50 };
+    const floored = derivePitcherStats(weak);
+    // esito "nudo" senza pavimento: le stesse formule sui rating grezzi.
+    const bf = 1000;
+    const nakedBb = Math.round(bf * 0.085 * ratingMult(50, 0.78));
+    const nakedH =
+      Math.round(bf * (0.153 + 0.045 + 0.0032) * ratingMult(50, 0.9)) +
+      Math.round(bf * 0.026 * ratingMult(50, 0.72));
+    expect(floored.bb).toBeLessThan(nakedBb);
+    expect(floored.h).toBeLessThan(nakedH);
   });
 });
 
