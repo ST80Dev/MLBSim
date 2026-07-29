@@ -389,6 +389,27 @@ riempiono. Conseguenza sul mercato a blocchi: il trigger di rilascio dell'AI è
 **"sopra il cap OPPURE sopra la taglia"**, così la profondità in eccesso dal draft
 **defluisce nel pool** durante i blocchi invece di restare bloccata.
 
+### Draft in modalità STORICA: nomi reali, rating ciechi
+
+**Decisione di design.** In una lega storica (import di un'annata, es. 1999) le
+classi di draft/ingresso degli anni successivi (2000, 2001, …) usano i **nomi
+reali** dei debuttanti di quell'anno (dall'archivio Lahman: nome, età, mano,
+ruolo) **ma NON i loro rating derivati dalle stats reali**. Il motivo è il
+principio non negoziabile *niente preveggenza* (vedi `players-and-ratings.md` §
+Potenziale come STIMA incerta): il draft avviene nell'off-season *prima* di
+giocare quella stagione in-game, quindi ratare un rookie dal suo rendimento reale
+= sapere in anticipo chi diventerà campione e accaparrarselo. **Vietato.**
+
+Quindi la classe è: **`rating → stats`** con **rating da prospetto CIECO**
+(giovane/grezzo, potenziale stocastico come `draft.ts` genera già), i nomi reali
+solo per immersione. Il vero fuoriclasse e il vero bidone entrano
+**indistinguibili**: l'esito lo decide l'aging (breakout/bust), non la realtà. I
+rookie del *primo* anno importato fanno eccezione perché il loro anno di debutto
+*è* l'annata importata (la fotografia): lì `stats → rating` è lecito (è il
+presente, non il futuro). L'unica alternativa che userebbe le stats reali senza
+barare è il *replay* (i rookie compaiono d'ufficio sulle loro squadre reali, non
+draftabili) — scartata perché toglie l'agency del draft.
+
 ### C'è spazio aggregato? Sì, per costruzione
 
 La curva è calibrata così che il **payroll medio ≈ 193M ≈ 0.77 × cap base
