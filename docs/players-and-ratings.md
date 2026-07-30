@@ -21,6 +21,31 @@ l'overall spazia davvero da 2 a 4 stelle con qualche 5★, invece di incollarsi 
 3★. Il talento resta **centrato**, quindi cambia la *dispersione*, non gli
 aggregati di lega (epoca "alta offesa").
 
+### Dove vive il BASSO della scala (40-59): percorso a rating ciechi, non import storico
+
+Decisione di design (confermata). Nell'**import storico** l'overall degli
+affermati **non scende sotto ~60**: è voluto, non un bug. Tre motivi:
+
+- **L'overall è una media di doti** → comprime per costruzione. Le **singole
+  doti** scendono eccome fino a **40** (es. 1999: Cristian Guzman power 40, McGwire
+  contact 43, Mike Lincoln stuff 48): la varianza a livello di *skill* (e quindi
+  del singolo AB) è piena anche dietro un overall 60.
+- **Il passato importato è un presente NOTO** → giustamente più stretto. La
+  regressione per campione (prior 250, `statsToRatings.ts`) tiene i campioni
+  sottili vicini alla media: si *evita* di ri-gonfiare i flukes (il rilievo con
+  mezza stagione fortunata). Abbassare quel prior riaprirebbe proprio quel difetto
+  (manopola globale: fidarsi di più di *tutti* i piccoli campioni, in su e in giù).
+- **L'imprevedibilità non vive nello spread degli overall affermati**, ma
+  nell'**aging/sviluppo** (breakout/bust ciechi) e nell'**RNG di partita**.
+
+Il **basso 40-59** e la sua texture arrivano invece dal **percorso a rating
+ciechi** (`rating → stats`), che per design spazia **40-100**: i giocatori
+**generati** (già oggi: min ~46, ~9% sotto 60, coda sotto 50) e — in Fase 5 — i
+**prospetti/draft/free agent** con nomi reali ma rating ciechi (nessuna
+preveggenza; vedi `docs/franchise.md` § Draft in modalità STORICA). Quindi il
+fringe/bust nasce dove *deve* nascere (talento ignoto), non forzando in basso uno
+snapshot storico che quel talento lo conosce già.
+
 ### Elite = SPECIALISTI, non maxati-ovunque (archetipi pesati)
 
 Un OVR alto **non** deve avere 100 in tutto: il 50 HR / 50 SB, i 15 tripli per un
