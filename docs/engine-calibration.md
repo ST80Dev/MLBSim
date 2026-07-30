@@ -254,12 +254,40 @@ dalla banda di realismo in `engine.test.ts`.
 ## Soft-cap sulla media (BA)
 
 `deriveBatterStats` applica un **tetto a rendimenti decrescenti** sulla media:
-oltre `BA_CAP` (~.330) l'eccesso conta solo per `BA_SLOPE` (~0.33). Serve perché
+oltre `BA_CAP` (~.345) l'eccesso conta solo per `BA_SLOPE` (~0.45). Serve perché
 la mappatura convessa faceva sfondare i multi-tool oltre .420 di *base* (battere
 .400 dev'essere rarissimo, non a comando). Il cap agisce **sopra** la soglia,
-quindi **non tocca** il contatto-puro (contact 82 ≈ .324) né la media di lega; vale
+quindi **non tocca** il contatto-puro né la media di lega; vale
 ovunque (sim reale, backstory, base della proiezione), così la varianza d'annata
 può portare a .400+ solo *di rado*.
+
+## Coda-gemma: stirare la CIMA senza muovere la mediana (calibrazione "Fedele")
+
+Obiettivo: le stagioni memorabili (Bonds 73 HR, Ichiro .350 con pochi K) devono
+esprimersi come numeri da gemma **senza** gonfiare l'aggregato di lega. Chiave:
+tutte le leve sono **convesse in cima** e no-op sotto la soglia, così la mediana
+(dote 70) resta ferma e l'invariante d'epoca è protetto.
+
+`topEdge(rating, knee)` = 0 fino a `knee`, sale a 1 a 100. Moltiplicato per un
+guadagno, agisce sulle SOLE gemme (`ratings.ts`):
+- **HR**: `× (1 + 0.30·topEdge(power, 88))` → power 100 ≈ **60 HR** (era ~43-50).
+- **K battitore**: `× (1 − 0.34·topEdge(contact, 90))` → contact 100 = **pochi K**.
+- **Singoli**: `× (1 + 0.16·topEdge(contact, 90))` → lo slap-hitter estremo tocca
+  **~.345** (senza il boost i K bassi non bastavano: i singoli sono un rate
+  diretto). Insieme intercettano la classe Ichiro/Gwynn, prima irriproducibile.
+
+**OVR convesso** (solo battitore): pesi verso il valore (power .30, eye .26,
+contact .22) **+ `peakBonus`** = `0.14 · Σ max(0, tool−78)` sui tre tool offensivi.
+Premia la concentrazione → Bonds **82→91**, i position-player storici arrivano a
+90 (prima max 86). Il lanciatore no: già concentrato nei 3 tool a peso alto.
+
+**Salary** (`salaryFromOverall`): curva invariata, **solo il tetto del clamp
+45→55M**. L'OVR più alto rende già le gemme più care (Bonds ~10M→~22M: chiuso
+l'arbitraggio "campione sotto-prezzo") e il payroll mediano resta ~78% del cap.
+
+Ordine di taratura (ognuno col suo probe): **1.** tetto-stat → invariante di lega
+(`engine.test`: R/g 4.3-6.4, BA .255-.295, HR/g <2.2) tenuto; **2.** OVR → mediana
+~70, coda 90+; **3.** salary → zone-cap sul target (~6 sopra base, ~2-3 oltre muro).
 
 ## Proiezione di lega e varianza d'annata (`data/projection.ts`)
 

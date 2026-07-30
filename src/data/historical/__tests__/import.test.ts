@@ -200,4 +200,17 @@ describe('Annate storiche multiple (1997/1998/1999/2000/2001/2003)', () => {
       expect(ids.every((id) => id.startsWith('hist-'))).toBe(true);
     },
   );
+
+  // Replica-gemma (calibrazione "Fedele"): una stagione memorabile esce con OVR
+  // da fenomeno (>=90) e numeri da gemma, non schiacciata dalla media piatta.
+  it('la gemma di Bonds 2001 esce OVR >=90 e ~55+ HR', () => {
+    const bonds = buildHistoricalLeague(2001)
+      .flatMap((t) => [...t.lineup, ...t.bench, ...t.reserveBatters])
+      .find((b) => b.name === 'Barry Bonds');
+    expect(bonds, 'Bonds presente nel 2001').toBeTruthy();
+    expect(batterOverall(bonds!.ratings)).toBeGreaterThanOrEqual(90);
+    expect(bonds!.stats.hr).toBeGreaterThanOrEqual(54);
+    expect(bonds!.ratings.power).toBe(100);
+    expect(bonds!.ratings.eye).toBe(100);
+  });
 });

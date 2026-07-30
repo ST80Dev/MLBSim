@@ -44,8 +44,8 @@ export interface LeagueMode {
 
 /**
  * Cap BASE di riferimento (milioni), CALIBRATO sulla curva stipendi di
- * `ratings.ts` (scala "MLB", stelle fino a ~45M): il payroll medio di lega
- * (~193M) sta sotto (~77% del cap), cosi' esiste spazio aggregato per la
+ * `ratings.ts` (scala "MLB", stelle fino a ~55M dopo l'OVR convesso): il payroll
+ * medio di lega (~194M) sta sotto (~78% del cap), cosi' esiste spazio aggregato per la
  * redistribuzione (vedi docs/franchise.md § C'e' spazio aggregato). ~6
  * squadre/lega partono sopra il base (fascia tassa) e ~2-3 oltre il muro esterno
  * (le corazzate, riassorbite gradualmente al rollover). Ritararlo con lo script
