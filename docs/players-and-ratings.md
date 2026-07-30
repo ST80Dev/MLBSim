@@ -79,6 +79,23 @@ power 100 → ~60 HR, contact 100 → media ~.345) resta e **alimenta la produzi
 Il salary (curva invariata, tetto clamp 55M) segue l'OVR: payroll generato ~82%
 del cap, zone-cap nella tolleranza. Dettaglio in `docs/engine-calibration.md`.
 
+### Stretch storico: allungare le code per la varianza tra squadre (EPOCA-SAFE)
+
+Le rose reali hanno talento aggregato simile → la forza-squadra usciva schiacciata
+(quasi tutte ~72), perché è una media di 25 e regressione + Marcel comprimono i
+singoli. Soluzione (solo import storico, `import.ts` `spreadBatter`/`spreadPitcher`):
+dopo l'inversione stats→rating, **si allunga la distribuzione attorno a 70** —
+`rating' = 70 + (rating − 70)·1.4` — così i forti salgono, i deboli scendono, la
+forza-squadra spazia ~**4 → ~8-9** di spread (corazzate ~78, coda ~68). La
+Resistenza non si stira (è durabilità, non qualità).
+
+**Perché è epoca-safe** (contro-intuitivo): stirare i rating *sembra* gonfiare
+l'offesa (misurando un battitore vs lancio medio, `deriveBatterStats` convessa
+inflaziona). Ma nel **sim vero** i battitori stirati affrontano i **lanciatori
+stirati**, e nel Log5/odds-ratio gli estremi si **cancellano** in aggregato:
+misurato, R/G resta ~5.5-6.0 (dentro banda), non sale. Solo storico: la lega
+generata (che *definisce* la calibrazione) non passa da qui ed è invariata.
+
 ### Elite = SPECIALISTI, non maxati-ovunque (archetipi pesati)
 
 Un OVR alto **non** deve avere 100 in tutto: il 50 HR / 50 SB, i 15 tripli per un

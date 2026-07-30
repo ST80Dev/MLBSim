@@ -12,6 +12,7 @@ import {
   salaryFor,
   projectPotential,
   clampRating,
+  RATING_AVG,
 } from '../../engine/ratings';
 import { splitName } from '../../engine/names';
 import { autoLineup } from '../../engine/lineup';
@@ -47,7 +48,7 @@ function pitcherBf(l: HistPitLine): number {
 }
 
 function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
-  const ratings = ratingsFromBatterStats({
+  const ratings = spreadBatter(ratingsFromBatterStats({
     pa: l.pa,
     h: l.h,
     double: l.double,
@@ -59,7 +60,7 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
     sb: l.sb,
     cs: l.cs,
     position: l.pos,
-  });
+  }));
   const stats = deriveBatterStats(ratings, l.pa);
   const ovr = batterOverall(ratings, l.pos);
   const nm = splitName(l.name);
@@ -93,6 +94,31 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
 const LG_ERA_BASE = 4.6; // baseline ERA dell'epoca "alta offesa" (~1999)
 const BOOST_MAX_PIT = 8; // punti-rating massimi del boost
 const PREVENT_SLOPE = 9; // punti-rating per 1.0 di ERA sotto/sopra l'epoca (contesto squadra)
+
+// ---------------------------------------------------------------------------
+// ESTENSIONE (stretch) delle code, solo import storico. Le rose reali hanno
+// talento aggregato simile → forza-squadra schiacciata (~72). Qui allunghiamo la
+// distribuzione dei rating attorno alla media di lega (70): i forti salgono, i
+// deboli scendono → più varianza tra le squadre (spread ~4 → ~8). EPOCA-SAFE:
+// stiro sia battitori sia lanciatori, e nel sim (Log5) gli estremi si cancellano
+// in aggregato — misurato: R/G resta ~5.5, non gonfia. La Resistenza NON si stira
+// (è durabilità/ruolo, non qualità). Vedi docs/players-and-ratings § stretch storico.
+// ---------------------------------------------------------------------------
+const HIST_SPREAD = 1.4;
+const spread = (v: number): number => clampRating(RATING_AVG + (v - RATING_AVG) * HIST_SPREAD);
+function spreadBatter(r: Batter['ratings']): Batter['ratings'] {
+  return {
+    contact: spread(r.contact), power: spread(r.power), eye: spread(r.eye),
+    speed: spread(r.speed), fielding: spread(r.fielding), arm: spread(r.arm),
+  };
+}
+function spreadPitcher(r: PitcherRatings): PitcherRatings {
+  return {
+    ...r,
+    stuff: spread(r.stuff), control: spread(r.control), movement: spread(r.movement),
+    groundball: spread(r.groundball), fielding: spread(r.fielding),
+  };
+}
 
 /** Bonus (punti overall) da carico di lavoro (IP) × qualità DE-CONTESTUALIZZATA.
  *  Usa il FIP (13·HR + 3·(BB+HBP) − 2·K, peripherals) invece dell'ERA: un
@@ -133,7 +159,7 @@ function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
     role: l.role,
     gs: l.gs,
   });
-  const ratings = boostPitcher(raw, pitcherQualityBonus(l));
+  const ratings = spreadPitcher(boostPitcher(raw, pitcherQualityBonus(l)));
   const stats = derivePitcherStats(ratings, bf);
   const ovr = pitcherOverall(ratings);
   const nm = splitName(l.name);
