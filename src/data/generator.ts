@@ -354,7 +354,7 @@ function makeBatter(
   const stats = deriveBatterStats(ratings);
   // Distribuzione età realistica (makeAge) + profilo età della franchigia (ageSkew).
   const age = Math.round(clamp(makeAge(rng) + ageSkew, 20, 40));
-  const ovr = batterOverall(ratings);
+  const ovr = batterOverall(ratings, position);
   const secondaryPosition = isDH ? ratingsPos : pickSecondary(rng, position);
   const nm = names.next();
   return {
@@ -441,7 +441,7 @@ function alignLineupDefense(players: Batter[]): Batter[] {
   const slots = players.map((b) => b.position);
   const n = players.length;
   const ovrAt = (i: number, j: number): number =>
-    canOccupy(players[i], slots[j]) ? batterOverall(ratingsAtPosition(players[i], slots[j])) : -1e9;
+    canOccupy(players[i], slots[j]) ? batterOverall(ratingsAtPosition(players[i], slots[j]), slots[j]) : -1e9;
   const assign = players.map((_, i) => i); // assign[j] = indice giocatore nello slot j
   let improved = true;
   while (improved) {
@@ -462,14 +462,23 @@ function alignLineupDefense(players: Batter[]): Batter[] {
     const b = players[pi];
     const pos = slots[j];
     if (pos === b.position) return b;
-    return { ...b, position: pos, secondaryPosition: b.position, ratings: ratingsAtPosition(b, pos) };
+    // Chi si sposta porta la naturale come secondaria, MA solo se è un'alternativa
+    // ammessa per il nuovo slot (SS→DH o C→1B non lo sono): altrimenti ripiega
+    // sulla secondaria originale se valida, o resta senza (evita combo illegali).
+    const opts = SECONDARY_OPTIONS[pos];
+    const sec = opts?.includes(b.position)
+      ? b.position
+      : b.secondaryPosition && opts?.includes(b.secondaryPosition)
+        ? b.secondaryPosition
+        : undefined;
+    return { ...b, position: pos, secondaryPosition: sec, ratings: ratingsAtPosition(b, pos) };
   });
 }
 
 /** Alza uniformemente le doti (preserva l'archetipo) finche' l'overall raggiunge
  *  `floor`; ri-deriva stat e stipendio. No-op se gia' sopra. Muta in place. */
 function floorBatter(b: Batter, floor: number): void {
-  const cur = batterOverall(b.ratings);
+  const cur = batterOverall(b.ratings, b.position);
   if (cur >= floor) return;
   const d = floor - cur;
   b.ratings = {
@@ -481,7 +490,7 @@ function floorBatter(b: Batter, floor: number): void {
     arm: clampRating(b.ratings.arm + d),
   };
   b.stats = deriveBatterStats(b.ratings);
-  const ovr = batterOverall(b.ratings);
+  const ovr = batterOverall(b.ratings, b.position);
   b.salary = salaryFor(ovr, b.age);
   b.potential = Math.max(b.potential, ovr);
 }
@@ -550,7 +559,7 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
       const bias = starLeft > 0 ? ((starLeft = 0), starBias()) : 0;
       return makeBatter(rng, names, `${f.abbrev}-${pos}-${k}`, pos, teamTalent, bias, ageSkew);
     });
-    cands.sort((a, b) => batterOverall(b.ratings) - batterOverall(a.ratings));
+    cands.sort((a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position));
     const order = [...tiers].sort((x, y) => BATTER_TIER_RANK[x] - BATTER_TIER_RANK[y]);
     order.forEach((tier, i) => batterBucket[tier].push(cands[i]));
   }
@@ -594,9 +603,9 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   // stelle iniettate sono uscite sfortunate sotto soglia).
   for (const p of rotation) floorPitcher(p, ROT_FLOOR);
   for (const b of lineup) floorBatter(b, LINEUP_FLOOR);
-  if (!lineup.some((b) => batterOverall(b.ratings) >= STAR_FLOOR)) {
+  if (!lineup.some((b) => batterOverall(b.ratings, b.position) >= STAR_FLOOR)) {
     const best = lineup.reduce((a, b) =>
-      batterOverall(b.ratings) >= batterOverall(a.ratings) ? b : a,
+      batterOverall(b.ratings, b.position) >= batterOverall(a.ratings, a.position) ? b : a,
     );
     floorBatter(best, STAR_FLOOR);
   }

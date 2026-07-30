@@ -46,33 +46,38 @@ preveggenza; vedi `docs/franchise.md` § Draft in modalità STORICA). Quindi il
 fringe/bust nasce dove *deve* nascere (talento ignoto), non forzando in basso uno
 snapshot storico che quel talento lo conosce già.
 
-### OVR convesso: la CONCENTRAZIONE conta più della media (calibrazione "Fedele")
+### OVR battitore = VALORE PRODOTTO (offesa + velocità + difesa per ruolo)
 
-Problema: l'OVR-media piatta **castrava le gemme mono-tool** — Bonds (power+eye a
-**100**, contact 56) usciva **82**, sotto un "82 bilanciato" che in campo produce
-200 punti di OPS in meno. E il salary, agganciato all'OVR, lo prezzava da 82
-(~10M): si accumulavano campioni sotto-prezzo. I rating sono già a **tappo 100**,
-quindi l'OVR più alto non si ottiene alzando i tool ma **cambiando l'aggregazione**.
+Problema: una media-pesata dei tool **non può prezzare bene due archetipi opposti**.
+Pesando power/eye si rende giustizia agli slugger (Bonds) ma si affossa il
+contact/speed (Ichiro 72); pesando contact si fa l'inverso. Qualunque peso fisso
+maltratta un archetipo — e il salary, agganciato all'OVR, eredita l'errore.
 
-Due leve sincronizzate (`src/engine/ratings.ts`), pensate per stirare **solo la
-coda** lasciando **ferma la mediana** (dote 70 = no-op → aggregati di lega
-invariati; verificato col probe `engine.test`):
+La cura: l'OVR non è più una media di doti ma il **valore che i tool PRODUCONO**
+(`batterOverall(ratings, position)` in `src/engine/ratings.ts`), tre componenti
+ancorate alla mediana (dote 70 + posizione media → ~70, così la coda si stira
+senza gonfiare la lega):
 
-1. **OVR battitore convesso** — pesi verso il valore (power/eye guidano SLG+OBP)
-   **+ `peakBonus`**: premia i tool sopra ~78, così il mono-dominante sfonda i 90
-   (Bonds 82→**91**) e i position-player storici raggiungono la coda alta (prima
-   nessuno sopra 86). Solo battitori: l'OVR lanciatore concentra già il valore.
-2. **Tetto-stat `topEdge`** — rampa convessa che sopra una soglia (power 88,
-   contact 90) fa esprimere alle SOLE gemme numeri da stagione memorabile:
-   **power 100 → ~60 HR**, **contact 100 → pochi K + media ~.345** (l'archetipo
-   slap-hitter alla Ichiro, prima irriproducibile, ora esce; intercetta l'intera
-   classe negli anni). `BA_CAP` alzato a .345.
+1. **Offesa** — wOBA-like (linear weights) dalle **stat derivate**: premia ciò che
+   ogni tool produce. Uno slap-speed e uno slugger salgono ognuno per la sua via,
+   senza penalizzare i tool "deboli" dell'archetipo (Ichiro non è punito per la
+   poca potenza: il suo .864 OPS + basi rubate lo valgono).
+2. **Velocità** — credito baserunning oltre le SB già dentro la wOBA.
+3. **Difesa** — `0.75·fielding + 0.25·braccio` **pesata per la DOMANDA del ruolo**
+   (`POS_DEF_DEMAND`, normalizzazione di `teamRatings.DEF_WEIGHT`: SS 1.0, CF/C
+   0.89 … 1B 0.11, DH 0), **COERENTE col modello difensivo del motore**. Un guanto
+   d'oro da SS/CF/C vale (Jeter, Andruw, i ricevitori salgono), uno da 1ª quasi no.
 
-Salary: la curva **non** è stata ri-pesata — l'OVR più alto rende già le gemme più
-care (Bonds ~10M → ~22M: arbitraggio "campione sotto-prezzo" chiuso) e il payroll
-mediano cade sul target (~78% del cap). È stato alzato **solo il tetto** del clamp
-(45→55M) perché il vertice 95-100 non si appiattisca. Dettaglio numerico e ordine
-di taratura in `docs/engine-calibration.md` § Coda-gemma.
+Rendimenti decrescenti sopra `OVR_KNEE` (88, ×0.3): solo i **veri fenomeni**
+sfondano i 90 (Bonds ~90, A-Rod 90), i mid-star restano sotto (evita l'inflazione
+di 5★ nella lega generata, più ricca di all-rounder). Esempi (import storico):
+Bonds 90 · A-Rod/Manny/Nomar/Chipper 89 · Andruw Jones 86 (CF Gold Glove) · Ichiro
+85 · **Jeter/Pudge/Piazza 84** · glove-only col bat debole giù (Ordóñez 69).
+
+La **coda-gemma sui tool** (tetto-stat convesso `topEdge` in `deriveBatterStats`:
+power 100 → ~60 HR, contact 100 → media ~.345) resta e **alimenta la produzione**.
+Il salary (curva invariata, tetto clamp 55M) segue l'OVR: payroll generato ~82%
+del cap, zone-cap nella tolleranza. Dettaglio in `docs/engine-calibration.md`.
 
 ### Elite = SPECIALISTI, non maxati-ovunque (archetipi pesati)
 
@@ -253,10 +258,10 @@ In `src/engine/ratings.ts`:
 - `deriveStamina(rating, role)` converte la Resistenza in soglia di battitori.
 - `pitcherOverall` = media pesata (stuff/control/movement a peso alto: già
   allineata al valore, arriva a ~90 per gli assi).
-- `batterOverall` = media pesata **verso il valore** (power 0.30, eye 0.26,
-  contact 0.22, speed/fielding 0.09, arm 0.04) **+ bonus-picco convesso**
-  (`peakBonus`, vedi § OVR convesso sotto). La media da sola schiacciava le
-  gemme mono-tool (Bonds power+eye 100 → OVR 82); il picco le riporta sopra 90.
+- `batterOverall(ratings, position?)` = **valore prodotto** (offesa wOBA +
+  baserunning + difesa pesata per ruolo), non media di doti — così sluggers e
+  contact/speed salgono ognuno per la sua via e la difesa da SS/C/CF conta
+  (vedi § OVR battitore sopra). `position` abilita il peso difensivo corretto.
 - `salaryFromOverall(overall)` = curva base dello stipendio (milioni), tetto
   **55M** (alzato da 45 dopo l'OVR convesso: il vertice 95-100 si distribuisce).
   La curva (coeff/esponente) è **calibrata** perché il payroll **medio** di

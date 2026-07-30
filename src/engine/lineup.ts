@@ -27,7 +27,7 @@ export const FIELD_SLOTS: readonly Position[] = [
 export function autoLineup(batters: Batter[]): Batter[] {
   const pool = [...batters];
   if (pool.length < 5) {
-    return pool.sort((a, b) => batterOverall(b.ratings) - batterOverall(a.ratings));
+    return pool.sort((a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position));
   }
 
   const take = (score: (b: Batter) => number): Batter => {
@@ -46,7 +46,7 @@ export function autoLineup(batters: Batter[]): Batter[] {
   order[1] = take((b) => r(b).contact * 0.7 + r(b).eye * 0.7); // n.2
   order[4] = take((b) => r(b).power * 0.9 + r(b).contact * 0.3); // n.5
 
-  pool.sort((a, b) => batterOverall(b.ratings) - batterOverall(a.ratings));
+  pool.sort((a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position));
   let slot = 5;
   for (const b of pool) order[slot++] = b;
   return order;

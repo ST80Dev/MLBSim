@@ -61,7 +61,7 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
     position: l.pos,
   });
   const stats = deriveBatterStats(ratings, l.pa);
-  const ovr = batterOverall(ratings);
+  const ovr = batterOverall(ratings, l.pos);
   const nm = splitName(l.name);
   return {
     id,

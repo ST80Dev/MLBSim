@@ -4,6 +4,7 @@ import type {
   PitcherRatings,
   PitcherStats,
   PitcherRole,
+  Position,
 } from './types';
 import { LEAGUE } from './constants';
 import { clamp } from './rng';
@@ -162,36 +163,60 @@ export function deriveStamina(rating: number, role: PitcherRole): number {
   return clamp(round(7 + ((rating - RATING_AVG) / 10) * 1.2), 4, 12);
 }
 
-// Bonus-PICCO (convesso) dell'OVR battitore: premia la CONCENTRAZIONE del talento
-// nei tool di valore (contact/power/eye), non la media. Un mono-dominante (Bonds:
-// power+eye a 100) sfonda i 90, mentre un "bilanciato" no e la MEDIANA resta ferma
-// (tool sotto la soglia = nessun bonus). Risolve "OVR = media che castra le gemme"
-// e "nessun position-player sopra 90". Solo battitori: l'OVR lanciatore concentra
-// gia' il valore nei 3 tool a peso alto (aggiungere un picco lo gonfierebbe).
-const PEAK_KNEE = 78;
-const PEAK_GAIN = 0.14;
-function peakBonus(tools: number[]): number {
-  let excess = 0;
-  for (const t of tools) excess += Math.max(0, t - PEAK_KNEE);
-  return PEAK_GAIN * excess;
+// ---------------------------------------------------------------------------
+// OVR battitore = VALORE PRODOTTO, non media di doti. Tre componenti, ancorate
+// alla mediana (dote 70 + posizione media → ~70, così la coda si stira senza
+// gonfiare la lega):
+//   1. OFFESA — wOBA-like (linear weights) dalle stat DERIVATE: premia ciò che i
+//      tool PRODUCONO, così uno slap-speed (Ichiro) e uno slugger (Bonds) salgono
+//      ognuno per la sua via, senza penalizzare i tool "deboli" dell'archetipo.
+//   2. VELOCITÀ — credito baserunning oltre le SB già dentro la wOBA.
+//   3. DIFESA — fielding+braccio PESATI per la DOMANDA del ruolo (SS/C/CF ≫
+//      1B/LF/DH), COERENTE col modello difensivo del motore (teamRatings
+//      DEF_WEIGHT): un guanto d'oro da SS vale, uno da 1ª quasi no.
+// Rendimenti decrescenti in cima (OVR_KNEE) così i fenomeni si distinguono senza
+// saturare. Vedi docs/players-and-ratings.md § OVR-produzione.
+// ---------------------------------------------------------------------------
+const WOBA_W = { bb: 0.69, hbp: 0.72, single: 0.89, double: 1.27, triple: 1.62, hr: 2.1, sb: 0.2, cs: -0.4 };
+function wobaOf(r: BatterRatings): number {
+  const s = deriveBatterStats(r, 650);
+  const single = s.h - s.double - s.triple - s.hr;
+  return (
+    WOBA_W.bb * s.bb + WOBA_W.hbp * s.hbp + WOBA_W.single * single + WOBA_W.double * s.double +
+    WOBA_W.triple * s.triple + WOBA_W.hr * s.hr + WOBA_W.sb * s.sb + WOBA_W.cs * s.cs
+  ) / s.pa;
 }
+const AVG_BAT: BatterRatings = { contact: 70, power: 70, eye: 70, speed: 70, fielding: 70, arm: 70 };
+const LG_WOBA = wobaOf(AVG_BAT);
+
+// Domanda difensiva per ruolo (0..1): normalizzazione di teamRatings.DEF_WEIGHT
+// (SS 9 … 1B 1, DH 0). TENERE ALLINEATA a quella tabella. Posizione ignota = media.
+const POS_DEF_DEMAND: Partial<Record<Position, number>> = {
+  SS: 1, CF: 0.89, C: 0.89, '2B': 0.67, '3B': 0.56, RF: 0.33, LF: 0.22, '1B': 0.11, DH: 0,
+};
+const DEFAULT_DEMAND = 0.45;
+
+const OVR_OFF_SLOPE = 118; // wOBA → punti-OVR
+const OVR_SPD_CREDIT = 0.2; // per punto di Velocità sopra la media
+const OVR_DEF_CREDIT = 0.34; // per punto di difesa, a domanda piena (SS)
+const OVR_KNEE = 88; // sopra: forti rendimenti decrescenti (×0.3): solo i veri
+const OVR_KNEE_SLOPE = 0.3; // fenomeni sfondano i 90, i mid-star restano sotto
 
 /**
- * Overall 40-100 di un battitore. Pesi VERSO IL VALORE (power/eye guidano i run:
- * SLG+OBP) piu' un bonus-picco convesso: cosi' l'OVR riflette la DOMINANZA e non
- * la media piatta (che schiacciava le gemme mono-tool a mid-80). Vedi
- * docs/players-and-ratings.md § OVR convesso.
+ * Overall 40-100 di un battitore = valore prodotto (offesa wOBA + baserunning +
+ * difesa pesata per ruolo). `position` abilita il peso difensivo corretto (SS/C
+ * contano più di 1B/DH); se assente usa una domanda media. Vedi il blocco sopra.
  */
-export function batterOverall(r: BatterRatings): number {
-  return clampRating(
-    0.3 * r.power +
-      0.26 * r.eye +
-      0.22 * r.contact +
-      0.09 * r.speed +
-      0.09 * r.fielding +
-      0.04 * r.arm +
-      peakBonus([r.contact, r.power, r.eye]),
-  );
+export function batterOverall(r: BatterRatings, position?: Position): number {
+  const demand = position != null ? POS_DEF_DEMAND[position] ?? DEFAULT_DEMAND : DEFAULT_DEMAND;
+  const defRating = 0.75 * r.fielding + 0.25 * r.arm;
+  let raw =
+    RATING_AVG +
+    OVR_OFF_SLOPE * (wobaOf(r) - LG_WOBA) +
+    OVR_SPD_CREDIT * (r.speed - RATING_AVG) +
+    OVR_DEF_CREDIT * demand * (defRating - RATING_AVG);
+  if (raw > OVR_KNEE) raw = OVR_KNEE + (raw - OVR_KNEE) * OVR_KNEE_SLOPE;
+  return clampRating(raw);
 }
 
 /** Overall 40-100 di un lanciatore (Resistenza esclusa; Difesa peso minimo). */
