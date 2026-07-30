@@ -45,6 +45,51 @@ l'occupazione delle basi. Coperto dai test in `engine/__tests__/live.test.ts`,
 `engine/__tests__/inplayout.test.ts` (avanzamenti forzati) e
 `ui/__tests__/scorecode.test.ts`.
 
+## Difesa pesata per reparto ed errori
+
+Oltre al modello **base** (DIPS team-level: `fieldingSigma` sposta uniformemente le
+hit su palla in gioco ↔ out, `TUNING.defense`, invariato), la difesa dei **fielder
+coinvolti** nella singola giocata conta su tre layer aggiuntivi. I neutrali sono le
+medie di lega MISURATE sul generatore (interni ~82.9, esterni ~82.1): una squadra
+**media è un NO-OP** su questi layer, quindi cambia lo **spread** attorno alla media,
+non il centro. La sintesi per reparto è `groupDefenseSynthesis` (`teamRatings.ts`),
+pesata per la domanda difensiva del ruolo (uno SS pesa più di un 1ª).
+
+- **Esterni → extrabase** (`TUNING.extraBaseDefense`, in `combineRates`): gli
+  esterni con range tolgono **doppi e tripli** oltre la soppressione uniforme del
+  modello base — così una gran difesa esterna taglia gli extrabase **più** dei
+  singoli (che il layer non tocca). Conserva la somma, TTO intatti. Neutro = no-op.
+- **Interni → doppi giochi** (`TUNING.dpRange`, in `resolveInPlayOut`): col
+  corridore in 1ª (<2 out) gli interni schierati bene convertono **più DP**
+  (`gidpProb ± range·perSigma`, clamp `maxBonus`); interni scarsi meno. Simmetrico
+  attorno al neutro → offense-neutral in media.
+- **Errori** (`TUNING.errors`, in `resolveInPlayOut`): su un out in gioco il fielder
+  coinvolto (interni sul **rimbalzo**, esterni **in aria**) può sbagliare:
+  `pErr = clamp(base − sigmaReparto·perSigma, min, max)` (difesa scarsa = più
+  errori). Il battitore raggiunge la prima (**reached-on-error**, conta come AB
+  senza valida → non intacca la BABIP/media), i corridori avanzano di una,
+  l'eventuale punto è **unearned**. A difesa **media** vale `base` (~2,2 % degli out
+  in gioco): è la **nuova baseline** dell'ambiente-punti, verso cui gli aggregati
+  sono **ricalibrati**.
+
+**Corse earned/unearned.** `makeScoreRunner` marca una corsa *unearned* se il
+corridore ha raggiunto la base per un errore **oppure** se l'inning, senza gli out
+cancellati da errori (`LiveGame.errorOutsThisInning`), sarebbe già finito. È
+un'**approssimazione da simulatore** della regola ufficiale (che ricostruirebbe
+l'inning senza l'errore): sottostima un po' le unearned, ma dà un vero split ER<R.
+Gli **errori di squadra** (`SideState.errors`) alimentano la colonna **E** del box
+(prima fissa a 0). Il lanciatore vede `er` solo sulle corse earned → l'ERD si scolla
+ancora di più dal talento grezzo.
+
+**Attivazione e RNG.** Errori e boost-DP scattano **solo** quando `resolveInPlayOut`
+riceve `defSig` — cioè dal turno *swing* (`swingAtBat`), quindi in **quick-sim** e
+gioco normale (la baseline errori è parte dell'ambiente). Le chiamate dirette a
+`resolveInPlayOut` **senza** `defSig` (test unitari, tattiche interattive che non
+passano il fascio) **non** tirano l'errore → restano invariate. Misure su ~300 gare:
+R/G ~5,6, BA ~.258, **E ~0,42/squadra**, **unearned ~5 %**. Difesa forte vs scarsa
+(fielding 92 vs 52): errori e doppi concessi crollano/esplodono di conseguenza.
+Coperto da `engine/__tests__/fielding.test.ts` e `defense.test.ts`.
+
 ## Tattiche interattive (Fase 1) e loro calibrazione
 
 Il motore è una **macchina a stati** (`LiveGame` in `game.ts`): `simulateGame`

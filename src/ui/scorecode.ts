@@ -117,6 +117,17 @@ const OUTFIELD: Array<[number, number]> = [
   [8, 40],
   [9, 26],
 ];
+// Errore difensivo: fielder che sbaglia (prevalentemente interni, come nella realtà).
+const ERROR_FIELDERS: Array<[number, number]> = [
+  [6, 26], // SS
+  [5, 22], // 3B
+  [4, 16], // 2B
+  [3, 10], // 1B
+  [7, 8], // LF
+  [8, 8], // CF
+  [9, 8], // RF
+  [2, 2], // C
+];
 // Scelta difensiva: corridore dalla 2ª eliminato in 3ª (tiro alla terza = 5).
 const FIELDER_CHOICE: Array<[number[], number]> = [
   [[6, 5], 34], // SS → 3B
@@ -210,6 +221,10 @@ export function scoreCode(ev: PlayEvent): ScoreCode | null {
         code: `${pop ? 'P' : 'F'}${p}`,
         title: `${pop ? 'eliminato su cielo (pop-up)' : 'eliminato al volo'}: ${POS_NAME[p]} (${p})`,
       };
+    }
+    case 'error': {
+      const pos = wpick(mix(h, 12), ERROR_FIELDERS);
+      return { code: `E${pos}`, title: `errore in difesa: ${POS_NAME[pos]} (${pos})` };
     }
     case 'sub':
     case 'other':

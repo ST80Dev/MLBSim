@@ -148,6 +148,49 @@ export const TUNING = {
   },
 
   /**
+   * Difesa PESATA PER REPARTO — layer differenziali che fanno contare i *fielder
+   * coinvolti* nella giocata, sopra il modello base (che resta invariato). I
+   * neutrali sono le medie di lega MISURATE sul generatore (interni ~82.9, esterni
+   * ~82.1), così una squadra media è un NO-OP su questi layer e non sposta gli
+   * aggregati; solo lo SPREAD attorno alla media cambia. sigma = (rep − neutral)/10.
+   *
+   *  - `extraBaseDefense`: gli ESTERNI limitano i doppi/tripli (range nei gap e
+   *    sulle righe). Soppressione AGGIUNTIVA di 2B/3B in `combineRates`, oltre a
+   *    quella uniforme del modello base → una gran difesa esterna taglia gli
+   *    extrabase più dei singoli. Neutro = no-op.
+   *  - `dpRange`: gli INTERNI schierati bene convertono più doppi giochi (col
+   *    corridore in 1ª, <2 out). Bonus/malus sul `gidpProb`, simmetrico attorno al
+   *    neutro → offense-neutral in media.
+   */
+  extraBaseDefense: {
+    neutral: 82.1,
+    perSigma: 0.06, // per sigma di difesa esterna: quota di 2B/3B in più/meno spostata su out
+    min: 0.82,
+    max: 1.18,
+  },
+  dpRange: {
+    neutral: 82.9,
+    perSigma: 0.05, // +/- conversione DP per sigma di difesa interna
+    maxBonus: 0.12,
+  },
+
+  /**
+   * ERRORI difensivi. Su un out in gioco il fielder coinvolto (interni sul
+   * rimbalzo, esterni in aria) può sbagliare: il battitore raggiunge la prima
+   * (reached-on-error), i corridori avanzano di una, l'eventuale punto è *unearned*.
+   * Prob. guidata dal fielding del reparto rispetto al neutro (difesa scarsa =
+   * più errori). A difesa media vale `base`: è la nuova baseline dell'ambiente
+   * (il quick-sim la usa → gli aggregati sono ricalibrati attorno a questa).
+   *   pErr = clamp(base − sigmaReparto·perSigma, min, max)
+   */
+  errors: {
+    base: 0.022, // ~ errore su 2.2% degli out in gioco a difesa media
+    perSigma: 0.011,
+    min: 0.004,
+    max: 0.06,
+  },
+
+  /**
    * Difesa avanzata "interni dentro": taglia il punto da terra col corridore in
    * terza, ma lascia piu' buchi. `hitThrough` = prob. che il rimbalzo passi per
    * un singolo (il punto segna); altrimenti battitore eliminato e corridore
