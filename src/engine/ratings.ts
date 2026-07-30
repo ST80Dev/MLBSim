@@ -30,6 +30,29 @@ export function ratingMult(rating: number, perSigma: number): number {
   return Math.pow(perSigma, (rating - RATING_AVG) / 10);
 }
 
+/**
+ * Rampa CONVESSA in cima alla scala: 0 (nessun effetto) fino a `knee`, poi sale
+ * linearmente a 1 a rating 100. E' la leva "coda-gemma": moltiplicata per un
+ * guadagno, fa esprimere alle SOLE gemme (rating >= knee) numeri da stagione
+ * memorabile (HR/K/BA estremi) SENZA toccare la fascia media — cosi' la mediana
+ * e gli aggregati di lega (dote 70 = no-op) restano invariati. Vedi
+ * docs/engine-calibration.md § Coda-gemma.
+ */
+export function topEdge(rating: number, knee: number): number {
+  return rating <= knee ? 0 : (rating - knee) / (RATING_MAX - knee);
+}
+
+// Coda-gemma (calibrazione "Fedele"): sopra la soglia i tool di VALORE rendono
+// di piu', cosi' power 100 -> ~60 HR e contact 100 -> pochissimi K (l'archetipo
+// slap-hitter, Ichiro/Gwynn, diventa esprimibile). Solo la coda si stira: knee
+// alte -> la fascia comune e la mediana non si muovono. Tarabili qui.
+const HR_TOP_KNEE = 88;
+const HR_TOP_GAIN = 0.3; // +30% HR a power 100
+const K_TOP_KNEE = 90;
+const K_TOP_GAIN = 0.34; // -34% K a contact 100 (bat-control estremo)
+const SINGLE_TOP_KNEE = 90;
+const SINGLE_TOP_GAIN = 0.16; // +16% singoli a contact 100: lo slap-hitter da .345
+
 const round = Math.round;
 
 // Fattore che riporta la base-AB alla base-PA per il giocatore MEDIO: con
@@ -53,11 +76,20 @@ export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
   const ab = Math.max(1, pa - bb - hbp);
   const abBase = ab * AB_SCALE;
 
-  const so = round(abBase * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97));
-  const hr = round(abBase * LEAGUE.hr * ratingMult(r.power, 1.42));
+  const so = round(
+    abBase * LEAGUE.so * ratingMult(r.contact, 0.88) * ratingMult(r.eye, 0.97) *
+      (1 - K_TOP_GAIN * topEdge(r.contact, K_TOP_KNEE)),
+  );
+  const hr = round(
+    abBase * LEAGUE.hr * ratingMult(r.power, 1.42) *
+      (1 + HR_TOP_GAIN * topEdge(r.power, HR_TOP_KNEE)),
+  );
   const triple = round(abBase * LEAGUE.triple * ratingMult(r.speed, 1.82) * ratingMult(r.power, 0.9));
   const double = round(abBase * LEAGUE.double * ratingMult(r.power, 1.2) * ratingMult(r.contact, 1.05));
-  let single = round(abBase * LEAGUE.single * ratingMult(r.contact, 1.1));
+  let single = round(
+    abBase * LEAGUE.single * ratingMult(r.contact, 1.1) *
+      (1 + SINGLE_TOP_GAIN * topEdge(r.contact, SINGLE_TOP_KNEE)),
+  );
   let h = single + double + triple + hr;
   if (h > ab) {
     single = Math.max(0, single - (h - ab));
@@ -68,8 +100,8 @@ export function deriveBatterStats(r: BatterRatings, pa = 650): BatterStats {
   // (battere .400 e' rarissimo). Non tocca i contatti-puri sotto soglia; comprime
   // i fenomeni multi-tool. Vale ovunque (sim, backstory, base della proiezione),
   // cosi' la varianza d'annata puo' sfondare .400 solo di rado, non a comando.
-  const BA_CAP = 0.33;
-  const BA_SLOPE = 0.33;
+  const BA_CAP = 0.345;
+  const BA_SLOPE = 0.45;
   if (h / ab > BA_CAP) {
     const targetH = round((BA_CAP + (h / ab - BA_CAP) * BA_SLOPE) * ab);
     single = Math.max(0, single - (h - targetH));
@@ -130,15 +162,35 @@ export function deriveStamina(rating: number, role: PitcherRole): number {
   return clamp(round(7 + ((rating - RATING_AVG) / 10) * 1.2), 4, 12);
 }
 
-/** Overall 40-100 di un battitore (media pesata delle doti). */
+// Bonus-PICCO (convesso) dell'OVR battitore: premia la CONCENTRAZIONE del talento
+// nei tool di valore (contact/power/eye), non la media. Un mono-dominante (Bonds:
+// power+eye a 100) sfonda i 90, mentre un "bilanciato" no e la MEDIANA resta ferma
+// (tool sotto la soglia = nessun bonus). Risolve "OVR = media che castra le gemme"
+// e "nessun position-player sopra 90". Solo battitori: l'OVR lanciatore concentra
+// gia' il valore nei 3 tool a peso alto (aggiungere un picco lo gonfierebbe).
+const PEAK_KNEE = 78;
+const PEAK_GAIN = 0.14;
+function peakBonus(tools: number[]): number {
+  let excess = 0;
+  for (const t of tools) excess += Math.max(0, t - PEAK_KNEE);
+  return PEAK_GAIN * excess;
+}
+
+/**
+ * Overall 40-100 di un battitore. Pesi VERSO IL VALORE (power/eye guidano i run:
+ * SLG+OBP) piu' un bonus-picco convesso: cosi' l'OVR riflette la DOMINANZA e non
+ * la media piatta (che schiacciava le gemme mono-tool a mid-80). Vedi
+ * docs/players-and-ratings.md § OVR convesso.
+ */
 export function batterOverall(r: BatterRatings): number {
   return clampRating(
-    0.3 * r.contact +
-      0.26 * r.power +
-      0.22 * r.eye +
-      0.1 * r.speed +
-      0.08 * r.fielding +
-      0.04 * r.arm,
+    0.3 * r.power +
+      0.26 * r.eye +
+      0.22 * r.contact +
+      0.09 * r.speed +
+      0.09 * r.fielding +
+      0.04 * r.arm +
+      peakBonus([r.contact, r.power, r.eye]),
   );
 }
 
@@ -179,8 +231,13 @@ export function projectPotential(rng: Rng, overall: number, age: number): number
  */
 export function salaryFromOverall(ovr: number): number {
   // Riferimento "replacement level" = 10 punti sotto la media di lega.
+  // RI-FIT dopo l'OVR convesso: la curva (coeff/esponente) resta invariata —
+  // l'OVR piu' alto delle gemme le rende gia' piu' care (Bonds ~10M -> ~22M:
+  // arbitraggio "campione sotto-prezzo" chiuso) e il monte-ingaggi mediano cade
+  // sul target di design (~77% del cap). Cambia SOLO il tetto (45 -> 55): il
+  // vertice 95-100 si distribuisce invece di appiattirsi sul clamp.
   const s = 1.75 * Math.pow(1.085, ovr - (RATING_AVG - 10));
-  return Math.round(clamp(s, 0.5, 45) * 10) / 10;
+  return Math.round(clamp(s, 0.5, 55) * 10) / 10;
 }
 
 /**

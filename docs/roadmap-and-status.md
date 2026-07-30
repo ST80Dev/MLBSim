@@ -67,8 +67,11 @@
     modalità storica ora costruisce la lega da quelle rose
     (`data/historical/league.ts`, `buildHistoricalLeague`) invece che
     procedurale. Dettaglio sotto.
-  - **Annate multiple giocabili — FATTO:** importate **1997, 1998, 1999, 2000**
-    (`HISTORICAL_SEASONS` / `HISTORICAL_YEARS`), selezionabili dalla schermata
+  - **Annate multiple giocabili — FATTO:** importate **1997, 1998, 1999, 2000,
+    2001, 2003** (`HISTORICAL_SEASONS` / `HISTORICAL_YEARS`) — le annate-gemma
+    2001 (Bonds 73 HR, RJ 372 K) e 2003 (Pujols breakout, Gagné 55/55) confermano
+    che le doti-firma si saturano (pow/eye 100) mentre l'OVR resta una media
+    piatta (Bonds OVR ~82-86) — selezionabili dalla schermata
     iniziale (picker d'annata sulla card storica). Il 1997 è a **28 squadre**
     (Arizona e Tampa Bay debuttano nel 1998): la lega tollera l'organico ridotto
     (calendario con pad/trim a 162, division 4×). Ogni annata ha la sua finestra

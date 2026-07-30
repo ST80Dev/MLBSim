@@ -21,6 +21,59 @@ l'overall spazia davvero da 2 a 4 stelle con qualche 5★, invece di incollarsi 
 3★. Il talento resta **centrato**, quindi cambia la *dispersione*, non gli
 aggregati di lega (epoca "alta offesa").
 
+### Dove vive il BASSO della scala (40-59): percorso a rating ciechi, non import storico
+
+Decisione di design (confermata). Nell'**import storico** l'overall degli
+affermati **non scende sotto ~60**: è voluto, non un bug. Tre motivi:
+
+- **L'overall è una media di doti** → comprime per costruzione. Le **singole
+  doti** scendono eccome fino a **40** (es. 1999: Cristian Guzman power 40, McGwire
+  contact 43, Mike Lincoln stuff 48): la varianza a livello di *skill* (e quindi
+  del singolo AB) è piena anche dietro un overall 60.
+- **Il passato importato è un presente NOTO** → giustamente più stretto. La
+  regressione per campione (prior 250, `statsToRatings.ts`) tiene i campioni
+  sottili vicini alla media: si *evita* di ri-gonfiare i flukes (il rilievo con
+  mezza stagione fortunata). Abbassare quel prior riaprirebbe proprio quel difetto
+  (manopola globale: fidarsi di più di *tutti* i piccoli campioni, in su e in giù).
+- **L'imprevedibilità non vive nello spread degli overall affermati**, ma
+  nell'**aging/sviluppo** (breakout/bust ciechi) e nell'**RNG di partita**.
+
+Il **basso 40-59** e la sua texture arrivano invece dal **percorso a rating
+ciechi** (`rating → stats`), che per design spazia **40-100**: i giocatori
+**generati** (già oggi: min ~46, ~9% sotto 60, coda sotto 50) e — in Fase 5 — i
+**prospetti/draft/free agent** con nomi reali ma rating ciechi (nessuna
+preveggenza; vedi `docs/franchise.md` § Draft in modalità STORICA). Quindi il
+fringe/bust nasce dove *deve* nascere (talento ignoto), non forzando in basso uno
+snapshot storico che quel talento lo conosce già.
+
+### OVR convesso: la CONCENTRAZIONE conta più della media (calibrazione "Fedele")
+
+Problema: l'OVR-media piatta **castrava le gemme mono-tool** — Bonds (power+eye a
+**100**, contact 56) usciva **82**, sotto un "82 bilanciato" che in campo produce
+200 punti di OPS in meno. E il salary, agganciato all'OVR, lo prezzava da 82
+(~10M): si accumulavano campioni sotto-prezzo. I rating sono già a **tappo 100**,
+quindi l'OVR più alto non si ottiene alzando i tool ma **cambiando l'aggregazione**.
+
+Due leve sincronizzate (`src/engine/ratings.ts`), pensate per stirare **solo la
+coda** lasciando **ferma la mediana** (dote 70 = no-op → aggregati di lega
+invariati; verificato col probe `engine.test`):
+
+1. **OVR battitore convesso** — pesi verso il valore (power/eye guidano SLG+OBP)
+   **+ `peakBonus`**: premia i tool sopra ~78, così il mono-dominante sfonda i 90
+   (Bonds 82→**91**) e i position-player storici raggiungono la coda alta (prima
+   nessuno sopra 86). Solo battitori: l'OVR lanciatore concentra già il valore.
+2. **Tetto-stat `topEdge`** — rampa convessa che sopra una soglia (power 88,
+   contact 90) fa esprimere alle SOLE gemme numeri da stagione memorabile:
+   **power 100 → ~60 HR**, **contact 100 → pochi K + media ~.345** (l'archetipo
+   slap-hitter alla Ichiro, prima irriproducibile, ora esce; intercetta l'intera
+   classe negli anni). `BA_CAP` alzato a .345.
+
+Salary: la curva **non** è stata ri-pesata — l'OVR più alto rende già le gemme più
+care (Bonds ~10M → ~22M: arbitraggio "campione sotto-prezzo" chiuso) e il payroll
+mediano cade sul target (~78% del cap). È stato alzato **solo il tetto** del clamp
+(45→55M) perché il vertice 95-100 non si appiattisca. Dettaglio numerico e ordine
+di taratura in `docs/engine-calibration.md` § Coda-gemma.
+
 ### Elite = SPECIALISTI, non maxati-ovunque (archetipi pesati)
 
 Un OVR alto **non** deve avere 100 in tutto: il 50 HR / 50 SB, i 15 tripli per un
@@ -198,11 +251,17 @@ In `src/engine/ratings.ts`:
   la media). L'inverso `statsToRatings` divide per la stessa base-AB (round-trip
   coerente).
 - `deriveStamina(rating, role)` converte la Resistenza in soglia di battitori.
-- `batterOverall` / `pitcherOverall` = media pesata delle doti (40-100).
-- `salaryFromOverall(overall)` = curva base dello stipendio (milioni). La curva è
-  **calibrata** perché il payroll **medio** di squadra stia sotto il cap base
-  (vedi `docs/franchise.md` § Salary cap); non toccarla senza rimisurare i
-  monte-ingaggi con lo script di probe.
+- `pitcherOverall` = media pesata (stuff/control/movement a peso alto: già
+  allineata al valore, arriva a ~90 per gli assi).
+- `batterOverall` = media pesata **verso il valore** (power 0.30, eye 0.26,
+  contact 0.22, speed/fielding 0.09, arm 0.04) **+ bonus-picco convesso**
+  (`peakBonus`, vedi § OVR convesso sotto). La media da sola schiacciava le
+  gemme mono-tool (Bonds power+eye 100 → OVR 82); il picco le riporta sopra 90.
+- `salaryFromOverall(overall)` = curva base dello stipendio (milioni), tetto
+  **55M** (alzato da 45 dopo l'OVR convesso: il vertice 95-100 si distribuisce).
+  La curva (coeff/esponente) è **calibrata** perché il payroll **medio** di
+  squadra stia ~77% del cap base (vedi `docs/franchise.md` § Salary cap); non
+  toccarla senza rimisurare i monte-ingaggi con lo script di probe.
 - `salaryFor(overall, age)` = `salaryFromOverall(overall) × youthFactor(age)`: lo
   stipendio **effettivo** usato ovunque (generatore, import, aging). `youthFactor`
   sale da ~0.4 a 21 anni a 1.0 a ~27 (sconto gioventù *stateless*, modello

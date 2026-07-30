@@ -127,6 +127,36 @@ describe('cime di eccellenza (stile anni 90/00)', () => {
   });
 });
 
+describe('coda-gemma + OVR convesso (calibrazione "Fedele")', () => {
+  // Il TETTO delle gemme si stira (power 100 -> ~60 HR, contact 100 -> pochi K,
+  // media da .345) SENZA muovere la fascia media (il "battitore medio" sopra
+  // resta sui numeri di lega: invariante di calibrazione).
+  it('lo slugger-gemma (power 100) sfonda i 55 fuoricampo', () => {
+    const s = deriveBatterStats({ ...AVG, power: 100, contact: 80 }, 660);
+    expect(s.hr).toBeGreaterThanOrEqual(55);
+  });
+
+  it("il bat-control estremo (contact 100) fa pochissimi K e batte ~.340", () => {
+    const s = deriveBatterStats({ ...AVG, contact: 100, power: 55, eye: 55 }, 700);
+    const ba = s.h / (s.pa - s.bb - s.hbp);
+    expect(s.so / s.pa).toBeLessThan(0.12); // slap-hitter alla Ichiro
+    expect(ba).toBeGreaterThan(0.32);
+  });
+
+  // L'OVR premia la CONCENTRAZIONE, non la media: un mono-dominante (power+eye a
+  // 100) sfonda i 90 e batte un "bilanciato" con media pari o superiore.
+  it('il mono-dominante (power+eye 100) supera 90 e batte il bilanciato', () => {
+    const gem = batterOverall({ contact: 56, power: 100, eye: 100, speed: 83, fielding: 70, arm: 75 });
+    const balanced = batterOverall({ contact: 84, power: 84, eye: 84, speed: 84, fielding: 84, arm: 84 });
+    expect(gem).toBeGreaterThanOrEqual(90);
+    expect(gem).toBeGreaterThan(balanced);
+  });
+
+  it('il bonus-picco NON tocca la mediana (tutto-medio resta 70)', () => {
+    expect(batterOverall(AVG)).toBe(70);
+  });
+});
+
 describe('evoluzione eta/potenziale', () => {
   it('un giovane con alto potenziale migliora nel tempo', () => {
     const rng = makeRng(3);
@@ -150,10 +180,10 @@ describe('evoluzione eta/potenziale', () => {
 });
 
 describe('stipendio: curva base + sconto gioventu (youthFactor)', () => {
-  it('la curva base cresce con l\'overall, con pavimento 0.5 e tetto 45', () => {
+  it('la curva base cresce con l\'overall, con pavimento 0.5 e tetto 55', () => {
     expect(salaryFromOverall(40)).toBe(0.5); // pavimento (minimo di lega)
     expect(salaryFromOverall(100)).toBeGreaterThan(35); // stella molto pagata
-    expect(salaryFromOverall(100)).toBeLessThanOrEqual(45); // ma sotto il tetto
+    expect(salaryFromOverall(100)).toBeLessThanOrEqual(55); // ma sotto il tetto
     expect(salaryFromOverall(85)).toBeGreaterThan(salaryFromOverall(70));
     expect(salaryFromOverall(70)).toBeGreaterThan(salaryFromOverall(60));
   });

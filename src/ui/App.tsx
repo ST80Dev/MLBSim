@@ -5434,6 +5434,8 @@ const HISTORICAL_YEAR_BLURB: Record<number, string> = {
   1998: "L'estate dei fuoricampo: McGwire 70, Sosa 66. Arrivano Diamondbacks e Devil Rays, gli Yankees vincono 114 gare.",
   1999: "L'attacco da 1009 punti di Cleveland, il Pedro Martinez da 2.07/313K, e tutti gli altri.",
   2000: 'Offesa alle stelle e il Pedro Martinez da 1.74 di ERA: forse la miglior stagione da lanciatore dell\'epoca.',
+  2001: 'I 73 fuoricampo di Barry Bonds, i 372 K di Randy Johnson, l\'esordio di Ichiro da .350 e 242 valide.',
+  2003: 'Il breakout di Pujols (.359/43 HR), le 55/55 salvezze di Éric Gagné a 1.20 di ERA, Bonds ancora devastante.',
 };
 
 function StartScreen({
