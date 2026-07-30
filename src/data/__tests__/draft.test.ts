@@ -23,7 +23,7 @@ describe('generateDraftClass', () => {
     for (const b of c.batters) {
       expect(b.age).toBeGreaterThanOrEqual(18);
       expect(b.age).toBeLessThanOrEqual(22);
-      expect(b.potential).toBeGreaterThanOrEqual(batterOverall(b.ratings));
+      expect(b.potential).toBeGreaterThanOrEqual(batterOverall(b.ratings, b.position));
     }
     for (const p of c.pitchers) {
       expect(p.age).toBeGreaterThanOrEqual(18);

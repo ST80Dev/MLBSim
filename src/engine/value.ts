@@ -11,7 +11,7 @@ import { batterOverall, pitcherOverall } from './ratings';
 
 /** Overall 40-100 del giocatore, qualunque sia il ruolo. */
 export function overallOf(p: Batter | Pitcher): number {
-  return 'role' in p ? pitcherOverall(p.ratings) : batterOverall(p.ratings);
+  return 'role' in p ? pitcherOverall(p.ratings) : batterOverall(p.ratings, p.position);
 }
 
 /**

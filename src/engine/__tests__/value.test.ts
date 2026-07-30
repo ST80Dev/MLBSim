@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { playerValue, overallOf, upsideWeight, SALARY_WEIGHT } from '../value';
-import { deriveBatterStats, derivePitcherStats, salaryFor } from '../ratings';
+import { deriveBatterStats, derivePitcherStats, salaryFor, batterOverall } from '../ratings';
 import type { Batter, Pitcher, BatterRatings, PitcherRatings } from '../types';
 
-// Ratings a un livello dato: tutte le doti = `lvl` (l'overall coincide con `lvl`,
-// essendo una media pesata che somma a 1). Cosi' i test controllano l'overall.
+// Ratings a un livello dato: tutte le doti = `lvl`. Per il LANCIATORE l'overall
+// coincide con `lvl` (media pesata a somma 1); per il BATTITORE l'OVR è
+// valore-prodotto (non lineare), quindi i test lo confrontano con `batterOverall`.
 const batRatings = (lvl: number): BatterRatings => ({
   contact: lvl, power: lvl, eye: lvl, speed: lvl, fielding: lvl, arm: lvl,
 });
@@ -22,9 +23,10 @@ const mkPit = (lvl: number, age: number, pot = lvl, salary = salaryFor(lvl, age)
 });
 
 describe('overallOf', () => {
-  it('usa la formula giusta per battitore e lanciatore (doti costanti = overall)', () => {
-    expect(overallOf(mkBat(64, 27))).toBe(64);
-    expect(overallOf(mkPit(58, 27))).toBe(58);
+  it('usa la formula giusta per battitore e lanciatore', () => {
+    const bat = mkBat(64, 27);
+    expect(overallOf(bat)).toBe(batterOverall(bat.ratings, bat.position)); // instrada al battitore
+    expect(overallOf(mkPit(58, 27))).toBe(58); // lanciatore: media pesata, resta lineare
   });
 });
 

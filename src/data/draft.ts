@@ -52,7 +52,7 @@ function makeProspectBatter(rng: Rng, name: { full: string; first: string; last:
   const ratings = batRatingsAround(rng, level);
   const position = rng.pick(DRAFT_POSITIONS);
   const age = rng.int(DRAFT_AGE_MIN, DRAFT_AGE_MAX);
-  const ovr = batterOverall(ratings);
+  const ovr = batterOverall(ratings, position);
   return {
     id, name: name.full, firstName: name.first, lastName: name.last,
     bats: hand(rng), position, ratings, stats: deriveBatterStats(ratings),

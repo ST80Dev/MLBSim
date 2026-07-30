@@ -127,7 +127,7 @@ describe('cime di eccellenza (stile anni 90/00)', () => {
   });
 });
 
-describe('coda-gemma + OVR convesso (calibrazione "Fedele")', () => {
+describe('coda-gemma + OVR = valore prodotto (difesa per ruolo)', () => {
   // Il TETTO delle gemme si stira (power 100 -> ~60 HR, contact 100 -> pochi K,
   // media da .345) SENZA muovere la fascia media (il "battitore medio" sopra
   // resta sui numeri di lega: invariante di calibrazione).
@@ -143,8 +143,8 @@ describe('coda-gemma + OVR convesso (calibrazione "Fedele")', () => {
     expect(ba).toBeGreaterThan(0.32);
   });
 
-  // L'OVR premia la CONCENTRAZIONE, non la media: un mono-dominante (power+eye a
-  // 100) sfonda i 90 e batte un "bilanciato" con media pari o superiore.
+  // OVR = valore PRODOTTO: il mono-dominante (power+eye 100) sfonda i 90 perché la
+  // sua wOBA è elite, e batte un "bilanciato" con media dei tool pari o superiore.
   it('il mono-dominante (power+eye 100) supera 90 e batte il bilanciato', () => {
     const gem = batterOverall({ contact: 56, power: 100, eye: 100, speed: 83, fielding: 70, arm: 75 });
     const balanced = batterOverall({ contact: 84, power: 84, eye: 84, speed: 84, fielding: 84, arm: 84 });
@@ -152,8 +152,27 @@ describe('coda-gemma + OVR convesso (calibrazione "Fedele")', () => {
     expect(gem).toBeGreaterThan(balanced);
   });
 
-  it('il bonus-picco NON tocca la mediana (tutto-medio resta 70)', () => {
+  it('la mediana resta ferma (tutto-medio = 70)', () => {
     expect(batterOverall(AVG)).toBe(70);
+  });
+
+  // Lo specialista contact+speed (Ichiro) NON è un "giocatore medio": la sua
+  // produzione (media alta + basi rubate) lo valorizza, senza penalizzarlo per
+  // la poca potenza. Era il buco della vecchia media-pesata.
+  it('lo specialista contact+speed è ben sopra la media', () => {
+    const ichiroLike = batterOverall({ contact: 100, power: 53, eye: 47, speed: 100, fielding: 73, arm: 78 }, 'RF');
+    expect(ichiroLike).toBeGreaterThan(80);
+  });
+
+  // Difesa COERENTE col motore: lo stesso guanto vale di più dove la domanda
+  // difensiva è alta (SS) che in un angolo (1B) o al DH (che non difende).
+  it('la difesa conta per RUOLO: stesso guanto, SS > 1B > DH', () => {
+    const glove = { contact: 72, power: 72, eye: 72, speed: 72, fielding: 92, arm: 90 };
+    const ss = batterOverall(glove, 'SS');
+    const first = batterOverall(glove, '1B');
+    const dh = batterOverall(glove, 'DH');
+    expect(ss).toBeGreaterThan(first);
+    expect(first).toBeGreaterThan(dh);
   });
 });
 

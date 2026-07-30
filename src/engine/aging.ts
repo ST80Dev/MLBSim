@@ -99,7 +99,7 @@ function driftPotential(
  * (stagione proiettata), da alimentare quando esistera' l'offseason.
  */
 export function advanceSeasonBatter(b: Batter, rng: Rng, perf = 0): Batter {
-  const gap = b.potential - batterOverall(b.ratings);
+  const gap = b.potential - batterOverall(b.ratings, b.position);
   const tail = developmentTail(b.age + 1, rng);
   const d = (physical: boolean) => seasonDelta(b.age + 1, gap, physical, rng) + tail.shift;
   b.ratings = {
@@ -112,7 +112,7 @@ export function advanceSeasonBatter(b: Batter, rng: Rng, perf = 0): Batter {
   };
   b.age += 1;
   b.stats = deriveBatterStats(b.ratings);
-  const ovr = batterOverall(b.ratings);
+  const ovr = batterOverall(b.ratings, b.position);
   b.potential = driftPotential(b.potential, ovr, b.age, tail, perf);
   b.salary = salaryFor(ovr, b.age);
   if (b.age >= 40 || (b.age >= 34 && ovr < 34)) b.retired = true;

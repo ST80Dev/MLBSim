@@ -44,8 +44,19 @@ export function ratingFromMult(mult: number, perSigma: number): number {
 // poche PA) tornano verso la media, stagioni piene restano quasi intatte. Serve
 // a evitare che rate estremi su MICRO-campioni (un rilievo da 12 inning) diventino
 // rating da fuoriclasse — mentre gli elite a stagione piena non ne risentono.
-export const REGRESS_PRIOR_BAT = 250; // "PA di prior" per i battitori
-export const REGRESS_PRIOR_PIT = 250; // "BF di prior" per i lanciatori
+// Prior PIÙ BASSO (era 250): la regressione stringeva troppo verso la media, così
+// le STELLE a stagione piena uscivano schiacciate (una lega di soli ~72). Con 90 i
+// campioni ampi restano quasi intatti (l'asso spicca) mentre i micro-campioni sono
+// ancora ricondotti (niente rilievo-fluke da fuoriclasse). Solo import storico.
+export const REGRESS_PRIOR_BAT = 90; // "PA di prior" per i battitori
+export const REGRESS_PRIOR_PIT = 90; // "BF di prior" per i lanciatori
+
+// DIPS: il lanciatore controlla POCO i hit su palla in gioco (BABIP) — dipendono
+// da difesa dei compagni, park, fortuna. Il rating `movement` (dai hit non-HR) va
+// quindi compresso verso la lega di questa quota di controllo reale, PRIMA della
+// regressione per campione: così un asso in una squadra-colabrodo non è penalizzato
+// (K/BB/HR restano la sua verità) né un contact-pitcher in gran difesa è gonfiato.
+export const DIPS_HIT_CONTROL = 0.4;
 
 export function regressMult(mult: number, n: number, prior: number): number {
   const w = n / (n + prior);
@@ -150,7 +161,11 @@ export function ratingsFromPitcherStats(s: PitcherImportInput): PitcherRatings {
 
   const nonHrHits = Math.max(0, s.h - s.hr);
   const leagueNonHr = LEAGUE.single + LEAGUE.double + LEAGUE.triple;
-  const movement = ratingFromMult(reg(nonHrHits / bf / leagueNonHr), 0.9);
+  // DIPS: comprime lo scarto dei hit-in-gioco verso la lega (contesto ≠ talento),
+  // poi la normale regressione per campione.
+  const movMultRaw = nonHrHits / bf / leagueNonHr;
+  const movMultDips = 1 + (movMultRaw - 1) * DIPS_HIT_CONTROL;
+  const movement = ratingFromMult(reg(movMultDips), 0.9);
 
   // Resistenza: inverte deriveStamina per gli SP (24 + sigma*3 battitori/start).
   let stamina: number;

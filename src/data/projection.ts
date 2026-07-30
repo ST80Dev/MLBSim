@@ -361,7 +361,7 @@ export function projectBatterSeason(b: Batter, tier: BatTier, opts: ProjectOpts)
   const total = opts.total ?? SEASON_GAMES;
   const gp = clamp(opts.day, 0, total);
   const prof = batterProfile(opts.seed, b.id, opts.year);
-  const pa = seasonalPA(opts.seed, b.id, opts.year, tier, b.age, batterOverall(b.ratings), prof.paMult);
+  const pa = seasonalPA(opts.seed, b.id, opts.year, tier, b.age, batterOverall(b.ratings, b.position), prof.paMult);
   const full = batterFull(b, pa, prof);
   if (gp <= 0) return { g: 0, ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, double: 0, triple: 0, hr: 0, sb: 0, cs: 0 };
   const k = (salt: string) => keyNum(opts.seed, b.id, opts.year, salt);

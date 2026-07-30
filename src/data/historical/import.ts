@@ -12,6 +12,7 @@ import {
   salaryFor,
   projectPotential,
   clampRating,
+  RATING_AVG,
 } from '../../engine/ratings';
 import { splitName } from '../../engine/names';
 import { autoLineup } from '../../engine/lineup';
@@ -47,7 +48,7 @@ function pitcherBf(l: HistPitLine): number {
 }
 
 function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
-  const ratings = ratingsFromBatterStats({
+  const ratings = spreadBatter(ratingsFromBatterStats({
     pa: l.pa,
     h: l.h,
     double: l.double,
@@ -59,9 +60,9 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
     sb: l.sb,
     cs: l.cs,
     position: l.pos,
-  });
+  }));
   const stats = deriveBatterStats(ratings, l.pa);
-  const ovr = batterOverall(ratings);
+  const ovr = batterOverall(ratings, l.pos);
   const nm = splitName(l.name);
   return {
     id,
@@ -92,15 +93,44 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
 // ---------------------------------------------------------------------------
 const LG_ERA_BASE = 4.6; // baseline ERA dell'epoca "alta offesa" (~1999)
 const BOOST_MAX_PIT = 8; // punti-rating massimi del boost
+const PREVENT_SLOPE = 9; // punti-rating per 1.0 di ERA sotto/sopra l'epoca (contesto squadra)
 
-/** Bonus (punti overall) da carico di lavoro (IP) × prevenzione punti (ERA). */
+// ---------------------------------------------------------------------------
+// ESTENSIONE (stretch) delle code, solo import storico. Le rose reali hanno
+// talento aggregato simile → forza-squadra schiacciata (~72). Qui allunghiamo la
+// distribuzione dei rating attorno alla media di lega (70): i forti salgono, i
+// deboli scendono → più varianza tra le squadre (spread ~4 → ~8). EPOCA-SAFE:
+// stiro sia battitori sia lanciatori, e nel sim (Log5) gli estremi si cancellano
+// in aggregato — misurato: R/G resta ~5.5, non gonfia. La Resistenza NON si stira
+// (è durabilità/ruolo, non qualità). Vedi docs/players-and-ratings § stretch storico.
+// ---------------------------------------------------------------------------
+const HIST_SPREAD = 1.4;
+const spread = (v: number): number => clampRating(RATING_AVG + (v - RATING_AVG) * HIST_SPREAD);
+function spreadBatter(r: Batter['ratings']): Batter['ratings'] {
+  return {
+    contact: spread(r.contact), power: spread(r.power), eye: spread(r.eye),
+    speed: spread(r.speed), fielding: spread(r.fielding), arm: spread(r.arm),
+  };
+}
+function spreadPitcher(r: PitcherRatings): PitcherRatings {
+  return {
+    ...r,
+    stuff: spread(r.stuff), control: spread(r.control), movement: spread(r.movement),
+    groundball: spread(r.groundball), fielding: spread(r.fielding),
+  };
+}
+
+/** Bonus (punti overall) da carico di lavoro (IP) × qualità DE-CONTESTUALIZZATA.
+ *  Usa il FIP (13·HR + 3·(BB+HBP) − 2·K, peripherals) invece dell'ERA: un
+ *  workhorse con ottimi K/BB/HR prende il boost anche dietro una difesa scarsa
+ *  (l'ERA reale la assorbe la forza-squadra ibrida, non il rating individuale). */
 function pitcherQualityBonus(l: HistPitLine): number {
   const ip = l.outs / 3;
   if (ip <= 0) return 0;
-  const era = (l.er * 9) / ip;
+  const fip = (13 * l.hr + 3 * (l.bb + l.hbp) - 2 * l.so) / ip + 3.2;
   const workload = clamp((ip - 100) / 140, 0, 1); // 0 a 100 IP → 1 a 240 IP
-  const eraEdge = clamp((LG_ERA_BASE - era) / LG_ERA_BASE, -0.4, 0.5);
-  const factor = clamp(0.4 + eraEdge, 0, 1);
+  const fipEdge = clamp((LG_ERA_BASE - fip) / LG_ERA_BASE, -0.4, 0.5);
+  const factor = clamp(0.4 + fipEdge, 0, 1);
   return BOOST_MAX_PIT * workload * factor;
 }
 
@@ -129,7 +159,7 @@ function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
     role: l.role,
     gs: l.gs,
   });
-  const ratings = boostPitcher(raw, pitcherQualityBonus(l));
+  const ratings = spreadPitcher(boostPitcher(raw, pitcherQualityBonus(l)));
   const stats = derivePitcherStats(ratings, bf);
   const ovr = pitcherOverall(ratings);
   const nm = splitName(l.name);
@@ -199,6 +229,15 @@ export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
   const bullpen = mkPitchers(h.pitchers.filter((p) => p.role !== 'SP'), 'RP');
   const reservePitchers = mkPitchers(h.reservePitchers ?? [], 'PR');
 
+  // Contesto REALE: prevenzione-punti del team dall'ERA vera (difesa + park + staff,
+  // cioè l'edge dei team run-prevention che i peripherals dei singoli non colgono).
+  // Alimenta la forza-squadra IBRIDA senza toccare i rating individuali.
+  const allPit = [...h.pitchers, ...(h.reservePitchers ?? [])];
+  const teamOuts = allPit.reduce((a, p) => a + p.outs, 0);
+  const teamER = allPit.reduce((a, p) => a + p.er, 0);
+  const teamERA = teamOuts > 0 ? (teamER * 27) / teamOuts : LG_ERA_BASE;
+  const prevent = clampRating(70 + (LG_ERA_BASE - teamERA) * PREVENT_SLOPE);
+
   const team: Team = {
     id: f.id,
     name: f.name,
@@ -215,6 +254,7 @@ export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
     usesDH: true,
     reserveBatters,
     reservePitchers,
+    context: { prevent },
   };
 
   return { team, realBat, realPit };
