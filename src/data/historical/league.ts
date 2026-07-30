@@ -1,7 +1,10 @@
 import type { Team } from '../../engine/types';
 import { FRANCHISES } from '../franchises';
 import { importHistoricalTeam } from './import';
+import { SEASON_1997 } from './season1997';
+import { SEASON_1998 } from './season1998';
 import { SEASON_1999, type HistTeam } from './season1999';
+import { SEASON_2000 } from './season2000';
 
 // ---------------------------------------------------------------------------
 // Lega STORICA: le 30 rose reali di un'annata importate come squadre del motore,
@@ -13,10 +16,19 @@ import { SEASON_1999, type HistTeam } from './season1999';
 
 /** Annate storiche disponibili (dataset generati dalla pipeline Lahman). */
 export const HISTORICAL_SEASONS: Record<number, HistTeam[]> = {
+  1997: SEASON_1997,
+  1998: SEASON_1998,
   1999: SEASON_1999,
+  2000: SEASON_2000,
 };
 
-/** Anno di default della modalità storica (il primo dataset importato). */
+/** Anni giocabili in ordine crescente (per la scelta a inizio partita). Nota:
+ *  il 1997 è a 28 squadre (Arizona e Tampa Bay non esistevano ancora). */
+export const HISTORICAL_YEARS: number[] = Object.keys(HISTORICAL_SEASONS)
+  .map(Number)
+  .sort((a, b) => a - b);
+
+/** Anno di default della modalità storica (annata "vetrina" ad alta offesa). */
 export const DEFAULT_HISTORICAL_YEAR = 1999;
 
 /**
