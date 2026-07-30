@@ -137,6 +137,15 @@ export interface Team {
    */
   reserveBatters: Batter[];
   reservePitchers: Pitcher[];
+  /**
+   * Contesto REALE della stagione (solo import storico; assente nella lega
+   * generata). Serve alla forza-squadra "ibrida": gli individui restano rated dai
+   * peripherals (abilità controllabile), ma la SQUADRA assorbe la prevenzione-punti
+   * reale — così un team run-prevention (difesa+park, es. gli A's del dinasty) legge
+   * forte senza gonfiare i singoli lanciatori. `prevent` è un rating 40-100 dalla
+   * ERA vera del team vs epoca. Vedi engine/strength.ts § forza ibrida.
+   */
+  context?: { prevent: number };
 }
 
 // ---------------------------------------------------------------------------
