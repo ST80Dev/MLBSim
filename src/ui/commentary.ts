@@ -358,6 +358,7 @@ const META: Record<
   ibb: { tier: 1, icon: '🅱️', label: 'BASE INTENZ.', accent: 'offense' },
   sacbunt: { tier: 1, icon: '🥎', label: 'SACRIFICIO', accent: 'offense' },
   buntout: { tier: 1, icon: '✖', label: 'ELIMINATO', accent: 'defense' },
+  error: { tier: 2, icon: '🧤', label: 'ERRORE', accent: 'offense' },
   inplayout: { tier: 1, icon: '✖', label: 'ELIMINATO', accent: 'defense' },
   sub: { tier: 0, icon: '🔁', label: 'CAMBIO', accent: 'offense' },
   other: { tier: 0, icon: '•', label: 'AZIONE', accent: 'offense' },

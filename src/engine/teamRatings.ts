@@ -28,9 +28,34 @@ const DEF_WEIGHT: Record<Position, number> = {
   SS: 9, CF: 8, C: 8, '2B': 6, '3B': 5, RF: 3, LF: 2, '1B': 1, DH: 0, P: 0,
 };
 
+/** Reparti difensivi: interni (rimbalzi) vs esterni (palle in aria/extrabase). */
+export const INFIELD_POS: Position[] = ['C', '1B', '2B', '3B', 'SS'];
+export const OUTFIELD_POS: Position[] = ['LF', 'CF', 'RF'];
+
 /** Difesa di un singolo alla sua casella: fielding (effettivo) + braccio. */
 function defenseAt(b: Batter, pos: Position): number {
   return clampRating(0.75 * fieldingAtPosition(b, pos) + 0.25 * b.ratings.arm);
+}
+
+/**
+ * Sintesi difensiva (40-100) del solo reparto indicato (interni o esterni),
+ * pesata per la domanda difensiva del ruolo. Serve a far contare i **fielder
+ * coinvolti** nella giocata (un rimbalzo chiama gli interni, una palla in aria
+ * gli esterni). Se il reparto è vuoto ritorna la media di lega (no-op).
+ */
+export function groupDefenseSynthesis(
+  entries: Array<{ b: Batter; pos: Position }>,
+  group: Position[],
+): number {
+  let num = 0;
+  let den = 0;
+  for (const { b, pos } of entries) {
+    if (!b || !group.includes(pos)) continue;
+    const w = DEF_WEIGHT[pos] ?? 0;
+    num += w * defenseAt(b, pos);
+    den += w;
+  }
+  return den ? clampRating(num / den) : RATING_AVG;
 }
 
 export interface TeamSynth {

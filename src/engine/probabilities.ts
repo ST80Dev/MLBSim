@@ -62,6 +62,12 @@ export interface MatchupContext {
    * solo le palle in gioco: mai HR/BB/HBP/SO. Vedi `TUNING.defense`.
    */
   fieldingSigma?: number;
+  /**
+   * Difesa ESTERNA in sigma: `(ofRating - neutral) / 10`. >0 = esterni con range
+   * sopra la media → soppressione AGGIUNTIVA di doppi/tripli (oltre a quella
+   * uniforme di `fieldingSigma`). Assente/0 = neutro. Vedi `TUNING.extraBaseDefense`.
+   */
+  outfieldSigma?: number;
 }
 
 /**
@@ -127,6 +133,20 @@ export function combineRates(
     out.single *= f;
     out.double *= f;
     out.triple *= f;
+    out.outInPlay = clamp(out.outInPlay + delta, 0.01, 1);
+  }
+
+  // Soppressione EXTRABASE degli esterni (layer differenziale, neutro = no-op):
+  // gli esterni con range tolgono doppi/tripli oltre il modello base. La massa
+  // sottratta va sugli out su palla in gioco (somma conservata; TTO intatti).
+  const of = ctx.outfieldSigma ?? 0;
+  if (of !== 0) {
+    const X = TUNING.extraBaseDefense;
+    const g = clamp(1 - of * X.perSigma, X.min, X.max);
+    const xbHits = out.double + out.triple;
+    const delta = xbHits * (1 - g); // >0 con buoni esterni: extrabase -> out
+    out.double *= g;
+    out.triple *= g;
     out.outInPlay = clamp(out.outInPlay + delta, 0.01, 1);
   }
   return out;

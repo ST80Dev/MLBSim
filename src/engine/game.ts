@@ -4,7 +4,7 @@ import { makeRng, clamp } from './rng';
 import { resolveAtBat } from './atbat';
 import { TUNING } from './constants';
 import { RATING_AVG } from './ratings';
-import { teamSynthesis } from './teamRatings';
+import { teamSynthesis, groupDefenseSynthesis, INFIELD_POS, OUTFIELD_POS } from './teamRatings';
 import {
   BattingLine,
   PitchingLine,
@@ -18,6 +18,8 @@ export type Half = 'top' | 'bottom';
 export interface Runner {
   batter: Batter;
   pitcherId: string;
+  /** Raggiunta la base per un errore difensivo: se segna, il punto è unearned. */
+  reachedViaError?: boolean;
 }
 
 /**
@@ -45,6 +47,7 @@ export type PlayKind =
   | 'wildpitch'
   | 'passedball'
   | 'balk'
+  | 'error'
   | 'sub'
   | 'other';
 
@@ -110,6 +113,8 @@ interface SideState {
   battersFacedByCurrent: number;
   runs: number;
   hits: number;
+  /** Errori difensivi commessi da questa squadra quando era in difesa (box: E). */
+  errors: number;
   lineByInning: number[];
 }
 
@@ -136,6 +141,7 @@ function makeSide(team: Team): SideState {
     battersFacedByCurrent: 0,
     runs: 0,
     hits: 0,
+    errors: 0,
     lineByInning: [],
   };
 }
@@ -169,6 +175,13 @@ export interface LiveGame {
   controlled: 'away' | 'home';
   /** Difesa avanzata "interni dentro" per il turno corrente (tattica difensiva). */
   infieldIn: boolean;
+  /**
+   * Out "cancellati" da errori difensivi in questo mezzo-inning: un errore che
+   * evita un out lo incrementa. Serve al conteggio delle corse *unearned* (le
+   * corse che segnano quando l'inning, senza l'errore, sarebbe già finito).
+   * Azzerato a ogni cambio di mezzo-inning.
+   */
+  errorOutsThisInning: number;
   /** Difesa "interni a doppio gioco" per il turno corrente (mutuam. escl. con infieldIn). */
   dpDepth: boolean;
   /** Difesa anti-extrabase ("difendi le righe") per il turno corrente. */
@@ -210,6 +223,7 @@ export function createLiveGame(
     status: 'live',
     finalInning: 1,
     controlled,
+    errorOutsThisInning: 0,
     infieldIn: false,
     dpDepth: false,
     noDoubles: false,
@@ -241,6 +255,30 @@ function fieldingSigma(def: SideState): number {
   return (teamSynthesis(entries).def - TUNING.defense.neutral) / 10;
 }
 
+/**
+ * Sigma difensiva del reparto INTERNI (rimbalzi: doppi giochi + errori da terra)
+ * rispetto alla media di lega. >0 = interni sopra la media.
+ */
+function infieldSigma(def: SideState): number {
+  const entries = def.team.lineup.map((b) => ({ b, pos: b.position }));
+  return (groupDefenseSynthesis(entries, INFIELD_POS) - TUNING.dpRange.neutral) / 10;
+}
+
+/**
+ * Sigma difensiva del reparto ESTERNI (palle in aria: soppressione extrabase +
+ * errori in aria) rispetto alla media di lega. >0 = esterni sopra la media.
+ */
+function outfieldSigma(def: SideState): number {
+  const entries = def.team.lineup.map((b) => ({ b, pos: b.position }));
+  return (groupDefenseSynthesis(entries, OUTFIELD_POS) - TUNING.extraBaseDefense.neutral) / 10;
+}
+
+/** Fascio difensivo passato al resolver degli out (errori + conversione DP). */
+interface DefSig {
+  infield: number;
+  outfield: number;
+}
+
 function ensureInningSlot(s: SideState, inning: number): void {
   while (s.lineByInning.length < inning) s.lineByInning.push(0);
 }
@@ -259,7 +297,12 @@ function makeScoreRunner(
     const pl = def.pitchingLines.get(r.pitcherId);
     if (pl) {
       pl.r += 1;
-      pl.er += 1; // nessun errore in Fase 0/1 -> tutte earned
+      // Corsa *earned* salvo che: (a) il corridore ha raggiunto la base per un
+      // errore, oppure (b) l'inning, senza gli out cancellati da errori, sarebbe
+      // già finito (le corse dopo il "terzo out mancato" sono unearned).
+      // Approssimazione da simulatore dell'omonima regola ufficiale MLB.
+      const earned = !r.reachedViaError && l.outs + l.errorOutsThisInning < 3;
+      if (earned) pl.er += 1;
     }
   };
 }
@@ -289,7 +332,7 @@ function pushPlay(
 
 /** Costruisce l'OutInfo per la UI dall'esito grezzo (solo per gli out in gioco). */
 function outInfoFrom(res: EventResult): OutInfo | undefined {
-  if (res.hit || !res.ball) return undefined;
+  if (res.hit || res.error || !res.ball) return undefined; // hit/errore non sono out
   return {
     ball: res.ball,
     advanced: !!res.advanced,
@@ -332,12 +375,15 @@ function swingAtBat(l: LiveGame): void {
   pLine.bf += 1;
   const bLine = off.battingLines.get(batter.id)!;
 
+  const defSig: DefSig = { infield: infieldSigma(def), outfield: outfieldSigma(def) };
+
   const { event: rawEvent } = resolveAtBat(
     batter,
     pitcher,
     def.battersFacedByCurrent,
     l.rng,
     fieldingSigma(def),
+    defSig.outfield,
   );
 
   // Difesa anti-extrabase ("difendi le righe"): parte dei doppi/tripli diventa
@@ -365,9 +411,15 @@ function swingAtBat(l: LiveGame): void {
     pLine,
     l.infieldIn,
     l.dpDepth,
+    false, // seekFly
+    defSig,
   );
   l.outs += res.outsAdded;
   if (res.hit) off.hits += 1;
+  if (res.error) {
+    def.errors += 1; // errore addebitato alla squadra in difesa (box: E)
+    l.errorOutsThisInning += 1; // out "mancato": serve al conteggio unearned
+  }
   const runsScored = off.runs - runsBefore;
 
   pushPlay(
@@ -1255,6 +1307,7 @@ function endHalf(l: LiveGame): void {
     }
     l.half = 'bottom';
     l.outs = 0;
+    l.errorOutsThisInning = 0;
     l.bases = [null, null, null];
     l.infieldIn = false;
     l.dpDepth = false;
@@ -1272,6 +1325,7 @@ function endHalf(l: LiveGame): void {
     }
     l.half = 'top';
     l.outs = 0;
+    l.errorOutsThisInning = 0;
     l.bases = [null, null, null];
     l.infieldIn = false;
     l.dpDepth = false;
@@ -1455,6 +1509,8 @@ interface EventResult {
   /** Tipo di battuta e avanzamenti (per gli out su palla in gioco). */
   ball?: BallType;
   advanced?: boolean;
+  /** L'out è saltato per un errore difensivo (reached-on-error). */
+  error?: boolean;
 }
 
 /**
@@ -1478,6 +1534,7 @@ function classifyEvent(event: RawEvent, res: EventResult): PlayKind {
     case '1B':
       return 'single';
     case 'IPO':
+      if (res.error) return 'error';
       if (res.hit) return 'single'; // singolo che passa gli interni
       if (res.detail === 'gidp') return 'gidp';
       if (res.detail === 'sacfly') return 'sacfly';
@@ -1498,6 +1555,7 @@ function applyEvent(
   infieldIn = false,
   dpDepth = false,
   seekFly = false,
+  defSig?: DefSig,
 ): EventResult {
   const runner: Runner = { batter, pitcherId };
 
@@ -1616,7 +1674,7 @@ function applyEvent(
       return { outsAdded: 0, hit: true };
     }
     case 'IPO':
-      return resolveInPlayOut(runner, bases, outsBefore, rng, scoreRunner, bLine, pLine, infieldIn, dpDepth, seekFly);
+      return resolveInPlayOut(runner, bases, outsBefore, rng, scoreRunner, bLine, pLine, infieldIn, dpDepth, seekFly, defSig);
   }
 }
 
@@ -1639,6 +1697,7 @@ export function resolveInPlayOut(
   infieldIn: boolean,
   dpDepth = false,
   seekFly = false,
+  defSig?: DefSig,
 ): EventResult {
   bLine.ab += 1;
   const canAct = outsBefore < 2; // avanzamenti/DP/SF solo con meno di 2 out
@@ -1701,6 +1760,35 @@ export function resolveInPlayOut(
   const ground = rng.chance(O.groundShare);
   const ball: BallType = ground ? 'ground' : rng.chance(O.popupShareOfAir) ? 'popup' : 'fly';
 
+  // ERRORE difensivo: il fielder coinvolto (interni sul rimbalzo, esterni in aria)
+  // può sbagliare la giocata. Guidato dal fielding del reparto (difesa scarsa =
+  // più errori). Consuma RNG solo quando `defSig` è fornito (dal turno swing, cioè
+  // dal quick-sim e dal gioco normale): i test che chiamano `resolveInPlayOut`
+  // senza `defSig` non lo tirano, restando invariati. Il battitore raggiunge la
+  // prima, i corridori avanzano di una, l'eventuale punto è unearned.
+  if (defSig) {
+    const E = TUNING.errors;
+    const sig = ball === 'ground' ? defSig.infield : defSig.outfield;
+    const pErr = clamp(E.base - sig * E.perSigma, E.min, E.max);
+    if (rng.chance(pErr)) {
+      if (bases[2]) {
+        // Il punto segnato SULL'errore è unearned: lo marchiamo come tale.
+        scoreRunner({ ...bases[2], reachedViaError: true });
+        bases[2] = null;
+      }
+      if (bases[1]) {
+        bases[2] = bases[1];
+        bases[1] = null;
+      }
+      if (bases[0]) {
+        bases[1] = bases[0];
+        bases[0] = null;
+      }
+      bases[0] = { ...runner, reachedViaError: true };
+      return { outsAdded: 0, hit: false, error: true, ball, advanced: true };
+    }
+  }
+
   if (ball === 'ground') {
     // Interni a doppio gioco (flag interattivo): col corridore in 1ª (<2 out) la
     // difesa e' schierata per il DP -> piu' conversione, ma qualche rimbalzo passa
@@ -1727,8 +1815,14 @@ export function resolveInPlayOut(
       bLine.rbi += rbi;
       return { outsAdded: 0, hit: true, detail: 'dphole', ball: 'ground', advanced: true };
     }
-    // Doppio gioco: corridore in 1ª, <2 out. Prob. boostata se interni a DP.
-    const gidp = dpDepth ? TUNING.gidpProb + TUNING.dpDepth.gidpBonus : TUNING.gidpProb;
+    // Doppio gioco: corridore in 1ª, <2 out. Prob. boostata se interni a DP
+    // (tattica) e modulata dal RANGE degli interni schierati (layer per-fielder:
+    // interni migliori convertono più DP, peggiori meno; neutro = no-op).
+    let gidp = dpDepth ? TUNING.gidpProb + TUNING.dpDepth.gidpBonus : TUNING.gidpProb;
+    if (defSig) {
+      const R = TUNING.dpRange;
+      gidp += clamp(defSig.infield * R.perSigma, -R.maxBonus, R.maxBonus);
+    }
     if (bases[0] && canAct && rng.chance(gidp)) {
       bases[0] = null;
       pLine.outs += 2;
@@ -1820,6 +1914,7 @@ function describe(event: RawEvent, batter: Batter, runs: number, res?: EventResu
     case '1B':
       return `${name} singolo${rr}`;
     case 'IPO': {
+      if (res?.error) return `${name} raggiunge la prima su errore${rr}`;
       if (res?.detail === 'gidp') return `${name} in doppio gioco`;
       if (res?.detail === 'infieldhit' || res?.detail === 'dphole')
         return `${name} singolo che passa gli interni${rr}`;
@@ -1848,7 +1943,7 @@ function buildTeamStats(side: SideState): TeamGameStats {
   return {
     runs: side.runs,
     hits: side.hits,
-    errors: 0,
+    errors: side.errors,
     lineByInning: side.lineByInning.slice(),
     batting: side.battingOrder.map((id) => ({ ...side.battingLines.get(id)! })),
     pitching: side.pitchersUsed.map((p) => ({ ...side.pitchingLines.get(p.id)! })),

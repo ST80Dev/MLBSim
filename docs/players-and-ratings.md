@@ -177,8 +177,8 @@ Criterio: **ognuna governa UNA sola leva** del motore (zero ridondanza).
 | **Potenza** | extrabase e fuoricampo | la parte "SLG" |
 | **Occhio** | basi ball (↑ OBP, lieve ↓ strikeout) | la parte "OBP" |
 | **Velocità** | rubate, tripli, basi extra in corsa | rubate e bunt attivi (Fase 1) |
-| **Difesa** | palle in gioco → out, errori | (difesa sul campo: Fase 4) |
-| **Braccio** | eliminare ladri di base (ricevitore), assist esterni | attivo sulle rubate (Fase 1) |
+| **Difesa** (fielding) | palle in gioco → out, doppi giochi, **errori** (reached-on-error) | **attiva**: pesata per reparto (interni sui rimbalzi, esterni sugli extrabase); vedi `engine-calibration.md` |
+| **Braccio** | eliminare ladri di base (ricevitore), assist esterni | attivo sulle rubate (Fase 1) e nella sintesi difensiva per reparto |
 
 ## Caratteristiche del lanciatore (6) — `PitcherRatings`
 

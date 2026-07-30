@@ -27,6 +27,7 @@ export function resolveAtBat(
   battersFaced: number,
   rng: Rng,
   fieldingSigma = 0,
+  outfieldSigma = 0,
 ): { event: RawEvent; rates: PaRates } {
   const adv = platoonAdvantage(batter, pitcher);
   const rates = combineRates(batterRates(batter.stats), pitcherRates(pitcher.stats), {
@@ -34,6 +35,7 @@ export function resolveAtBat(
     platoonDisadvantage: batter.bats !== 'S' && !adv,
     fatigue: clamp(fatigueFactor(pitcher, battersFaced), 1, 2.2),
     fieldingSigma,
+    outfieldSigma,
   });
 
   const roll = rng.next();
