@@ -153,9 +153,9 @@ describe('SEASON_1999 (dataset Lahman, 30 squadre)', () => {
   });
 });
 
-describe('Annate storiche multiple (1997/1998/1999/2000)', () => {
+describe('Annate storiche multiple (1997/1998/1999/2000/2001/2003)', () => {
   it('espone gli anni giocabili in ordine crescente', () => {
-    expect(HISTORICAL_YEARS).toEqual([1997, 1998, 1999, 2000]);
+    expect(HISTORICAL_YEARS).toEqual([1997, 1998, 1999, 2000, 2001, 2003]);
   });
 
   // Conteggi reali: dal 1998 la MLB ha 30 squadre; il 1997 ne aveva 28
@@ -165,6 +165,8 @@ describe('Annate storiche multiple (1997/1998/1999/2000)', () => {
     [1998, 30],
     [1999, 30],
     [2000, 30],
+    [2001, 30],
+    [2003, 30],
   ])('la stagione %i copre %i franchigie distinte', (year, count) => {
     const dataset = HISTORICAL_SEASONS[year];
     expect(dataset).toHaveLength(count);

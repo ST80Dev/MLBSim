@@ -5,6 +5,8 @@ import { SEASON_1997 } from './season1997';
 import { SEASON_1998 } from './season1998';
 import { SEASON_1999, type HistTeam } from './season1999';
 import { SEASON_2000 } from './season2000';
+import { SEASON_2001 } from './season2001';
+import { SEASON_2003 } from './season2003';
 
 // ---------------------------------------------------------------------------
 // Lega STORICA: le 30 rose reali di un'annata importate come squadre del motore,
@@ -20,6 +22,8 @@ export const HISTORICAL_SEASONS: Record<number, HistTeam[]> = {
   1998: SEASON_1998,
   1999: SEASON_1999,
   2000: SEASON_2000,
+  2001: SEASON_2001,
+  2003: SEASON_2003,
 };
 
 /** Anni giocabili in ordine crescente (per la scelta a inizio partita). Nota:
