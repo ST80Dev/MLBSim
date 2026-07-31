@@ -6,9 +6,12 @@ import { divisionRivals } from './league';
 // giornate di regular season + le date (potenziali) di playoff. E' uno
 // SCAFFOLD deterministico dal seed: la distribuzione degli avversari e'
 // plausibile (piu' partite contro i rivali di division, poi resto lega, un po'
-// di interlega) ma NON ancora fedele alle regole ufficiali MLB. La generazione
-// col calendario reale (conteggi esatti per division/interlega) arrivera' con
-// il motore di stagione. Puro: nessuna dipendenza da UI o rete.
+// di interlega) ma NON ancora fedele ai conteggi esatti delle regole ufficiali.
+// La regular season e' organizzata a SERIE come nella realta': 2-4 gare
+// CONSECUTIVE (~3) contro lo stesso avversario, stessa sede per l'intera serie;
+// nella serie l'avversario ruota i partenti (giorni consecutivi -> il partente
+// AI cambia, vedi `withRotationStarter`/`rotationPhase`). Puro: nessuna
+// dipendenza da UI o rete.
 
 export type SchedulePhase = 'preseason' | 'regular' | 'playoff';
 
@@ -102,6 +105,65 @@ function shuffle<T>(arr: T[], rng: ReturnType<typeof makeRng>): T[] {
 }
 
 /**
+ * Spezza `count` gare contro lo stesso avversario in SERIE consecutive di 2-4
+ * gare (prevalenza 3), come la MLB reale. Non lascia mai una serie da 1 (se non
+ * quando `count` stesso è 1). La somma delle lunghezze è esattamente `count`.
+ */
+function splitIntoSeries(count: number, rng: ReturnType<typeof makeRng>): number[] {
+  const lens: number[] = [];
+  const CHOICES = [3, 3, 3, 2, 4]; // prevalenza 3, qualche 2 e 4
+  let rem = count;
+  while (rem > 4) {
+    let len = CHOICES[rng.int(0, CHOICES.length - 1)];
+    if (rem - len === 1) len = 2; // evita di lasciare una serie da 1 gara
+    lens.push(len);
+    rem -= len;
+  }
+  if (rem > 0) lens.push(rem); // ultima serie: 1-4 (di norma 2-4)
+  return lens;
+}
+
+interface Series {
+  opp: string;
+  len: number;
+  home: boolean;
+}
+
+/**
+ * Dal pool pesato di 162 avversari costruisce le SERIE della stagione: raggruppa
+ * le gare di ciascun avversario in serie consecutive (2-4, ~3), assegnando a
+ * ognuna una sede unica (casa/trasferta alternata per bilanciare), poi mescola
+ * l'ordine delle serie evitando due serie di fila contro lo stesso avversario.
+ */
+function buildSeries(managedId: string, teams: Team[], rng: ReturnType<typeof makeRng>): Series[] {
+  const counts = new Map<string, number>();
+  for (const id of regularOpponentPool(managedId, teams)) {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+
+  const series: Series[] = [];
+  for (const [opp, count] of counts) {
+    const startHome = rng.int(0, 1) === 0;
+    splitIntoSeries(count, rng).forEach((len, i) => {
+      series.push({ opp, len, home: startHome !== (i % 2 === 1) }); // sede alternata per serie
+    });
+  }
+
+  shuffle(series, rng);
+  // De-cluster: nessuna coppia di serie consecutive contro lo stesso avversario.
+  for (let i = 1; i < series.length; i++) {
+    if (series[i].opp !== series[i - 1].opp) continue;
+    for (let j = i + 1; j < series.length; j++) {
+      if (series[j].opp !== series[i - 1].opp) {
+        [series[i], series[j]] = [series[j], series[i]];
+        break;
+      }
+    }
+  }
+  return series;
+}
+
+/**
  * Genera il calendario della squadra gestita, deterministico dal seed della
  * lega e dall'id squadra. Alterna (in modo pseudo-casuale ma stabile) casa e
  * trasferta.
@@ -109,14 +171,17 @@ function shuffle<T>(arr: T[], rng: ReturnType<typeof makeRng>): T[] {
 export function generateSchedule(seed: number, managedId: string, teams: Team[]): Schedule {
   const rng = makeRng((seed ^ hashStr(managedId)) >>> 0);
 
-  const regularOpps = shuffle(regularOpponentPool(managedId, teams), rng);
-  const regular: ScheduleGame[] = regularOpps.map((opponentId, i) => ({
-    id: `reg-${i + 1}`,
-    phase: 'regular',
-    day: i + 1,
-    opponentId,
-    home: rng.int(0, 1) === 0,
-  }));
+  // Regular season a SERIE: 2-4 gare consecutive (~3) contro lo stesso avversario,
+  // stessa sede per l'intera serie. Nella serie l'avversario ruota i partenti
+  // (giorni consecutivi -> `withRotationStarter` avanza), come nella realtà.
+  const regular: ScheduleGame[] = [];
+  let dayNo = 0;
+  for (const s of buildSeries(managedId, teams, rng)) {
+    for (let g = 0; g < s.len; g++) {
+      dayNo += 1;
+      regular.push({ id: `reg-${dayNo}`, phase: 'regular', day: dayNo, opponentId: s.opp, home: s.home });
+    }
+  }
 
   // Prestagione: 10 avversari sparsi (mix), casa/trasferta pseudo-casuale.
   const others = teams.filter((t) => t.id !== managedId).map((t) => t.id);

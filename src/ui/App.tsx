@@ -81,7 +81,7 @@ import {
 import type { SeasonState, SeasonBat, SeasonPit, WLRecord } from '../data/season';
 import { suggestedStarter, withStarterId, restInfo } from '../data/rotation';
 import type { RotationState } from '../data/rotation';
-import { withRotationStarter, potentialRole } from '../data/generator';
+import { withRotationStarter, rotationPhase, potentialRole } from '../data/generator';
 import {
   seedPlayoffs,
   recordManagedGame,
@@ -303,9 +303,12 @@ export function App() {
         : base.rotation[0]?.id;
     const applied = starterId ? withStarterId(base, starterId) : base;
     // L'avversario ruota anch'esso il partente. Nei playoff col n° di gara nella
-    // serie (asso in Gara 1), in regular col giorno di stagione.
+    // serie (asso in Gara 1), in regular col giorno di stagione + lo sfasamento
+    // proprio della squadra (`rotationPhase`): ogni squadra AI cicla i suoi 5
+    // partenti in modo indipendente, così in una serie ne affronti 3 diversi.
     const oppDay = isRegularGame ? season.day : isPlayoffGame ? playoffCtx?.gameNo ?? 0 : activeGame?.day ?? 0;
-    const opp = withRotationStarter(opponent, oppDay);
+    const oppPhase = isRegularGame ? rotationPhase(opponent) : 0;
+    const opp = withRotationStarter(opponent, oppDay + oppPhase);
     return controlled === 'home'
       ? { away: opp, home: applied }
       : { away: applied, home: opp };
