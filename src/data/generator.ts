@@ -644,6 +644,22 @@ export function withRotationStarter(team: Team, n: number): Team {
   return { ...team, rotation: [...team.rotation.slice(k), ...team.rotation.slice(0, k)] };
 }
 
+/**
+ * Sfasamento di rotazione STABILE per squadra (0..len-1), da hash dell'id: due
+ * squadre diverse sono a punti diversi del loro ciclo di partenti, così ognuna
+ * ha la SUA rotazione (non sono tutte sincronizzate sullo stesso giorno). Da
+ * sommare a `n` in `withRotationStarter`. Vedi l'uso in App (avversario in gara).
+ */
+export function rotationPhase(team: Team): number {
+  const len = team.rotation.length || 1;
+  let h = 2166136261;
+  for (let i = 0; i < team.id.length; i++) {
+    h ^= team.id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % len;
+}
+
 /** Genera due franchigie reali distinte con rosa procedurale, dal seed. */
 export function generateMatchup(seed: number): { away: Team; home: Team } {
   const rng = makeRng(seed);

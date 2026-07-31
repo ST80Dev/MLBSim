@@ -151,8 +151,13 @@
     sopra la foto stadio + **micro-eventi** partita (lancio pazzo / palla passata
     / balk) — vedi `src/ui/commentary.ts` e `docs/engine-calibration.md`.
 - **Fase 4 — Stagione** *(gran parte anticipata in Fase 2)*
-  - **FATTO:** **calendario** (10 prestagione + 162 regular + slot playoff,
-    `data/schedule.ts`); **stagione a stati** (`data/season.ts`) che accumula i
+  - **FATTO:** **calendario a SERIE** (10 prestagione + 162 regular + slot playoff,
+    `data/schedule.ts`): la regular season è organizzata in **serie di 2-4 gare
+    consecutive (~3)** contro lo stesso avversario, stessa sede per l'intera serie
+    — e nella serie l'**avversario AI ruota i partenti** giorno per giorno
+    (`withRotationStarter` + sfasamento per-squadra `rotationPhase`: ogni squadra
+    cicla i suoi 5 SP in modo indipendente); **stagione a stati** (`data/season.ts`)
+    che accumula i
     box score **reali** di entrambe le squadre nelle mie partite e **quick-sima**
     il resto della lega per classifiche reali; pagina **Classifiche** (record di
     division reali) e pagina **Leaderboard** (Batting/Pitching: numeri reali per
