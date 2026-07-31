@@ -87,3 +87,47 @@ describe('Auto-manager: uso dei rilievi coerente con la situazione', () => {
     expect(homePitcher(l).role).not.toBe('CL');
   });
 });
+
+// --------------------------------------------------------------------------
+describe('Hook precoce: partente in emorragia prima del 5°', () => {
+  it('sotto di 4 al 3° (partente NON affaticato): entra un rilievo lungo', () => {
+    const l = createLiveGame(histTeam(['SEA']), histTeam(['LAA', 'ANA']), 5);
+    l.inning = 3;
+    l.half = 'top'; // casa in difesa
+    l.homeSide.runs = 1;
+    l.awaySide.runs = 5; // sotto di 4
+    l.homeSide.battersFacedByCurrent = 4; // NON affaticato
+    const startWasSP = homePitcher(l).role === 'SP';
+    const maxSta = Math.max(
+      ...l.homeSide.pitchers.slice(1).filter((p) => p.role !== 'CL').map((p) => p.stamina),
+    );
+    autoManageDefense(l);
+    const now = homePitcher(l);
+    expect(startWasSP).toBe(true);
+    expect(now.role).not.toBe('SP'); // il partente è stato tolto
+    expect(now.role).not.toBe('CL'); // non il closer
+    expect(now.stamina).toBe(maxSta); // il rilievo più lungo (massima resistenza)
+  });
+
+  it('sotto di solo 3: il partente resta (soglia = 4)', () => {
+    const l = createLiveGame(histTeam(['SEA']), histTeam(['LAA', 'ANA']), 6);
+    l.inning = 3;
+    l.half = 'top';
+    l.homeSide.runs = 1;
+    l.awaySide.runs = 4; // sotto di 3: sotto soglia
+    l.homeSide.battersFacedByCurrent = 4;
+    autoManageDefense(l);
+    expect(homePitcher(l).role).toBe('SP'); // resta il partente
+  });
+
+  it('sotto di 5 ma già al 5°: l’hook precoce non scatta (solo prima del 5°)', () => {
+    const l = createLiveGame(histTeam(['SEA']), histTeam(['LAA', 'ANA']), 7);
+    l.inning = 5;
+    l.half = 'top';
+    l.homeSide.runs = 1;
+    l.awaySide.runs = 6; // sotto di 5, ma inning 5
+    l.homeSide.battersFacedByCurrent = 4; // e non affaticato
+    autoManageDefense(l);
+    expect(homePitcher(l).role).toBe('SP'); // niente hook: resta
+  });
+});
