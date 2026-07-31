@@ -16,7 +16,7 @@ export const FREE_AGENT_BATTERS_2004: HistBatLine[] = [
   { id: 'dobbsgr01', name: 'Greg Dobbs', pos: '3B', bats: 'L', age: 25, pa: 56, h: 12, double: 1, triple: 0, hr: 1, bb: 1, so: 14, hbp: 1, sb: 0, cs: 0 },
   { id: 'kroegjo01', name: 'Josh Kroeger', pos: 'LF', bats: 'L', age: 21, pa: 55, h: 9, double: 3, triple: 0, hr: 0, bb: 1, so: 21, hbp: 0, sb: 0, cs: 1 },
   { id: 'diazvi01', name: 'Victor Diaz', pos: 'RF', bats: 'R', age: 22, pa: 53, h: 15, double: 3, triple: 0, hr: 3, bb: 1, so: 15, hbp: 1, sb: 0, cs: 0 },
-  { id: 'gettiby01', name: 'Byron Gettis', pos: 'LF', bats: 'R', age: 24, pa: 49, h: 7, double: 1, triple: 1, hr: 0, bb: 8, so: 14, hbp: 1, sb: 0, cs: 1, fld: 77, arm: 86 },
+  { id: 'gettiby01', name: 'Byron Gettis', pos: 'LF', bats: 'R', age: 24, pa: 49, h: 7, double: 1, triple: 1, hr: 0, bb: 8, so: 14, hbp: 1, sb: 0, cs: 1, sec: 'RF', fld: 77, arm: 86 },
   { id: 'tiffete01', name: 'Terry Tiffee', pos: '3B', bats: 'S', age: 25, pa: 48, h: 12, double: 4, triple: 0, hr: 2, bb: 3, so: 3, hbp: 1, sb: 0, cs: 0 },
   { id: 'mateohe01', name: 'Henry Mateo', pos: '2B', bats: 'S', age: 27, pa: 46, h: 10, double: 1, triple: 0, hr: 0, bb: 2, so: 10, hbp: 1, sb: 3, cs: 1 },
   { id: 'santira01', name: 'Ramon Santiago', pos: 'SS', bats: 'S', age: 24, pa: 45, h: 9, double: 1, triple: 0, hr: 0, bb: 3, so: 6, hbp: 1, sb: 1, cs: 0 },

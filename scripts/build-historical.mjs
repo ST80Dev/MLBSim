@@ -127,6 +127,29 @@ const FRANCHISE_ORDER = [
 
 const POS_SLOTS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
 
+// Posizioni secondarie AMMESSE per ruolo primario (deve combaciare con
+// engine/positions.ts SECONDARY_OPTIONS: nulla valida a runtime, quindi filtriamo
+// qui per non generare secondarie illegali — invariante dei test generati).
+const SECONDARY_OPTIONS = {
+  C: ['1B'], '1B': ['3B', 'LF'], '2B': ['SS', '3B'], SS: ['2B', '3B'],
+  '3B': ['1B', '2B', 'SS'], LF: ['RF', 'CF', '1B'], CF: ['LF', 'RF'],
+  RF: ['LF', 'CF', '1B'], DH: ['1B', 'LF', 'RF', '3B', 'C'],
+};
+const SEC_MIN_GAMES = 10; // partite minime a una casella per considerarla "seconda posizione"
+// Seconda posizione REALE: la casella più giocata (oltre la primaria) tra quelle
+// ammesse dall'archetipo, se il giocatore vi ha davvero giocato ≥ soglia. Per i DH
+// è la loro "casa" difensiva (dove scendono in campo). Da Appearances (gAt).
+function deriveSecondary(gAt, primary) {
+  const opts = SECONDARY_OPTIONS[primary];
+  if (!opts || !gAt) return null;
+  let best = null, bestG = 0;
+  for (const p of opts) {
+    const g = gAt[p] ?? 0;
+    if (g >= SEC_MIN_GAMES && g > bestG) { best = p; bestG = g; }
+  }
+  return best;
+}
+
 function ageOf(person, year) {
   const by = num(person.birthYear);
   if (!by) return 27; // fallback ragionevole
@@ -480,8 +503,11 @@ function main() {
 
     const bLine = (c, pos) => {
       const def = deriveDef(c.pid); // difesa reale (null = archetipo di ruolo)
+      const primary = pos ?? c.pos;
+      const sec = deriveSecondary(c.gAt, primary); // seconda posizione reale (Appearances)
       return {
-        id: c.pid, name: c.name, pos: pos ?? c.pos, bats: c.bats, age: c.age, ...c.line,
+        id: c.pid, name: c.name, pos: primary, bats: c.bats, age: c.age, ...c.line,
+        ...(sec ? { sec } : {}),
         ...(def.fld != null ? { fld: def.fld } : {}),
         ...(def.arm != null ? { arm: def.arm } : {}),
       };
@@ -571,9 +597,10 @@ function main() {
 function q(s) { return `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`; }
 
 function batObj(b) {
+  const sec = b.sec ? `, sec: '${b.sec}'` : '';
   const def =
     (b.fld != null ? `, fld: ${b.fld}` : '') + (b.arm != null ? `, arm: ${b.arm}` : '');
-  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${def} }`;
+  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${sec}${def} }`;
 }
 function pitObj(p) {
   return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv} }`;
@@ -636,6 +663,10 @@ export interface HistBatLine {
   hbp: number;
   sb: number;
   cs: number;
+  /** Seconda posizione difensiva REALE (Appearances: 2ª casella più giocata tra
+   *  quelle ammesse dall'archetipo, ≥ soglia partite). Abilita lo schieramento
+   *  fuori-ruolo (canOccupy) per gestione/ottimizzazione lineup. Assente = mono-ruolo. */
+  sec?: Position;
   /** Difesa/Braccio REALI (40-100 pre-stretch) da Fielding.csv, normalizzati per
    *  ruolo. Assenti = campione difensivo insufficiente → l'importatore usa
    *  l'archetipo di ruolo. \`arm\` c'è solo dove misurabile (ricevitori: CS%;

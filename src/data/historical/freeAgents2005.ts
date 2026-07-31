@@ -31,7 +31,7 @@ export const FREE_AGENT_BATTERS_2005: HistBatLine[] = [
   { id: 'daubabr01', name: 'Brian Daubach', pos: '1B', bats: 'L', age: 33, pa: 34, h: 6, double: 2, triple: 0, hr: 1, bb: 5, so: 8, hbp: 0, sb: 0, cs: 0 },
   { id: 'romanja01', name: 'Jason Romano', pos: 'LF', bats: 'R', age: 26, pa: 34, h: 6, double: 1, triple: 0, hr: 1, bb: 2, so: 9, hbp: 0, sb: 0, cs: 0 },
   { id: 'cashke01', name: 'Kevin Cash', pos: 'C', bats: 'R', age: 27, pa: 33, h: 5, double: 1, triple: 0, hr: 1, bb: 1, so: 10, hbp: 1, sb: 0, cs: 0 },
-  { id: 'willige02', name: 'Gerald Williams', pos: 'LF', bats: 'R', age: 38, pa: 32, h: 7, double: 2, triple: 0, hr: 1, bb: 2, so: 6, hbp: 0, sb: 1, cs: 0 },
+  { id: 'willige02', name: 'Gerald Williams', pos: 'LF', bats: 'R', age: 38, pa: 32, h: 7, double: 2, triple: 0, hr: 1, bb: 2, so: 6, hbp: 0, sb: 1, cs: 0, sec: 'CF' },
   { id: 'holbeaa01', name: 'Aaron Holbert', pos: '2B', bats: 'R', age: 32, pa: 32, h: 6, double: 3, triple: 0, hr: 0, bb: 3, so: 8, hbp: 0, sb: 1, cs: 0 },
   { id: 'haadya01', name: 'Yamid Haad', pos: 'C', bats: 'R', age: 27, pa: 32, h: 2, double: 1, triple: 0, hr: 0, bb: 3, so: 7, hbp: 0, sb: 0, cs: 0 },
   { id: 'pickeca01', name: 'Calvin Pickering', pos: 'DH', bats: 'L', age: 28, pa: 31, h: 6, double: 1, triple: 0, hr: 1, bb: 4, so: 10, hbp: 0, sb: 0, cs: 0 },
