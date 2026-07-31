@@ -420,7 +420,7 @@ function main() {
       arm9: meanSd(arr.map((d) => d.arm9)),
     };
   }
-  const clampZ = (z) => Math.max(-2.5, Math.min(2.5, z));
+  const clampZ = (z) => Math.max(-2.8, Math.min(2.8, z)); // cap più ampio → picchi più netti
   const z = (x, ms) => clampZ((x - ms.m) / ms.s);
   const roundR = (v) => Math.max(40, Math.min(100, Math.round(v)));
   // Deriva fielding/arm 40-100 (pre-stretch) dai dati reali; null = usa archetipo.
@@ -428,14 +428,20 @@ function main() {
     const d = rawDef.get(pid);
     if (!d) return { fld: null, arm: null };
     const b = base[d.pos];
-    const IF = ['2B', '3B', 'SS', '1B'].includes(d.pos);
+    const IF = ['2B', '3B', 'SS'].includes(d.pos);
     let fld;
     if (d.pos === 'C') {
       // Ricevitore: le PO sono strikeout (non range) → pesa ricezione (PB) + errori.
       fld = 70 - 4 * z(d.pb9, b.pb9) - 3 * z(d.err, b.err);
+    } else if (d.pos === '1B') {
+      // Prima base: le PO sono throw RICEVUTI (contesto di squadra, non skill) → NON
+      // usare il range factor. Vale l'AGGRESSIVITÀ/copertura (assist) + l'affidabilità
+      // (pochi errori, lo scoop). Così un guanto d'oro come Grace non è sotto-valutato.
+      fld = 70 + 5 * z(d.arm9, b.arm9) - 4 * z(d.err, b.err);
     } else {
-      fld = 70 + 7 * z(d.rf, b.rf) - 3 * z(d.err, b.err);
-      if (IF) fld += 1 * z(d.dp9, b.dp9); // turning dei doppi giochi (peso lieve: DP è context-dipendente)
+      // Posizioni di RANGE (SS/2B/3B/OF): range factor (coeff più alto → più picchi) + errori.
+      fld = 70 + 8 * z(d.rf, b.rf) - 3 * z(d.err, b.err);
+      if (IF) fld += 1 * z(d.dp9, b.dp9); // turning dei doppi giochi (peso lieve: context-dipendente)
     }
     let arm = null;
     if (d.pos === 'C' && d.csRate != null) arm = 70 + 7 * z(d.csRate, b.cs);

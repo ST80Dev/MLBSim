@@ -10,7 +10,7 @@ import type { HistBatLine, HistPitLine } from './season2001';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_2001: HistBatLine[] = [
-  { id: 'monrocr01', name: 'Craig Monroe', pos: 'RF', bats: 'R', age: 24, pa: 58, h: 11, double: 1, triple: 0, hr: 2, bb: 6, so: 18, hbp: 0, sb: 2, cs: 0, sec: 'LF', fld: 91, arm: 88, rk: true },
+  { id: 'monrocr01', name: 'Craig Monroe', pos: 'RF', bats: 'R', age: 24, pa: 58, h: 11, double: 1, triple: 0, hr: 2, bb: 6, so: 18, hbp: 0, sb: 2, cs: 0, sec: 'LF', fld: 96, arm: 90, rk: true },
   { id: 'milleco01', name: 'Corky Miller', pos: 'C', bats: 'R', age: 25, pa: 57, h: 9, double: 2, triple: 0, hr: 3, bb: 4, so: 16, hbp: 2, sb: 1, cs: 0, sec: '1B', fld: 67, arm: 82, rk: true },
   { id: 'hermach01', name: 'Chad Hermansen', pos: 'RF', bats: 'R', age: 23, pa: 56, h: 10, double: 2, triple: 0, hr: 1, bb: 3, so: 17, hbp: 0, sb: 0, cs: 1, sec: 'CF' },
   { id: 'seguife01', name: 'Fernando Seguignol', pos: '1B', bats: 'S', age: 26, pa: 54, h: 12, double: 3, triple: 0, hr: 2, bb: 2, so: 15, hbp: 1, sb: 0, cs: 0, sec: 'LF' },

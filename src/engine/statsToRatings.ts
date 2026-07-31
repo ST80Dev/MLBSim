@@ -102,7 +102,6 @@ export interface BatterImportInput extends BatterStats {
  */
 export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
   const pa = Math.max(1, s.pa);
-  const single = Math.max(0, s.h - s.double - s.triple - s.hr);
 
   // Occhio dai BB (per PA). Gli esiti da AB (SO, battute valide) vanno divisi per
   // la base-AB, coerente con la forward (deriveBatterStats scala sugli AB): base =
@@ -118,11 +117,21 @@ export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
   const powerDbl = ratingFromMult(reg(s.double / abBase / LEAGUE.double), 1.11);
   const power = 0.8 * powerHr + 0.2 * powerDbl;
 
-  const contactSingle = ratingFromMult(reg(single / abBase / LEAGUE.single), 1.1);
-  // SO forward: abBase*so*mult(contact,0.88)*mult(eye,0.97). Isola la parte contact.
+  // Contatto ANCORATO alla MEDIA (BA): è ciò che il contatto deve predire. Prima si
+  // pesava 50/50 con contactSo (dai K), che ESPLODE sul basso strikeout — un .271 a
+  // 9% di K leggeva contact 100 come un .347, perché il contactSo (119) trascinava la
+  // media. Ora la BA è l'ancora; il basso/alto K RIFINISCE (±), ma è LIMITATO e non
+  // domina: un contact-maker senza media resta un contact-maker senza media.
+  const LG_BA =
+    (LEAGUE.single + LEAGUE.double + LEAGUE.triple + LEAGUE.hr) / (1 - LEAGUE.bb - LEAGUE.hbp);
+  const contactBa = ratingFromMult(reg(s.h / ab / LG_BA), 1.12);
+  // Parte-K isolata dalla forward (SO = abBase·so·mult(contact,0.88)·mult(eye,0.97)).
   const eyeSoMult = Math.pow(0.97, (eye - RATING_AVG) / 10);
   const contactSo = ratingFromMult(reg(s.so / abBase / LEAGUE.so / eyeSoMult), 0.88);
-  const contact = 0.5 * contactSingle + 0.5 * contactSo;
+  // Rifinitura-K limitata: il basso K aggiunge poco (+), l'alto K toglie di più (−),
+  // ma mai tanto da ribaltare l'ancora-BA.
+  const kAdj = Math.max(-24, Math.min(13, contactSo - RATING_AVG)) * 0.5;
+  const contact = contactBa + kAdj;
 
   // Velocita: SB e' la leva diretta (invertendo la formula lineare di sb);
   // i tripli confermano (data la Potenza gia' stimata).

@@ -10,13 +10,13 @@ import type { HistBatLine, HistPitLine } from './season2004';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_2004: HistBatLine[] = [
-  { id: 'gutieri01', name: 'Ricky Gutierrez', pos: '2B', bats: 'R', age: 34, pa: 112, h: 25, double: 4, triple: 0, hr: 1, bb: 7, so: 13, hbp: 2, sb: 0, cs: 0, sec: 'SS', fld: 80 },
-  { id: 'gilje01', name: 'Jerry Gil', pos: 'SS', bats: 'R', age: 21, pa: 88, h: 15, double: 2, triple: 1, hr: 0, bb: 0, so: 33, hbp: 1, sb: 2, cs: 0, sec: '2B', fld: 69, rk: true },
-  { id: 'blancan01', name: 'Andres Blanco', pos: 'SS', bats: 'S', age: 20, pa: 67, h: 19, double: 2, triple: 2, hr: 0, bb: 5, so: 6, hbp: 1, sb: 1, cs: 2, sec: '2B', fld: 84, rk: true },
+  { id: 'gutieri01', name: 'Ricky Gutierrez', pos: '2B', bats: 'R', age: 34, pa: 112, h: 25, double: 4, triple: 0, hr: 1, bb: 7, so: 13, hbp: 2, sb: 0, cs: 0, sec: 'SS', fld: 81 },
+  { id: 'gilje01', name: 'Jerry Gil', pos: 'SS', bats: 'R', age: 21, pa: 88, h: 15, double: 2, triple: 1, hr: 0, bb: 0, so: 33, hbp: 1, sb: 2, cs: 0, sec: '2B', fld: 70, rk: true },
+  { id: 'blancan01', name: 'Andres Blanco', pos: 'SS', bats: 'S', age: 20, pa: 67, h: 19, double: 2, triple: 2, hr: 0, bb: 5, so: 6, hbp: 1, sb: 1, cs: 2, sec: '2B', fld: 85, rk: true },
   { id: 'dobbsgr01', name: 'Greg Dobbs', pos: '3B', bats: 'L', age: 25, pa: 56, h: 12, double: 1, triple: 0, hr: 1, bb: 1, so: 14, hbp: 1, sb: 0, cs: 0, sec: '1B', rk: true },
   { id: 'kroegjo01', name: 'Josh Kroeger', pos: 'LF', bats: 'L', age: 21, pa: 55, h: 9, double: 3, triple: 0, hr: 0, bb: 1, so: 21, hbp: 0, sb: 0, cs: 1, sec: 'RF', rk: true },
   { id: 'diazvi01', name: 'Victor Diaz', pos: 'RF', bats: 'R', age: 22, pa: 53, h: 15, double: 3, triple: 0, hr: 3, bb: 1, so: 15, hbp: 1, sb: 0, cs: 0, sec: 'LF', rk: true },
-  { id: 'gettiby01', name: 'Byron Gettis', pos: 'LF', bats: 'R', age: 24, pa: 49, h: 7, double: 1, triple: 1, hr: 0, bb: 8, so: 14, hbp: 1, sb: 0, cs: 1, sec: 'RF', fld: 77, arm: 86, rk: true },
+  { id: 'gettiby01', name: 'Byron Gettis', pos: 'LF', bats: 'R', age: 24, pa: 49, h: 7, double: 1, triple: 1, hr: 0, bb: 8, so: 14, hbp: 1, sb: 0, cs: 1, sec: 'RF', fld: 79, arm: 86, rk: true },
   { id: 'tiffete01', name: 'Terry Tiffee', pos: '3B', bats: 'S', age: 25, pa: 48, h: 12, double: 4, triple: 0, hr: 2, bb: 3, so: 3, hbp: 1, sb: 0, cs: 0, sec: '1B', rk: true },
   { id: 'mateohe01', name: 'Henry Mateo', pos: '2B', bats: 'S', age: 27, pa: 46, h: 10, double: 1, triple: 0, hr: 0, bb: 2, so: 10, hbp: 1, sb: 3, cs: 1, sec: 'SS' },
   { id: 'santira01', name: 'Ramon Santiago', pos: 'SS', bats: 'S', age: 24, pa: 45, h: 9, double: 1, triple: 0, hr: 0, bb: 3, so: 6, hbp: 1, sb: 1, cs: 0, sec: '2B' },

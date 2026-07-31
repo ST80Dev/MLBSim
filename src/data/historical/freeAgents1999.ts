@@ -10,7 +10,7 @@ import type { HistBatLine, HistPitLine } from './season1999';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_1999: HistBatLine[] = [
-  { id: 'clybuda01', name: 'Danny Clyburn', pos: 'LF', bats: 'R', age: 25, pa: 89, h: 17, double: 3, triple: 0, hr: 3, bb: 6, so: 23, hbp: 1, sb: 0, cs: 0, sec: 'RF', fld: 80, arm: 88, rk: true },
+  { id: 'clybuda01', name: 'Danny Clyburn', pos: 'LF', bats: 'R', age: 25, pa: 89, h: 17, double: 3, triple: 0, hr: 3, bb: 6, so: 23, hbp: 1, sb: 0, cs: 0, sec: 'RF', fld: 81, arm: 90, rk: true },
   { id: 'pritcch01', name: 'Chris Pritchett', pos: '1B', bats: 'L', age: 29, pa: 49, h: 10, double: 1, triple: 0, hr: 1, bb: 2, so: 9, hbp: 0, sb: 1, cs: 0, sec: '3B', rk: true },
   { id: 'vitiejo01', name: 'Joe Vitiello', pos: '1B', bats: 'R', age: 29, pa: 45, h: 8, double: 1, triple: 0, hr: 1, bb: 3, so: 10, hbp: 1, sb: 0, cs: 0, sec: 'LF' },
   { id: 'matthga02', name: 'Gary Matthews', pos: 'RF', bats: 'S', age: 24, pa: 45, h: 8, double: 0, triple: 0, hr: 0, bb: 9, so: 9, hbp: 0, sb: 2, cs: 0, sec: 'LF', rk: true },
