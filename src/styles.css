@@ -3061,6 +3061,33 @@ table {
   border-radius: 6px;
   background: var(--panel);
 }
+/* Badge fisso: tipo di gioco + anno di stagione, sempre in header. */
+.game-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.game-info .gi-icon {
+  font-size: 13px;
+}
+.game-info .gi-type {
+  color: var(--text);
+}
+.game-info .gi-sep {
+  color: var(--muted);
+}
+.game-info .gi-year {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--accent);
+}
 .hdr-team-name {
   font-family: var(--mono);
   font-weight: 700;

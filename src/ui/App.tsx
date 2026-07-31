@@ -740,6 +740,7 @@ export function App() {
         league={league}
         seed={leagueSeed}
         mode={leagueMode}
+        year={season.year}
         onPick={pickManagedTeam}
         onBack={() => setStage('start')}
       />
@@ -761,6 +762,8 @@ export function App() {
           <span className="logo">⚾</span> MLBSim
           <span className="phase">Fase 2</span>
         </div>
+
+        <GameInfoBadge source={source} year={season.year} />
 
         <div className="hdr-team" title="Squadra gestita">
           <TeamBadge team={managedTeam} size={22} />
@@ -5627,11 +5630,45 @@ function TeamDetailModal({
   );
 }
 
+/**
+ * Etichetta del tipo di gioco (sorgente della lega) per l'indicatore d'header.
+ * Stessa vocabolario della SavedGameCard ("Storica"/"Generata"), per coerenza.
+ */
+function gameTypeLabel(source: LeagueSource): { icon: string; label: string } {
+  return source === 'historical'
+    ? { icon: '📜', label: 'Storica' }
+    : { icon: '🎲', label: 'Generata' };
+}
+
+/**
+ * Badge FISSO d'header: tipo di gioco + anno di stagione. Sempre visibile — dalla
+ * panoramica lega a tutte le pagine di gioco — così il giocatore ha sempre
+ * presente COSA sta giocando e in che stagione. L'anno è `season.year`:
+ * PROGRESSIVO da 1 in modalità generata, ANNO REALE (+avanzamenti) in storica.
+ */
+function GameInfoBadge({ source, year }: { source: LeagueSource; year: number }) {
+  const { icon, label } = gameTypeLabel(source);
+  const full = source === 'historical' ? `Stagione storica ${year}` : `Carriera generata · anno ${year}`;
+  return (
+    <div className="game-info" title={`Tipo di gioco: ${full}`}>
+      <span className="gi-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="gi-type">{label}</span>
+      <span className="gi-sep" aria-hidden="true">
+        ·
+      </span>
+      <span className="gi-year">Anno {year}</span>
+    </div>
+  );
+}
+
 /** Panoramica lega: 30 squadre per division con forza e cap; scelta squadra. */
 function LeagueOverview({
   league,
   seed,
   mode,
+  year,
   onPick,
   onBack,
   embedded = false,
@@ -5639,6 +5676,8 @@ function LeagueOverview({
   league: Team[];
   seed: number;
   mode: LeagueMode;
+  /** Anno/stagione corrente, per il badge d'header (assente in modalità embedded). */
+  year?: number;
   onPick: (id: string) => void;
   onBack?: () => void;
   /** Incorporata come pagina DENTRO la partita (usa la header di gioco): niente
@@ -5655,6 +5694,7 @@ function LeagueOverview({
           <div className="brand">
             <span className="logo">⚾</span> MLBSim <span className="phase">Panoramica lega</span>
           </div>
+          {year != null && <GameInfoBadge source={mode.source} year={year} />}
           <div className="actions">
             <span className="muted seed-note">seed {seed}</span>
             <button className="btn" onClick={onBack}>
