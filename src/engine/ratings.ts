@@ -202,19 +202,38 @@ const OVR_DEF_CREDIT = 0.34; // per punto di difesa, a domanda piena (SS)
 const OVR_KNEE = 88; // sopra: forti rendimenti decrescenti (×0.3): solo i veri
 const OVR_KNEE_SLOPE = 0.3; // fenomeni sfondano i 90, i mid-star restano sotto
 
+// Credito SPECIALISTA (solo OVR/valutazione — l'overall NON entra nel motore di
+// gioco: alza salary/valore/draft, non il punteggio simulato → EPOCA INTATTA).
+// Un fenomeno di puro CONTATTO e/o VELOCITÀ (Ichiro, Gwynn, Raines, Lofton) vale
+// in realtà più di quanto la sola wOBA sappia esprimere: il soft-cap BA (.345)
+// nasconde le medie da record e le corse in base sono impatto sottopesato. È un
+// termine coda-only (topEdge, knee 90 post-stretch ≈ battute-titolo / 30+ rubate):
+// scatta SOLO per le doti-vetta, quindi la fascia media e gli aggregati non si
+// muovono. Sommato PRIMA della soglia OVR_KNEE, così anche lo slap-hitter estremo
+// resta appena sotto i veri multi-tool (Bonds). Vedi docs/players-and-ratings § OVR.
+const SPEC_CONTACT_KNEE = 90;
+const SPEC_CONTACT_GAIN = 5; // +5 OVR a contact 100 (media da record, .350+)
+const SPEC_SPEED_KNEE = 90;
+const SPEC_SPEED_GAIN = 3; // +3 OVR a speed 100 (baserunning elite)
+
 /**
  * Overall 40-100 di un battitore = valore prodotto (offesa wOBA + baserunning +
- * difesa pesata per ruolo). `position` abilita il peso difensivo corretto (SS/C
- * contano più di 1B/DH); se assente usa una domanda media. Vedi il blocco sopra.
+ * difesa pesata per ruolo, + credito specialista per le doti-vetta di contatto/
+ * velocità). `position` abilita il peso difensivo corretto (SS/C contano più di
+ * 1B/DH); se assente usa una domanda media. Vedi il blocco sopra.
  */
 export function batterOverall(r: BatterRatings, position?: Position): number {
   const demand = position != null ? POS_DEF_DEMAND[position] ?? DEFAULT_DEMAND : DEFAULT_DEMAND;
   const defRating = 0.75 * r.fielding + 0.25 * r.arm;
+  const specialist =
+    SPEC_CONTACT_GAIN * topEdge(r.contact, SPEC_CONTACT_KNEE) +
+    SPEC_SPEED_GAIN * topEdge(r.speed, SPEC_SPEED_KNEE);
   let raw =
     RATING_AVG +
     OVR_OFF_SLOPE * (wobaOf(r) - LG_WOBA) +
     OVR_SPD_CREDIT * (r.speed - RATING_AVG) +
-    OVR_DEF_CREDIT * demand * (defRating - RATING_AVG);
+    OVR_DEF_CREDIT * demand * (defRating - RATING_AVG) +
+    specialist;
   if (raw > OVR_KNEE) raw = OVR_KNEE + (raw - OVR_KNEE) * OVR_KNEE_SLOPE;
   return clampRating(raw);
 }

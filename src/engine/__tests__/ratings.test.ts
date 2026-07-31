@@ -164,6 +164,25 @@ describe('coda-gemma + OVR = valore prodotto (difesa per ruolo)', () => {
     expect(ichiroLike).toBeGreaterThan(80);
   });
 
+  // Credito SPECIALISTA (solo OVR): le doti-vetta di contatto/velocità (la media
+  // da record + il baserunning che la wOboa col cap-BA sottopesa) portano lo
+  // slap-hitter estremo verso 88-90 — ma il coda-only + la soglia OVR_KNEE lo
+  // tengono APPENA SOTTO i veri multi-tool, e NON toccano la fascia comune.
+  it('il credito specialista porta contact+speed 100 a 88+, sotto i multi-tool', () => {
+    const ichiroLike = batterOverall({ contact: 100, power: 53, eye: 47, speed: 100, fielding: 73, arm: 78 }, 'RF');
+    const multiTool = batterOverall({ contact: 90, power: 100, eye: 100, speed: 90, fielding: 85, arm: 85 }, 'RF');
+    expect(ichiroLike).toBeGreaterThanOrEqual(88);
+    expect(ichiroLike).toBeLessThan(multiTool);
+  });
+
+  it('il credito specialista è coda-only: entra graduale, nessuno scalino alla soglia', () => {
+    // A contact/speed 90 il credito è 0 (topEdge alla soglia = 0); da 90 a 91 sale
+    // di poco (5+3 punti spalmati su 10 di rating). Nessun salto brusco = coda-only.
+    const at90 = batterOverall({ ...AVG, contact: 90, speed: 90 }, 'RF');
+    const at91 = batterOverall({ ...AVG, contact: 91, speed: 91 }, 'RF');
+    expect(at91 - at90).toBeLessThan(3);
+  });
+
   // Difesa COERENTE col motore: lo stesso guanto vale di più dove la domanda
   // difensiva è alta (SS) che in un angolo (1B) o al DH (che non difende).
   it('la difesa conta per RUOLO: stesso guanto, SS > 1B > DH', () => {

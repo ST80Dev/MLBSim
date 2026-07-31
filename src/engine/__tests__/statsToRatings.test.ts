@@ -5,6 +5,7 @@ import {
   ratingsFromPitcherStats,
 } from '../statsToRatings';
 import { ratingMult, deriveBatterStats, derivePitcherStats } from '../ratings';
+import { LEAGUE } from '../constants';
 import type { BatterRatings, PitcherRatings } from '../types';
 
 describe('ratingFromMult', () => {
@@ -77,5 +78,19 @@ describe('ratingsFromPitcherStats', () => {
     expect(back.stuff).toBeGreaterThan(84);
     expect(back.control).toBeGreaterThan(80);
     expect(back.groundball).toBeGreaterThan(75);
+  });
+
+  // DIPS_HIT_CONTROL: il lanciatore controlla ~metà delle valide su palla in
+  // gioco (0.5). Un efficiente-di-valide (WHIP bassa) legge Movimento sopra la
+  // media, ma COMPRESSO (non pieno): metà dello scarto è contesto → squadra.
+  it('la soppressione-valide (WHIP bassa) alza il Movimento, ma compressa (DIPS 0.5)', () => {
+    const bf = 900;
+    // pochi hit non-HR concessi rispetto alla lega (buona WHIP), K/BB/HR nella media
+    const hits = Math.round((LEAGUE.single + LEAGUE.double + LEAGUE.triple) * bf * 0.6);
+    const stats = { bf, h: hits + Math.round(LEAGUE.hr * bf), hr: Math.round(LEAGUE.hr * bf),
+      bb: Math.round(LEAGUE.bb * bf), so: Math.round(LEAGUE.so * bf), hbp: Math.round(LEAGUE.hbp * bf) };
+    const r = ratingsFromPitcherStats({ ...stats, role: 'SP', gs: 30 });
+    expect(r.movement).toBeGreaterThan(72); // sopra la media
+    expect(r.movement).toBeLessThan(90);    // ma non pieno: metà è contesto
   });
 });

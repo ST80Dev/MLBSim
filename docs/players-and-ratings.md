@@ -68,11 +68,21 @@ senza gonfiare la lega):
    0.89 … 1B 0.11, DH 0), **COERENTE col modello difensivo del motore**. Un guanto
    d'oro da SS/CF/C vale (Jeter, Andruw, i ricevitori salgono), uno da 1ª quasi no.
 
+**Credito SPECIALISTA** (`SPEC_CONTACT_GAIN`/`SPEC_SPEED_GAIN`, coda-only `topEdge`
+knee 90): le doti-vetta di **contatto** e **velocità** valgono in realtà più di
+quanto la sola wOBA sappia esprimere — il soft-cap BA (.345) nasconde le medie da
+record e il baserunning è sottopesato. Un +5/+3 punti (a contact/speed 100) sommato
+**prima** dell'`OVR_KNEE`, così lo slap-hitter estremo (Ichiro 2004 da 262 valide)
+sale verso 88-90 ma resta **appena sotto** i veri multi-tool. È coda-only: la fascia
+media e gli aggregati di lega non si muovono. **Nota**: l'OVR battitore NON entra nel
+motore di gioco (guida salary/valore/draft/potenziale) → alzarlo è **epoca-safe**.
+
 Rendimenti decrescenti sopra `OVR_KNEE` (88, ×0.3): solo i **veri fenomeni**
 sfondano i 90 (Bonds ~90, A-Rod 90), i mid-star restano sotto (evita l'inflazione
 di 5★ nella lega generata, più ricca di all-rounder). Esempi (import storico):
-Bonds 90 · A-Rod/Manny/Nomar/Chipper 89 · Andruw Jones 86 (CF Gold Glove) · Ichiro
-85 · **Jeter/Pudge/Piazza 84** · glove-only col bat debole giù (Ordóñez 69).
+Bonds 90 · A-Rod/Manny/Nomar/Chipper 89 · **Ichiro 2004 89** (record BA + speed) ·
+Andruw Jones 86 (CF Gold Glove) · **Jeter/Pudge/Piazza 84** · glove-only col bat
+debole giù (Ordóñez 69).
 
 La **coda-gemma sui tool** (tetto-stat convesso `topEdge` in `deriveBatterStats`:
 power 100 → ~60 HR, contact 100 → media ~.345) resta e **alimenta la produzione**.
@@ -88,6 +98,17 @@ dopo l'inversione stats→rating, **si allunga la distribuzione attorno a 70** �
 `rating' = 70 + (rating − 70)·1.4` — così i forti salgono, i deboli scendono, la
 forza-squadra spazia ~**4 → ~8-9** di spread (corazzate ~78, coda ~68). La
 Resistenza non si stira (è durabilità, non qualità).
+
+**Bonus "horse" & WHIP/DIPS (import lanciatori).** Il boost-partenti è
+`max(volume totale, profondità BF/GS) × qualità(FIP)`: un asso che va in fondo
+(Halladay, 7+ IP/start) resta valorizzato anche in una stagione accorciata da
+**infortunio** — si premia la durata reale, non le partite saltate. La qualità-
+valide segue il **DIPS** (`DIPS_HIT_CONTROL`): il lanciatore controlla ~**metà**
+(0.5) delle proprie valide su palla in gioco, il resto è difesa/park/fortuna che
+l'Ibrido instrada sulla squadra. È un **rate** → i control/contact artist di OGNI
+ruolo (reliever, short-start) sono valutati per efficienza, non per volume; è la
+parte "nuova" della WHIP che il FIP non vede (i walk sono già pieni nel control).
+Alza la varianza tra lanciatori, epoca-safe (R/G ~invariato nel Log5).
 
 **Perché è epoca-safe** (contro-intuitivo): stirare i rating *sembra* gonfiare
 l'offesa (misurando un battitore vs lancio medio, `deriveBatterStats` convessa
