@@ -1,6 +1,7 @@
 import type { Batter, Pitcher, Team } from '../engine/types';
 import { playerValue, overallOf } from '../engine/value';
 import { effectiveCap, GENERATED_MODE, type LeagueMode } from './leagueMode';
+import { assembleTeam } from './generator';
 
 // ---------------------------------------------------------------------------
 // OFF-SEASON A BLOCCHI — mercato dei free agent (Fase 5A, step 3).
@@ -438,4 +439,21 @@ export function runOffseasonMarket(state: OffseasonState): OffseasonState {
   let s = state;
   while (!isOffseasonComplete(s)) s = advanceBlock(s);
   return s;
+}
+
+/**
+ * FINALIZE: chiude l'off-season ricomponendo ogni rosa piatta in una `Team`
+ * giocabile (lineup/rotazione/panca/bullpen/riserve) e TAGLIANDOLA alle taglie a
+ * regime (20/15) — e' il momento "decidi gli X della rosa". Il pool residuo (FA
+ * invenduti) e l'eccedenza di rosa escono dalla lega (churn). `baseTeams` fornisce
+ * l'identita' (id/nome/division/colori); l'ordine di output segue `teamOrder`.
+ */
+export function finalizeOffseason(state: OffseasonState, baseTeams: Team[]): Team[] {
+  const byId = new Map(baseTeams.map((t) => [t.id, t] as const));
+  return state.teamOrder.map((id) => {
+    const set = state.rosters[id];
+    const base = byId.get(id);
+    if (!base) throw new Error(`finalizeOffseason: squadra base mancante per ${id}`);
+    return assembleTeam(base, set.batters, set.pitchers);
+  });
 }

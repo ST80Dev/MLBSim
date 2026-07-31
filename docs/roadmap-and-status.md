@@ -198,9 +198,12 @@
     (ricomposizione lineup/rotazione dai set piatti) + aggancio aging/draft;
     4) draft inverso (`draft.ts`: classe prospetti giovani/grezzi deterministica,
     ordine inverso alla classifica, BPA per `playerValue`, immessi nella **depth**)
-    — **FATTO**; 5) valutazione scambi umano→1 AI (con **premio di consolidamento**);
-    6) `runOffseason` (perf=0) + **finalize/reslot** (ricomposizione lineup/rotazione
-    + riconciliazione taglia dopo draft e mercato).
+    — **FATTO**; 5) valutazione scambi umano→1 AI (con **premio di consolidamento**)
+    — **DA FARE**; 6) `runOffseason` (`offseasonRun.ts`) + **finalize/reslot**
+    (`generator.assembleTeam`: ricompone lineup/rotazione dai set piatti, taglia a
+    20/15, backfill replacement-level) — **FATTO**. L'off-season gira **end-to-end**
+    (aging → ritiri → draft → mercato → finalize), deterministico, verificato su
+    **più anni** (rose sempre valide/giocabili, età stabile ~28.7, perf=0).
   - **Cadenza mercato** (decisa): in stagione **solo scambi** umano→1 AI fino alla
     **trade deadline ~gara 103** (`TRADE_DEADLINE_GAME` in `schedule.ts`), poi rose
     congelate; pool FA e riallineamento AI↔AI sono **eventi di off-season**.

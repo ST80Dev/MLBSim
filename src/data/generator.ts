@@ -629,6 +629,126 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   };
 }
 
+// Ordine di assegnazione titolari: le posizioni scarse/centrali prima (piu'
+// difficili da coprire), il DH per ultimo (slot bat-first, nessun guanto).
+const ASSEMBLE_ORDER: Position[] = ['C', 'SS', '2B', 'CF', '3B', 'RF', 'LF', '1B', 'DH'];
+// Taglie a regime (coerenti con offseason.ts): 9+5+6 battitori, 5+6+4 lanciatori.
+const ASM_TARGET_BATTERS = 20;
+const ASM_TARGET_PITCHERS = 15;
+const FILLER_POSITIONS: Position[] = ['C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'];
+const REPL_LEVEL = 48; // replacement-level (sotto la media di lega)
+
+/** Seed deterministico da una stringa (per i nomi dei rimpiazzi). */
+function strSeed(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Rimpiazzo replacement-level (call-up AAA) quando mercato/draft non riempiono la
+ *  taglia: giocatore reale ma modesto, a stipendio minimo. Deterministico. */
+function replacementBatter(nm: { full: string; first: string; last: string }, id: string, pos: Position): Batter {
+  const ratings: BatterRatings = {
+    contact: REPL_LEVEL, power: REPL_LEVEL, eye: REPL_LEVEL, speed: REPL_LEVEL, fielding: REPL_LEVEL, arm: REPL_LEVEL,
+  };
+  const ovr = batterOverall(ratings, pos);
+  return {
+    id, name: nm.full, firstName: nm.first, lastName: nm.last, bats: 'R', position: pos,
+    ratings, stats: deriveBatterStats(ratings), age: 26, potential: Math.max(ovr, 52),
+    salary: salaryFor(ovr, 26), retired: false,
+  };
+}
+function replacementPitcher(nm: { full: string; first: string; last: string }, id: string): Pitcher {
+  const ratings: PitcherRatings = {
+    stuff: REPL_LEVEL, control: REPL_LEVEL, movement: REPL_LEVEL, groundball: REPL_LEVEL, stamina: REPL_LEVEL, fielding: REPL_LEVEL,
+  };
+  const ovr = pitcherOverall(ratings);
+  return {
+    id, name: nm.full, firstName: nm.first, lastName: nm.last, throws: 'R', role: 'RP',
+    ratings, stats: derivePitcherStats(ratings), stamina: deriveStamina(ratings.stamina, 'RP'),
+    age: 26, potential: Math.max(ovr, 52), salary: salaryFor(ovr, 26), retired: false,
+  };
+}
+
+/** Ricolloca un battitore a `pos` (doti rivalutate alla posizione, naturale come
+ *  secondaria se ammessa). Come la coda di `alignLineupDefense`. */
+function placeBatterAt(b: Batter, pos: Position): Batter {
+  if (pos === b.position) return b;
+  if (pos === 'DH') return { ...b, position: 'DH' }; // DH: si tiene le doti, nessun guanto
+  const opts = SECONDARY_OPTIONS[pos];
+  const sec = opts?.includes(b.position)
+    ? b.position
+    : b.secondaryPosition && opts?.includes(b.secondaryPosition)
+      ? b.secondaryPosition
+      : undefined;
+  return { ...b, position: pos, secondaryPosition: sec, ratings: ratingsAtPosition(b, pos) };
+}
+
+/**
+ * RICOMPONE una squadra giocabile da un insieme PIATTO di battitori/lanciatori
+ * (uscita del mercato off-season, dopo aging/ritiri/draft — vedi `offseason.ts`).
+ * Copre le 9 posizioni di lineup (assegnazione greedy per scarsita', con malus
+ * fuori ruolo se serve → copertura garantita), poi panca/riserve; rotazione per
+ * attitudine a partire (qualita' + resistenza), closer per dominio, bullpen,
+ * riserve. TAGLIA alle taglie a regime (20 bat / 15 pit): l'eccedenza (peggior
+ * merito) esce dalla lega — e' il "decidi gli X" della rosa. Preserva l'identita'
+ * della squadra `base` (id, nome, division, colori). NON muta l'input.
+ */
+export function assembleTeam(base: Team, batters: Batter[], pitchers: Pitcher[]): Team {
+  // --- Battitori: 9 titolari a copertura, poi panca (5) e riserve (6) ---
+  const pool = batters.map((b) => ({ ...b }));
+  const chosen: Batter[] = [];
+  for (const pos of ASSEMBLE_ORDER) {
+    if (!pool.length) break;
+    const scoreAt = (b: Batter): number => {
+      if (pos === 'DH') return batterOverall(b.ratings, b.position); // bat puro
+      const ok = canOccupy(b, pos);
+      const s = batterOverall(ratingsAtPosition(b, pos), pos);
+      return ok ? s : s - 15; // fuori ruolo: penalizzato ma ammesso (copertura garantita)
+    };
+    let bi = 0;
+    for (let i = 1; i < pool.length; i++) if (scoreAt(pool[i]) > scoreAt(pool[bi])) bi = i;
+    chosen.push(placeBatterAt(pool.splice(bi, 1)[0], pos));
+  }
+  const lineup = autoLineup(chosen);
+  pool.sort((a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position));
+  const bench = pool.slice(0, 5);
+  const reserveBatters = pool.slice(5, 5 + 6); // taglia: 9 + 5 + 6 = 20; eccedenza scartata
+
+  // --- Lanciatori: rotazione (attitudine a partire), closer, bullpen, riserve ---
+  const startScore = (p: Pitcher): number => pitcherOverall(p.ratings) + 0.9 * (p.ratings.stamina - RATING_AVG);
+  const byStart = pitchers.map((p) => ({ ...p })).sort((a, b) => startScore(b) - startScore(a));
+  const rotation = byStart
+    .slice(0, 5)
+    .map((p) => setPitcherRole(p, 'SP'))
+    .sort((a, b) => pitcherOverall(b.ratings) - pitcherOverall(a.ratings));
+  const rest = byStart.slice(5);
+  const closerScore = (p: Pitcher): number => pitcherOverall(p.ratings) + 0.4 * (p.ratings.stuff - RATING_AVG);
+  const restByCloser = [...rest].sort((a, b) => closerScore(b) - closerScore(a));
+  const bullpen: Pitcher[] = restByCloser.length
+    ? [...restByCloser.slice(1, 6).map((p) => setPitcherRole(p, 'RP')), setPitcherRole(restByCloser[0], 'CL')]
+    : [];
+  const reservePitchers = restByCloser.slice(6, 6 + 4).map((p) => setPitcherRole(p, 'RP')); // taglia: 5 + 6 + 4 = 15
+
+  // Backfill a taglia: se aging/ritiri/draft/mercato non hanno riempito, si
+  // promuove qualche replacement-level (call-up AAA) → rose sempre 20/15 e giocabili.
+  const names = makeNameFactory(makeRng(strSeed(base.id)));
+  for (let k = 0; lineup.length + bench.length + reserveBatters.length < ASM_TARGET_BATTERS; k++) {
+    reserveBatters.push(replacementBatter(names.next(), `${base.id}-repl-b${k}`, FILLER_POSITIONS[k % FILLER_POSITIONS.length]));
+  }
+  for (let k = 0; rotation.length + bullpen.length + reservePitchers.length < ASM_TARGET_PITCHERS; k++) {
+    reservePitchers.push(replacementPitcher(names.next(), `${base.id}-repl-p${k}`));
+  }
+
+  return {
+    ...base,
+    lineup, bench, rotation, bullpen, reserveBatters, reservePitchers, usesDH: true,
+  };
+}
+
 /**
  * Ruota la rotazione perché il PARTENTE del giorno vari lungo la stagione.
  * `makeSide` (engine) fa sempre partire `rotation[0]`: con la rotazione ordinata
