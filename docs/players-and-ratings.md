@@ -99,6 +99,17 @@ dopo l'inversione stats→rating, **si allunga la distribuzione attorno a 70** �
 forza-squadra spazia ~**4 → ~8-9** di spread (corazzate ~78, coda ~68). La
 Resistenza non si stira (è durabilità, non qualità).
 
+**Bonus "horse" & WHIP/DIPS (import lanciatori).** Il boost-partenti è
+`max(volume totale, profondità BF/GS) × qualità(FIP)`: un asso che va in fondo
+(Halladay, 7+ IP/start) resta valorizzato anche in una stagione accorciata da
+**infortunio** — si premia la durata reale, non le partite saltate. La qualità-
+valide segue il **DIPS** (`DIPS_HIT_CONTROL`): il lanciatore controlla ~**metà**
+(0.5) delle proprie valide su palla in gioco, il resto è difesa/park/fortuna che
+l'Ibrido instrada sulla squadra. È un **rate** → i control/contact artist di OGNI
+ruolo (reliever, short-start) sono valutati per efficienza, non per volume; è la
+parte "nuova" della WHIP che il FIP non vede (i walk sono già pieni nel control).
+Alza la varianza tra lanciatori, epoca-safe (R/G ~invariato nel Log5).
+
 **Perché è epoca-safe** (contro-intuitivo): stirare i rating *sembra* gonfiare
 l'offesa (misurando un battitore vs lancio medio, `deriveBatterStats` convessa
 inflaziona). Ma nel **sim vero** i battitori stirati affrontano i **lanciatori

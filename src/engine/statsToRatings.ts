@@ -51,12 +51,18 @@ export function ratingFromMult(mult: number, perSigma: number): number {
 export const REGRESS_PRIOR_BAT = 90; // "PA di prior" per i battitori
 export const REGRESS_PRIOR_PIT = 90; // "BF di prior" per i lanciatori
 
-// DIPS: il lanciatore controlla POCO i hit su palla in gioco (BABIP) — dipendono
-// da difesa dei compagni, park, fortuna. Il rating `movement` (dai hit non-HR) va
-// quindi compresso verso la lega di questa quota di controllo reale, PRIMA della
-// regressione per campione: così un asso in una squadra-colabrodo non è penalizzato
-// (K/BB/HR restano la sua verità) né un contact-pitcher in gran difesa è gonfiato.
-export const DIPS_HIT_CONTROL = 0.4;
+// DIPS: il lanciatore controlla in PARTE i hit su palla in gioco (BABIP) — il
+// resto è difesa dei compagni, park, fortuna. Il rating `movement` (dai hit
+// non-HR) va quindi compresso verso la lega di questa quota di controllo reale,
+// PRIMA della regressione per campione: così un asso in una squadra-colabrodo non
+// è penalizzato (K/BB/HR restano la sua verità) né un contact-pitcher in gran
+// difesa è gonfiato. A 0.5 ("metà delle valide le controlla il lanciatore", via di
+// mezzo sabermetrica) la SOPPRESSIONE-VALIDE elite conta di più: è la parte "nuova"
+// della WHIP che il FIP non vede (i walk sono già pieni nel control). È un RATE →
+// premia i control/contact artist di OGNI ruolo, reliever e short-start compresi,
+// non solo i mangia-inning. Epoca-safe: alza la varianza (code più larghe) ma nel
+// Log5 gli estremi si cancellano — misurato R/G ~invariato. Vedi docs § WHIP/DIPS.
+export const DIPS_HIT_CONTROL = 0.5;
 
 export function regressMult(mult: number, n: number, prior: number): number {
   const w = n / (n + prior);
