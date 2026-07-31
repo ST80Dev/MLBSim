@@ -10,9 +10,9 @@ import type { HistBatLine, HistPitLine } from './season2005';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_2005: HistBatLine[] = [
-  { id: 'huberju01', name: 'Justin Huber', pos: '1B', bats: 'R', age: 22, pa: 85, h: 17, double: 3, triple: 0, hr: 0, bb: 5, so: 20, hbp: 1, sb: 0, cs: 0 },
+  { id: 'huberju01', name: 'Justin Huber', pos: '1B', bats: 'R', age: 22, pa: 85, h: 17, double: 3, triple: 0, hr: 0, bb: 5, so: 20, hbp: 1, sb: 0, cs: 0, fld: 47 },
   { id: 'hockide01', name: 'Denny Hocking', pos: '2B', bats: 'S', age: 35, pa: 71, h: 15, double: 2, triple: 0, hr: 0, bb: 7, so: 12, hbp: 0, sb: 0, cs: 1 },
-  { id: 'phillpa01', name: 'Paul Phillips', pos: 'C', bats: 'R', age: 28, pa: 67, h: 18, double: 4, triple: 1, hr: 1, bb: 0, so: 5, hbp: 1, sb: 0, cs: 0 },
+  { id: 'phillpa01', name: 'Paul Phillips', pos: 'C', bats: 'R', age: 28, pa: 67, h: 18, double: 4, triple: 1, hr: 1, bb: 0, so: 5, hbp: 1, sb: 0, cs: 0, fld: 64, arm: 87 },
   { id: 'harveke01', name: 'Ken Harvey', pos: 'DH', bats: 'R', age: 27, pa: 48, h: 12, double: 2, triple: 0, hr: 1, bb: 3, so: 9, hbp: 1, sb: 0, cs: 0 },
   { id: 'gonzawi01', name: 'Wiki Gonzalez', pos: 'C', bats: 'R', age: 31, pa: 47, h: 11, double: 4, triple: 0, hr: 0, bb: 2, so: 5, hbp: 0, sb: 0, cs: 0 },
   { id: 'nakamno01', name: 'Norihiro Nakamura', pos: '3B', bats: 'R', age: 31, pa: 41, h: 5, double: 2, triple: 0, hr: 0, bb: 2, so: 7, hbp: 0, sb: 0, cs: 0 },

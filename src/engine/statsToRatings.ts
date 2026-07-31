@@ -85,6 +85,11 @@ const POS_DEFENSE: Record<string, { field: number; arm: number }> = {
 
 export interface BatterImportInput extends BatterStats {
   position?: Position;
+  /** Difesa/Braccio REALI (40-100 pre-stretch) da Fielding.csv, se disponibili.
+   *  Presenti → usati al posto dell'archetipo di ruolo (import storico). `arm`
+   *  può mancare anche con `fld` presente (interni/1B: nessun dato di braccio). */
+  fld?: number;
+  arm?: number;
 }
 
 /**
@@ -126,15 +131,20 @@ export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
   const speedTri = ratingFromMult(reg(s.triple / abBase / LEAGUE.triple / powerTriMult), 1.6);
   const speed = 0.6 * speedSb + 0.4 * speedTri;
 
+  // Difesa: se il tabellino porta i valori REALI (da Fielding.csv) usali; altrimenti
+  // ricadi sull'archetipo di ruolo. Il Braccio reale può mancare pur avendo la Difesa
+  // (interni/1B: nessun segnale di braccio affidabile in Lahman) → archetipo per esso.
   const def = POS_DEFENSE[s.position ?? 'LF'] ?? { field: 0, arm: 0 };
+  const fielding = s.fld != null ? s.fld : RATING_AVG + def.field;
+  const arm = s.arm != null ? s.arm : RATING_AVG + def.arm;
 
   return {
     contact: clampRating(contact),
     power: clampRating(power),
     eye: clampRating(eye),
     speed: clampRating(speed),
-    fielding: clampRating(RATING_AVG + def.field),
-    arm: clampRating(RATING_AVG + def.arm),
+    fielding: clampRating(fielding),
+    arm: clampRating(arm),
   };
 }
 

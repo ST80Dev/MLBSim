@@ -46,7 +46,7 @@ const YEAR = Number(flag('year', 1999));
 const LAHMAN_DIR = String(flag('lahman', join(__dirname, '.lahman')));
 const DO_DOWNLOAD = flag('download', false);
 
-const CORE = ['Teams', 'Batting', 'Pitching', 'People', 'Appearances'];
+const CORE = ['Teams', 'Batting', 'Pitching', 'People', 'Appearances', 'Fielding'];
 const MIRROR =
   'https://raw.githubusercontent.com/cbwinslow/baseballdatabank/master/core';
 
@@ -158,6 +158,7 @@ function main() {
   const batting = battingAll.filter((r) => num(r.yearID) === YEAR);
   const pitching = pitchingAll.filter((r) => num(r.yearID) === YEAR);
   const appear = loadCsv('Appearances').filter((r) => num(r.yearID) === YEAR);
+  const fielding = loadCsv('Fielding').filter((r) => num(r.yearID) === YEAR);
   const peopleRows = loadCsv('People');
   const people = new Map(peopleRows.map((p) => [p.playerID, p]));
 
@@ -299,6 +300,90 @@ function main() {
     return best;
   };
 
+  // -------------------------------------------------------------------------
+  // DIFESA REALE (da Fielding.csv). Il tabellino di battuta non ha metriche
+  // difensive → prima la difesa era un ARCHETIPO piatto per ruolo (ogni SS
+  // uguale). Qui la individualizziamo dai dati reali, normalizzati PER RUOLO
+  // (roster) rispetto ai pari-ruolo dell'annata (z-score → 70 = media di ruolo):
+  //   - fielding ← Range Factor (PO+A)/9inn [range/attività] + errori [mani];
+  //     + DP per gli interni (turning), + PB per i ricevitori (ricezione).
+  //   - arm ← SOLO dove c'è dato reale: CS% per i ricevitori, assist per gli
+  //     esterni. Interni/1B (nessun segnale di braccio affidabile) → archetipo.
+  // I valori sono 40-100 PRE-stretch; l'importatore applica lo spread come al
+  // solito. Chi ha pochi inning (< ~33) ricade sull'archetipo. Vedi import.ts.
+  // -------------------------------------------------------------------------
+  const fldPosOf = (rosterPos) => (['LF', 'CF', 'RF'].includes(rosterPos) ? 'OF' : rosterPos);
+  // Aggrega Fielding per (pid, POS) sommando stint/righe.
+  const fldAgg = new Map(); // `${pid}|${POS}` -> {po,a,e,dp,pb,sb,cs,inn}
+  for (const f of fielding) {
+    const k = `${f.playerID}|${f.POS}`;
+    const c = fldAgg.get(k) ?? { po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0, inn: 0 };
+    c.po += num(f.PO); c.a += num(f.A); c.e += num(f.E); c.dp += num(f.DP);
+    c.pb += num(f.PB); c.sb += num(f.SB); c.cs += num(f.CS); c.inn += num(f.InnOuts);
+    fldAgg.set(k, c);
+  }
+  // Metriche grezze per giocatore (sul suo ruolo primario di roster).
+  const rawDef = new Map(); // pid -> {pos, rf, err, dp9, pb9, csRate, arm9, inn}
+  for (const pid of new Set([...batTot.keys()])) {
+    const pos = primaryPosOf(pid);
+    if (!pos || pos === 'P' || pos === 'DH') continue;
+    const c = fldAgg.get(`${pid}|${fldPosOf(pos)}`);
+    if (!c || c.inn < 400) continue; // < ~133 inning: campione difensivo instabile (RF flukey) → archetipo
+    const chances = c.po + c.a + c.e;
+    rawDef.set(pid, {
+      pos,
+      rf: ((c.po + c.a) * 27) / c.inn,
+      err: chances > 0 ? c.e / chances : 0,
+      dp9: (c.dp * 27) / c.inn,
+      pb9: (c.pb * 27) / c.inn,
+      csRate: c.sb + c.cs > 0 ? c.cs / (c.sb + c.cs) : null,
+      arm9: (c.a * 27) / c.inn,
+      inn: c.inn,
+    });
+  }
+  // Baseline per RUOLO (media/sd dei pari-ruolo con abbastanza inning).
+  const meanSd = (arr) => {
+    if (!arr.length) return { m: 0, s: 1 };
+    const m = arr.reduce((x, y) => x + y, 0) / arr.length;
+    const s = Math.sqrt(arr.reduce((x, y) => x + (y - m) ** 2, 0) / arr.length) || 1;
+    return { m, s };
+  };
+  const byPos = {};
+  for (const d of rawDef.values()) (byPos[d.pos] ??= []).push(d);
+  const base = {};
+  for (const [pos, arr] of Object.entries(byPos)) {
+    base[pos] = {
+      rf: meanSd(arr.map((d) => d.rf)),
+      err: meanSd(arr.map((d) => d.err)),
+      dp9: meanSd(arr.map((d) => d.dp9)),
+      pb9: meanSd(arr.map((d) => d.pb9)),
+      cs: meanSd(arr.filter((d) => d.csRate != null).map((d) => d.csRate)),
+      arm9: meanSd(arr.map((d) => d.arm9)),
+    };
+  }
+  const clampZ = (z) => Math.max(-2.5, Math.min(2.5, z));
+  const z = (x, ms) => clampZ((x - ms.m) / ms.s);
+  const roundR = (v) => Math.max(40, Math.min(100, Math.round(v)));
+  // Deriva fielding/arm 40-100 (pre-stretch) dai dati reali; null = usa archetipo.
+  const deriveDef = (pid) => {
+    const d = rawDef.get(pid);
+    if (!d) return { fld: null, arm: null };
+    const b = base[d.pos];
+    const IF = ['2B', '3B', 'SS', '1B'].includes(d.pos);
+    let fld;
+    if (d.pos === 'C') {
+      // Ricevitore: le PO sono strikeout (non range) → pesa ricezione (PB) + errori.
+      fld = 70 - 4 * z(d.pb9, b.pb9) - 3 * z(d.err, b.err);
+    } else {
+      fld = 70 + 7 * z(d.rf, b.rf) - 3 * z(d.err, b.err);
+      if (IF) fld += 1 * z(d.dp9, b.dp9); // turning dei doppi giochi (peso lieve: DP è context-dipendente)
+    }
+    let arm = null;
+    if (d.pos === 'C' && d.csRate != null) arm = 70 + 7 * z(d.csRate, b.cs);
+    else if (['LF', 'CF', 'RF'].includes(d.pos)) arm = 70 + 7 * z(d.arm9, b.arm9);
+    return { fld: roundR(fld), arm: arm == null ? null : roundR(arm) };
+  };
+
   // Assegnazione unica alla squadra primaria.
   const teamBatCand = new Map(); // teamID -> [cand battitore]
   for (const [pid, s] of batTot) {
@@ -393,7 +478,14 @@ function main() {
     // Eventuali caselle vuote (squadra atipica): riempi col miglior residuo.
     for (const slot of POS_SLOTS) if (!lineupSlots[slot]) lineupSlots[slot] = fillBest();
 
-    const bLine = (c, pos) => ({ id: c.pid, name: c.name, pos: pos ?? c.pos, bats: c.bats, age: c.age, ...c.line });
+    const bLine = (c, pos) => {
+      const def = deriveDef(c.pid); // difesa reale (null = archetipo di ruolo)
+      return {
+        id: c.pid, name: c.name, pos: pos ?? c.pos, bats: c.bats, age: c.age, ...c.line,
+        ...(def.fld != null ? { fld: def.fld } : {}),
+        ...(def.arm != null ? { arm: def.arm } : {}),
+      };
+    };
     const lineup = POS_SLOTS.map((slot) => bLine(lineupSlots[slot], slot));
 
     const rest = cand.filter((c) => !used.has(c.pid));
@@ -479,7 +571,9 @@ function main() {
 function q(s) { return `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`; }
 
 function batObj(b) {
-  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs} }`;
+  const def =
+    (b.fld != null ? `, fld: ${b.fld}` : '') + (b.arm != null ? `, arm: ${b.arm}` : '');
+  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${def} }`;
 }
 function pitObj(p) {
   return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv} }`;
@@ -542,6 +636,12 @@ export interface HistBatLine {
   hbp: number;
   sb: number;
   cs: number;
+  /** Difesa/Braccio REALI (40-100 pre-stretch) da Fielding.csv, normalizzati per
+   *  ruolo. Assenti = campione difensivo insufficiente → l'importatore usa
+   *  l'archetipo di ruolo. \`arm\` c'è solo dove misurabile (ricevitori: CS%;
+   *  esterni: assist); interni/1B usano l'archetipo. */
+  fld?: number;
+  arm?: number;
 }
 
 export interface HistPitLine {

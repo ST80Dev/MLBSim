@@ -60,6 +60,8 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
     sb: l.sb,
     cs: l.cs,
     position: l.pos,
+    fld: l.fld,
+    arm: l.arm,
   }));
   const stats = deriveBatterStats(ratings, l.pa);
   const ovr = batterOverall(ratings, l.pos);
@@ -109,7 +111,11 @@ const spread = (v: number): number => clampRating(RATING_AVG + (v - RATING_AVG) 
 function spreadBatter(r: Batter['ratings']): Batter['ratings'] {
   return {
     contact: spread(r.contact), power: spread(r.power), eye: spread(r.eye),
-    speed: spread(r.speed), fielding: spread(r.fielding), arm: spread(r.arm),
+    speed: spread(r.speed),
+    // Difesa/Braccio NON si stirano: lo stretch riespande il TALENTO offensivo/di
+    // lancio compresso dalla regressione; la difesa ora è REALE (da Fielding.csv,
+    // normalizzata per ruolo) e ha già la sua varianza — il ×1.4 la gonfierebbe.
+    fielding: r.fielding, arm: r.arm,
   };
 }
 function spreadPitcher(r: PitcherRatings): PitcherRatings {
@@ -269,4 +275,27 @@ export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
   };
 
   return { team, realBat, realPit };
+}
+
+/**
+ * Istanzia il POOL FREE AGENT storico: i giocatori reali con minutaggio ma fuori
+ * dalle 30 rose attive (dedup: un giocatore = una squadra primaria), convertiti in
+ * `Batter[]`/`Pitcher[]` con la STESSA inversione delle rose (stat reali → rating →
+ * ri-derivazione + difesa reale + boost/spread). Alimentano il mercato dell'off-
+ * season (`startOffseason`): finalmente i "fuori rosa" non spariscono. `id` = `hist-
+ * <playerID>` (identità stabile, come nelle rose). Il `seed` pilota solo il
+ * potenziale (deterministico per annata). */
+export function importHistoricalPool(
+  batLines: HistBatLine[],
+  pitLines: HistPitLine[],
+  seed: number,
+): { batters: Batter[]; pitchers: Pitcher[] } {
+  const rng = makeRng(seed);
+  const batters = batLines.map((l, i) =>
+    batterFrom(l, l.id ? `hist-${l.id}` : `fa-b${i}`, rng),
+  );
+  const pitchers = pitLines.map((l, i) =>
+    pitcherFrom(l, l.id ? `hist-${l.id}` : `fa-p${i}`, rng),
+  );
+  return { batters, pitchers };
 }
