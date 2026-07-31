@@ -5531,11 +5531,14 @@ function TeamDetailModal({
   mode,
   onClose,
   onPick,
+  canManage = true,
 }: {
   team: Team;
   mode: LeagueMode;
   onClose: () => void;
   onPick: () => void;
+  /** Se false (carriera avviata) la squadra gestita è bloccata: niente switch. */
+  canManage?: boolean;
 }) {
   const s = teamStrength(team);
   const pay = teamPayroll(team);
@@ -5621,9 +5624,15 @@ function TeamDetailModal({
         </div>
         <div className="td-foot">
           <span className="muted">Monte-ingaggi ${pay.toFixed(0)}M</span>
-          <button className="btn primary" onClick={onPick}>
-            Gestisci questa squadra ▸
-          </button>
+          {canManage ? (
+            <button className="btn primary" onClick={onPick}>
+              Gestisci questa squadra ▸
+            </button>
+          ) : (
+            <span className="muted" title="La squadra gestita si sceglie a inizio carriera e non cambia in corso di stagione">
+              🔒 Squadra gestita bloccata a stagione avviata
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -5759,6 +5768,7 @@ function LeagueOverview({
           mode={mode}
           onClose={() => setSelId('')}
           onPick={() => onPick(sel.id)}
+          canManage={!embedded}
         />
       )}
     </div>
