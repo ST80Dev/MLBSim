@@ -439,3 +439,37 @@ I tilt archetipo sono ~a somma zero sulla popolazione (aggregati di lega: HR/600
 BA ~.272), cambia solo la dispersione. La risposta derivata di **doppi** (potenza+contatto) e **basi ball**
 (occhio) è stata resa un po' più ampia perché la varietà dei rating si traduca in
 varietà di statistiche (σ 2B ~7-8, σ BB ~16 tra i 9 titolari, non più ~4 e ~11).
+
+## Import storico: profili FEDELI ⊕ varianza-squadra disaccoppiata
+
+Importare una stagione reale ha un conflitto di fondo: **un'unica leva** (lo
+stretch `HIST_SPREAD` sui rating individuali) doveva servire *due* obiettivi che
+tirano in direzioni opposte — la **varianza tra squadre** (le corazzate devono
+leggere forti) e la **fedeltà dei profili** (i tool di un giocatore devono
+rispecchiare le sue stat). Alzare lo stretch dava varianza ma **caricaturava** gli
+spigolosi (Glaus 2001 → C40/P100/O100); abbassarlo dava profili veri ma squadre
+tutte uguali. **Disaccoppiamento**: una leva per obiettivo.
+
+- **Profili → derivazione FEDELE.** Il contatto è **ancorato alla BA** (`contactBa`,
+  non più 50/50 col `contactSo` dai K, che esplodeva sul basso strikeout: un .271
+  a 9%K leggeva C100 come un .347). Il K rifinisce (±), asimmetrico e limitato.
+  Lo `HIST_SPREAD` resta **moderato** (1.25 + taper a rendimenti decrescenti verso
+  40/100) — abbastanza da contro-bilanciare la regressione, non da saturare.
+- **Varianza-squadra → convessità AGGREGATA** (`teamStrength`, solo storico via
+  `team.context`). Le rose reali hanno talento-medio simile (25-man convergente),
+  ma le corazzate **concentrano** i fenomeni: una convessità (`TEAM_CONVEX` 1.6)
+  sui sotto-punteggi allarga le distanze (Δ~5 → ~9-13) **senza toccare un solo
+  rating individuale**. `teamStrength` è **solo display** (non entra nel sim) →
+  epoca-safe.
+- **HR-gemma → coda-gemma** (`HR_TOP_KNEE`/`HR_TOP_GAIN`): un power-96 fedele
+  sfonda i 50+ HR dalla coda, senza bisogno che lo stretch lo porti a 100.
+
+**Correzione round-trip (fedeltà dell'aggregato).** L'inversione BA→rating
+(`ratingFromMult`, perSigma 1.12) **sovra-legge** rispetto alla forward
+`deriveBatterStats` (singoli perSigma 1.1 + contributo XBH sulla BA): il round-trip
+gonfiava l'aggregato di lega (BA .286 vs il reale ~.275 degli starter) e con esso
+l'R/G storico (5,98 → 6,3). Il fattore `RT` (0.78, proporzionale alla distanza da
+70) riporta l'aggregato al BA reale → **R/G ~6,0** (banda alta-offesa) con i profili
+elite preservati (Ichiro C95). NB: `HR/squadra ~200` **non** è gonfio — è ≈ il reale
+AL 2001, on-design "alta offesa". La lega *generata* (senza `context`) non è toccata
+da nulla di tutto questo: gira sul suo path (R/G ~4,7, i suoi rating già spaziano).

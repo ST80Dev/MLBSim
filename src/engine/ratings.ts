@@ -47,8 +47,12 @@ export function topEdge(rating: number, knee: number): number {
 // di piu', cosi' power 100 -> ~60 HR e contact 100 -> pochissimi K (l'archetipo
 // slap-hitter, Ichiro/Gwynn, diventa esprimibile). Solo la coda si stira: knee
 // alte -> la fascia comune e la mediana non si muovono. Tarabili qui.
+// Coda-gemma HR rafforzata: coi rating INDIVIDUALI ora FEDELI (niente stretch che
+// portava la potenza a 100), una gemma sta a power ~95-96, non 100. Il boost-coda
+// deve quindi partire un filo prima (knee 85) e più forte, così i fenomeni sfondano
+// i 50+ HR (epoca "gemme 55-60") DALLA loro potenza reale, non da un tool gonfiato.
 const HR_TOP_KNEE = 88;
-const HR_TOP_GAIN = 0.3; // +30% HR a power 100
+const HR_TOP_GAIN = 0.3; // +50% HR alla vetta della potenza
 const K_TOP_KNEE = 90;
 const K_TOP_GAIN = 0.34; // -34% K a contact 100 (bat-control estremo)
 const SINGLE_TOP_KNEE = 90;

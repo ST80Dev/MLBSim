@@ -420,7 +420,7 @@ function main() {
       arm9: meanSd(arr.map((d) => d.arm9)),
     };
   }
-  const clampZ = (z) => Math.max(-2.5, Math.min(2.5, z));
+  const clampZ = (z) => Math.max(-2.8, Math.min(2.8, z)); // cap più ampio → picchi più netti
   const z = (x, ms) => clampZ((x - ms.m) / ms.s);
   const roundR = (v) => Math.max(40, Math.min(100, Math.round(v)));
   // Deriva fielding/arm 40-100 (pre-stretch) dai dati reali; null = usa archetipo.
@@ -428,19 +428,45 @@ function main() {
     const d = rawDef.get(pid);
     if (!d) return { fld: null, arm: null };
     const b = base[d.pos];
-    const IF = ['2B', '3B', 'SS', '1B'].includes(d.pos);
+    const IF = ['2B', '3B', 'SS'].includes(d.pos);
     let fld;
     if (d.pos === 'C') {
       // Ricevitore: le PO sono strikeout (non range) → pesa ricezione (PB) + errori.
       fld = 70 - 4 * z(d.pb9, b.pb9) - 3 * z(d.err, b.err);
+    } else if (d.pos === '1B') {
+      // Prima base: le PO sono throw RICEVUTI (contesto di squadra, non skill) → NON
+      // usare il range factor. Vale l'AGGRESSIVITÀ/copertura (assist) + l'affidabilità
+      // (pochi errori, lo scoop). Così un guanto d'oro come Grace non è sotto-valutato.
+      fld = 70 + 5 * z(d.arm9, b.arm9) - 4 * z(d.err, b.err);
     } else {
-      fld = 70 + 7 * z(d.rf, b.rf) - 3 * z(d.err, b.err);
-      if (IF) fld += 1 * z(d.dp9, b.dp9); // turning dei doppi giochi (peso lieve: DP è context-dipendente)
+      // Posizioni di RANGE (SS/2B/3B/OF): range factor (coeff più alto → più picchi) + errori.
+      fld = 70 + 8 * z(d.rf, b.rf) - 3 * z(d.err, b.err);
+      if (IF) fld += 1 * z(d.dp9, b.dp9); // turning dei doppi giochi (peso lieve: context-dipendente)
     }
     let arm = null;
     if (d.pos === 'C' && d.csRate != null) arm = 70 + 7 * z(d.csRate, b.cs);
     else if (['LF', 'CF', 'RF'].includes(d.pos)) arm = 70 + 7 * z(d.arm9, b.arm9);
     return { fld: roundR(fld), arm: arm == null ? null : roundR(arm) };
+  };
+
+  // DIFESA del LANCIATORE (POS=P in Fielding.csv): comebacker, coprire prima,
+  // assist. Range Factor (PO+A/inn) + errori, normalizzati vs i lanciatori pari
+  // campione (z-score → 70 media). Individualizza il fielding dei partenti (era
+  // tutto 70): Maddux/Kenny Rogers elite, gli scarsi sotto. Chi ha pochi inning →
+  // archetipo (70). Segnale rumoroso (poche palle giocate) → coefficiente prudente.
+  const pitFieldRaw = new Map(); // pid -> {rf, err}
+  for (const [key, c] of fldAgg) {
+    if (!key.endsWith('|P') || c.inn < 400) continue;
+    const pid = key.slice(0, -2);
+    const chances = c.po + c.a + c.e;
+    pitFieldRaw.set(pid, { rf: ((c.po + c.a) * 27) / c.inn, err: chances > 0 ? c.e / chances : 0 });
+  }
+  const pfRf = meanSd([...pitFieldRaw.values()].map((d) => d.rf));
+  const pfErr = meanSd([...pitFieldRaw.values()].map((d) => d.err));
+  const derivePitField = (pid) => {
+    const d = pitFieldRaw.get(pid);
+    if (!d) return null;
+    return roundR(70 + 6 * z(d.rf, pfRf) - 2.5 * z(d.err, pfErr));
   };
 
   // Assegnazione unica alla squadra primaria.
@@ -573,12 +599,16 @@ function main() {
 
   function buildPitchers(teamID) {
     const cand = teamPitCand.get(teamID) ?? [];
-    const line = (c, role) => ({
-      id: c.pid, name: c.name, role, throws: c.throws, age: c.age,
-      gs: c.gs, outs: c.outs, h: c.h, hr: c.hr, bb: c.bb, so: c.so,
-      hbp: c.hbp, er: c.er, w: c.w, l: c.l, sv: c.sv,
-      ...(isRookiePit(c.pid) ? { rk: true } : {}),
-    });
+    const line = (c, role) => {
+      const fld = derivePitField(c.pid); // difesa reale del lanciatore (null = archetipo 70)
+      return {
+        id: c.pid, name: c.name, role, throws: c.throws, age: c.age,
+        g: c.g, gs: c.gs, outs: c.outs, h: c.h, hr: c.hr, bb: c.bb, so: c.so,
+        hbp: c.hbp, er: c.er, w: c.w, l: c.l, sv: c.sv,
+        ...(fld != null ? { fld } : {}),
+        ...(isRookiePit(c.pid) ? { rk: true } : {}),
+      };
+    };
 
     const starters = cand.filter((c) => c.gs >= 10).sort((a, b) => b.outs - a.outs);
     const relievers = cand.filter((c) => c.gs < 10).sort((a, b) => b.outs - a.outs);
@@ -651,8 +681,9 @@ function batObj(b) {
   return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${sec}${def}${rk} }`;
 }
 function pitObj(p) {
+  const fld = p.fld != null ? `, fld: ${p.fld}` : '';
   const rk = p.rk ? ', rk: true' : '';
-  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv}${rk} }`;
+  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, g: ${p.g}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv}${fld}${rk} }`;
 }
 
 function emitTs(built) {
@@ -734,6 +765,9 @@ export interface HistPitLine {
   role: PitcherRole;
   throws: ThrowHand;
   age: number;
+  /** Apparizioni totali (Resistenza dei rilievi: BF/apparizione). Opzionale per le
+   *  fixture a mano; i dataset generati la includono sempre. */
+  g?: number;
   gs: number;
   outs: number; // IP*3 (es. 213.1 IP = 640 out)
   h: number;
@@ -745,6 +779,9 @@ export interface HistPitLine {
   w: number;
   l: number;
   sv: number;
+  /** Difesa REALE del lanciatore (40-100) da Fielding.csv (POS=P): range factor +
+   *  errori sul monte. Assente = pochi inning → l'importatore usa l'archetipo (70). */
+  fld?: number;
   /** Esordiente MLB (nessun track record prima di quest'anno): gate rookie. */
   rk?: boolean;
 }

@@ -102,7 +102,6 @@ export interface BatterImportInput extends BatterStats {
  */
 export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
   const pa = Math.max(1, s.pa);
-  const single = Math.max(0, s.h - s.double - s.triple - s.hr);
 
   // Occhio dai BB (per PA). Gli esiti da AB (SO, battute valide) vanno divisi per
   // la base-AB, coerente con la forward (deriveBatterStats scala sugli AB): base =
@@ -118,11 +117,29 @@ export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
   const powerDbl = ratingFromMult(reg(s.double / abBase / LEAGUE.double), 1.11);
   const power = 0.8 * powerHr + 0.2 * powerDbl;
 
-  const contactSingle = ratingFromMult(reg(single / abBase / LEAGUE.single), 1.1);
-  // SO forward: abBase*so*mult(contact,0.88)*mult(eye,0.97). Isola la parte contact.
+  // Contatto ANCORATO alla MEDIA (BA): è ciò che il contatto deve predire. Prima si
+  // pesava 50/50 con contactSo (dai K), che ESPLODE sul basso strikeout — un .271 a
+  // 9% di K leggeva contact 100 come un .347, perché il contactSo (119) trascinava la
+  // media. Ora la BA è l'ancora; il basso/alto K RIFINISCE (±), ma è LIMITATO e non
+  // domina: un contact-maker senza media resta un contact-maker senza media.
+  const LG_BA =
+    (LEAGUE.single + LEAGUE.double + LEAGUE.triple + LEAGUE.hr) / (1 - LEAGUE.bb - LEAGUE.hbp);
+  const contactBa = ratingFromMult(reg(s.h / ab / LG_BA), 1.12);
+  // Parte-K isolata dalla forward (SO = abBase·so·mult(contact,0.88)·mult(eye,0.97)).
   const eyeSoMult = Math.pow(0.97, (eye - RATING_AVG) / 10);
   const contactSo = ratingFromMult(reg(s.so / abBase / LEAGUE.so / eyeSoMult), 0.88);
-  const contact = 0.5 * contactSingle + 0.5 * contactSo;
+  // Rifinitura-K asimmetrica: il basso K aggiunge poco (+), l'alto K toglie di più
+  // (−) — un forte strikeout-prone (Glaus) ha meno contatto reale, e non deve alzare
+  // il pavimento (che gonfiava l'offesa di lega). Non ribalta mai l'ancora-BA.
+  const kAdj = Math.max(-32, Math.min(10, contactSo - RATING_AVG)) * 0.6;
+  // Correzione ROUND-TRIP: l'inversione BA→rating (perSigma 1.12) sovra-legge rispetto
+  // alla forward deriveBatterStats (singoli perSigma 1.1 + contributo XBH sulla BA), così
+  // il round-trip gonfiava l'aggregato di lega (.286 vs il reale ~.275 degli starter) e
+  // con esso l'R/G storico. Il ritocco riporta l'aggregato al BA reale — è FEDELTÀ, non
+  // soppressione: contact scende quel tanto che serve perché deriveBatterStats(contact)
+  // riproduca la BA d'ingresso. Proporzionale alla distanza da 70 (l'errore è lì).
+  const RT = 0.78;
+  const contact = RATING_AVG + (contactBa + kAdj - RATING_AVG) * RT;
 
   // Velocita: SB e' la leva diretta (invertendo la formula lineare di sb);
   // i tripli confermano (data la Potenza gia' stimata).
@@ -152,6 +169,10 @@ export interface PitcherImportInput extends PitcherStats {
   role?: PitcherRole;
   /** Partite iniziate: stima la Resistenza (battitori affrontati per start). */
   gs?: number;
+  /** Apparizioni totali: stima la Resistenza dei RILIEVI (battitori per apparizione). */
+  g?: number;
+  /** Difesa REALE del lanciatore (40-100) da Fielding.csv, se disponibile. */
+  fld?: number;
 }
 
 /**
@@ -183,14 +204,30 @@ export function ratingsFromPitcherStats(s: PitcherImportInput): PitcherRatings {
   const movMultDips = 1 + (movMultRaw - 1) * DIPS_HIT_CONTROL;
   const movement = ratingFromMult(reg(movMultDips), 0.9);
 
-  // Resistenza: inverte deriveStamina per gli SP (24 + sigma*3 battitori/start).
-  let stamina: number;
+  // Resistenza: INVERTE deriveStamina dai battitori affrontati per uscita — così è
+  // REALE, non un archetipo piatto per ruolo (i rilievi erano tutti 65). SP: BF per
+  // partenza (24 = ~6 inning a rating 70). RP/CL: BF per APPARIZIONE (un LOOGY da un
+  // out ha poca Resistenza, un long-man molta). Le costanti 3/1.2/0.8 combaciano con
+  // deriveStamina (round-trip fedele).
+  // REGRESSIONE PER CAMPIONE: chi ha POCHE partenze/apparizioni ha un rapporto sballato
+  // (magari usato pochissimo quell'anno) → si regredisce verso il CENTRO di ruolo
+  // (neutro), così un micro-campione non produce una Resistenza estrema. Campione pieno
+  // → valore reale quasi intatto. Fallback al centro se mancano i conteggi.
+  const staminaCenter =
+    role === 'CL' ? RATING_AVG - 8 : role === 'RP' ? RATING_AVG - 5 : RATING_AVG;
+  let staminaRaw = staminaCenter;
+  let staminaW = 0;
   if (role === 'SP' && s.gs && s.gs > 0) {
-    const bfPerStart = bf / s.gs;
-    stamina = RATING_AVG + ((bfPerStart - 24) / 3) * 10;
-  } else {
-    stamina = role === 'CL' ? RATING_AVG - 8 : role === 'RP' ? RATING_AVG - 5 : RATING_AVG + 10;
+    staminaRaw = RATING_AVG + ((bf / s.gs - 24) / 3) * 10;
+    staminaW = s.gs / (s.gs + 10); // ~10 partenze di prior
+  } else if ((role === 'RP' || role === 'CL') && s.g && s.g > 0) {
+    const bfPerApp = bf / s.g;
+    staminaRaw = role === 'CL'
+      ? RATING_AVG + ((bfPerApp - 5) / 0.8) * 10
+      : RATING_AVG + ((bfPerApp - 7) / 1.2) * 10;
+    staminaW = s.g / (s.g + 22); // ~22 apparizioni di prior
   }
+  const stamina = staminaCenter + staminaW * (staminaRaw - staminaCenter);
 
   return {
     stuff: clampRating(stuff),
@@ -198,6 +235,7 @@ export function ratingsFromPitcherStats(s: PitcherImportInput): PitcherRatings {
     movement: clampRating(movement),
     groundball: clampRating(groundball),
     stamina: clampRating(stamina),
-    fielding: RATING_AVG,
+    // Difesa: reale (da Fielding.csv POS=P) se disponibile, altrimenti archetipo lega.
+    fielding: s.fld != null ? clampRating(s.fld) : RATING_AVG,
   };
 }

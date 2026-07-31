@@ -109,8 +109,21 @@ const PREVENT_SLOPE = 9; // punti-rating per 1.0 di ERA sotto/sopra l'epoca (con
 // in aggregato — misurato: R/G resta ~5.5, non gonfia. La Resistenza NON si stira
 // (è durabilità/ruolo, non qualità). Vedi docs/players-and-ratings § stretch storico.
 // ---------------------------------------------------------------------------
-const HIST_SPREAD = 1.4;
-const spread = (v: number): number => clampRating(RATING_AVG + (v - RATING_AVG) * HIST_SPREAD);
+const HIST_SPREAD = 1.25;
+// Lo stretch riespande il talento compresso, MA con rendimenti decrescenti vicino
+// alle sponde: senza taper un profilo già spigoloso (slugger paziente e strikeout-
+// prone, es. Glaus C44/P92/O94) veniva spinto fino a 40/100/100 — una caricatura.
+// Oltre ±SPREAD_KNEE di deviazione stirata il guadagno cala (×SPREAD_TAPER): la
+// fascia comune (dove sta la massa dei tool) è stirata pieno → varianza-squadra
+// intatta; solo i tool estremi non saturano più. Vedi docs § stretch storico.
+const SPREAD_KNEE = 22;
+const SPREAD_TAPER = 0.4;
+const spread = (v: number): number => {
+  let d = (v - RATING_AVG) * HIST_SPREAD;
+  const a = Math.abs(d);
+  if (a > SPREAD_KNEE) d = Math.sign(d) * (SPREAD_KNEE + (a - SPREAD_KNEE) * SPREAD_TAPER);
+  return clampRating(RATING_AVG + d);
+};
 // GATE ROOKIE (present-only, niente preveggenza): un esordiente senza track record
 // MLB NON riceve lo stretch. Lo stretch riespande il TALENTO PROVATO (compresso dalla
 // regressione); un rookie ha una sola annata incerta a definirlo, spesso un mezzo
@@ -134,7 +147,10 @@ function spreadPitcher(r: PitcherRatings): PitcherRatings {
   return {
     ...r,
     stuff: spread(r.stuff), control: spread(r.control), movement: spread(r.movement),
-    groundball: spread(r.groundball), fielding: spread(r.fielding),
+    groundball: spread(r.groundball),
+    // Difesa NON stirata: è reale (Fielding.csv) o archetipo neutro (70) — il ×1.4
+    // la gonfierebbe, come per i battitori.
+    fielding: r.fielding,
   };
 }
 
@@ -187,6 +203,8 @@ function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
     hbp: l.hbp,
     role: l.role,
     gs: l.gs,
+    g: l.g,
+    fld: l.fld,
   });
   // NB: nessun gate-rookie sui lanciatori — non gonfiano da esordienti (il bonus-
   // workload richiede inning, la regressione per campione già doma i micro-campioni)
