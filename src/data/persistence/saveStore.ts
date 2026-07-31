@@ -11,6 +11,7 @@ import type { MatchArrangement } from '../../engine/arrangement';
 import type { SeasonState } from '../season';
 import type { PlayoffState } from '../playoff';
 import type { LeagueSource } from '../leagueMode';
+import type { Team } from '../../engine/types';
 
 // Il "foglio partita" persistente e' definito nel motore (`MatchArrangement`):
 // la persistenza lo importa e basta, cosi' il motore resta la fonte di verita'
@@ -23,8 +24,12 @@ export type { MatchArrangement } from '../../engine/arrangement';
  *   - v2: aggiunge `seed` e `source` (la lega generata da seed diventa
  *     riproducibile; prima il seed era casuale ad ogni avvio → ricaricare un
  *     salvataggio rigenerava una lega DIVERSA da quella salvata).
+ *   - v3: aggiunge `teams` (rose PERSISTITE). Dopo il primo rollover di
+ *     off-season (aging/scambi/draft) la lega DIVERGE dal seed e non è più
+ *     ri-derivabile: da lì si salvano le rose vere. Assente (v2) → si deriva
+ *     ancora dal seed (`generateLeague`) / dall'annata (`buildHistoricalLeague`).
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Stato di gioco persistente (fetta della Fase 2). Cresce nelle fasi
@@ -61,6 +66,14 @@ export interface GameSave {
    * save che non hanno ancora raggiunto i playoff → trattato come "nessun playoff".
    */
   playoff?: PlayoffState;
+  /**
+   * Rose PERSISTITE (schema v3): presenti dopo il primo rollover di off-season,
+   * quando la lega ha smesso di coincidere col seed (aging + scambi + draft +
+   * mercato). Se presenti, sono la fonte di verità della lega e vanno usate al
+   * posto di `generateLeague(seed)` / `buildHistoricalLeague(year)`. Assenti nei
+   * save v2 (prima stagione, ancora ri-derivabili dal seed). Vedi `data/rollover.ts`.
+   */
+  teams?: Team[];
 }
 
 /** Metadati di uno slot, senza il payload (per elencare i salvataggi). */
