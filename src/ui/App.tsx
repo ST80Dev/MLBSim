@@ -31,7 +31,6 @@ import { batterOverall, pitcherOverall, RATING_AVG } from '../engine/ratings';
 import { disambiguateLastNames } from '../engine/names';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import { teamSynthesis, staffSynthesis } from '../engine/teamRatings';
-import type { TeamSynth } from '../engine/teamRatings';
 import { autoLineup, FIELD_SLOTS } from '../engine/lineup';
 import {
   defaultArrangement,
@@ -113,8 +112,16 @@ import {
   pitcherStatLine,
   STATS_MODE_SHORT,
   STATS_MODE_TITLE,
+  salaryFmt,
+  pct3,
+  rolesOf,
+  ipFmt,
+  seasonBatLine,
+  seasonPitLine,
+  defLine,
 } from './statlines';
-import type { StatItem, StatsMode } from './statlines';
+import type { StatItem, StatsMode, BatLine, PitLine } from './statlines';
+import { Rating, SynthBadges, OvrBadge, OvrBarCell, PotCell } from './rating-widgets';
 import { buildCommentary, logLine, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
 import { scoreCode } from './scorecode';
@@ -2840,14 +2847,6 @@ function RecapModal({
   );
 }
 
-function Rating({ v }: { v: number }) {
-  return (
-    <td className="rat" style={{ background: ratingColor(v) }}>
-      {v}
-    </td>
-  );
-}
-
 // Colonne del mini-popup: battuta e lancio (una riga "Stagione" reale + una
 // "Carriera/Storico" derivata dai rating).
 const PM_BAT_COLS: Array<[string, (l: BatLine) => string]> = [
@@ -2878,11 +2877,6 @@ const PM_PIT_COLS: Array<[string, (l: PitLine) => string]> = [
   ['WHIP', (l) => (l.ip ? l.whip.toFixed(2) : '—')],
   ['K/9', (l) => (l.ip ? l.k9.toFixed(1) : '—')],
 ];
-
-/** Stipendio annuale (milioni) come "12.5 M$". */
-function salaryFmt(m: number): string {
-  return `${m.toFixed(1)} M$`;
-}
 
 /**
  * Mini-popup giocatore: intestazione (nome, età, ruolo/i, overall + stelle,
@@ -3039,137 +3033,6 @@ function PlayerModal({
   );
 }
 
-/** Badge di sintesi squadra (OVR / Attacco / Difesa / staff Lanciatori). Riusato
- *  nel Roster (schieramento corrente) e in partita (titolari coinvolti). */
-function SynthBadges({ synth, staff }: { synth: TeamSynth; staff: number }) {
-  const item = (lbl: string, v: number, cls = '') => (
-    <span className={`ts-item ${cls}`.trim()}>
-      <b>{lbl}</b>
-      <i style={{ color: ratingColor(v) }}>{v}</i>
-    </span>
-  );
-  return (
-    <>
-      {item('OVR', synth.ovr, 'ovrbig')}
-      {item('ATT', synth.off)}
-      {item('DIF', synth.def)}
-      {item('LAN', staff, 'pit')}
-    </>
-  );
-}
-
-/** Voto in stelle 1..5 dall'overall: piene evidenti, vuote smorzate. */
-/**
- * Rating generale numerico in una card colorata in tono con la forza (testo
- * bianco grassetto), come le celle delle singole caratteristiche: stima precisa,
- * al posto delle stelle (troppo grossolane).
- */
-function OvrBadge({ overall }: { overall: number }) {
-  return (
-    <span className="ovr-badge" style={{ background: ratingColor(overall) }} title={`${overall} OVR`}>
-      {overall}
-    </span>
-  );
-}
-
-// Percentuale 0-100 di un rating sulla scala 40-100 (per le barre).
-const ratingPct = (v: number) => clamp01((v - 40) / 60, 0, 1) * 100;
-
-// Hash deterministico dell'id -> [0,1): rende la "nebbia di scouting" STABILE per
-// giocatore (non sfarfalla tra un render e l'altro) ma diversa da uno all'altro.
-function hash01(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return ((h >>> 0) % 100000) / 100000;
-}
-
-type Outlook = { dir: 'up' | 'flat' | 'down'; lo: number; hi: number };
-
-// Prospettiva di crescita "nebbiosa" mostrata in rosa AL POSTO del potenziale
-// nudo: una FASCIA (non un numero-verdetto), direzionale per fase d'età, così non
-// si legge il futuro esatto in anticipo.
-//  - giovane con margine    -> ▲ verso l'alto (upside dal potenziale, offuscato)
-//  - picco / nessun margine  -> numero secco (flat)
-//  - veterano (> 30)         -> ▼ verso il basso (declino stimato dalla curva
-//    d'età: fascia inferiore all'attuale)
-// La fascia CONTIENE il valore vero (stima onesta), ma con ampiezza e posizione
-// variabili per giocatore (seed sull'id): il tetto esatto resta nascosto.
-function growthOutlook(id: string, overall: number, potential: number, age: number): Outlook {
-  const seed = hash01(id);
-  if (age > 30) {
-    // Declino: fascia INFERIORE all'attuale, dal calo atteso (~ (età-30)/anno).
-    const dec = Math.max(1, Math.min(9, Math.round((age - 30) * 0.7)));
-    const hi = Math.max(40, overall - Math.round(seed));
-    const lo = Math.max(40, Math.min(hi, overall - dec - Math.round(seed * 2)));
-    return { dir: 'down', lo, hi };
-  }
-  const margin = potential - overall;
-  if (margin <= 1) return { dir: 'flat', lo: overall, hi: overall };
-  // Ampiezza della nebbia: cresce col margine e con la gioventù (un 20enne è più
-  // imprevedibile). La fascia racchiude il potenziale vero, spostata dal seed.
-  const spread = Math.max(1, Math.min(5, Math.round(margin * 0.4 + (age < 24 ? 2 : 1))));
-  const lo = Math.max(overall, Math.min(potential, potential - 1 - Math.round(seed * spread)));
-  const hi = Math.min(100, Math.max(potential, potential + 1 + Math.round((1 - seed) * spread)));
-  return { dir: 'up', lo, hi };
-}
-
-// Barra OVR mini: il riempimento (colore del rating) è l'overall corrente; se c'è
-// upside, il tratto fino al bordo ALTO della fascia (hi, non il potenziale esatto)
-// resta visibile come segmento più chiaro = "spazio di crescita". Info di corredo.
-function OvrBar({ id, overall, potential, age }: { id: string; overall: number; potential: number; age: number }) {
-  const o = growthOutlook(id, overall, potential, age);
-  const head = o.dir === 'up';
-  return (
-    <span className="ovr-bar" title={head ? `OVR ${overall} · crescita stimata ~${o.lo}-${o.hi}` : `OVR ${overall}`}>
-      {head && <span className="ovr-bar-pot" style={{ width: `${ratingPct(o.hi)}%` }} />}
-      <span className="ovr-bar-fill" style={{ width: `${ratingPct(overall)}%`, background: ratingColor(overall) }} />
-    </span>
-  );
-}
-
-// Colonna DEDICATA per la barra OVR (fissa, allineata verticalmente riga per
-// riga: niente più barre "a scorrimento" dopo nomi di lunghezza diversa).
-function OvrBarCell({ id, overall, potential, age }: { id: string; overall: number; potential: number; age: number }) {
-  return (
-    <td className="ovrbar-c">
-      <OvrBar id={id} overall={overall} potential={potential} age={age} />
-    </td>
-  );
-}
-
-// Colonna DEDICATA per la prospettiva (40-100). Mostra una FASCIA "nebbiosa" (mai
-// il tetto esatto): ▲lo-hi se c'è upside (giovane), ▼lo-hi se è probabile un
-// declino (veterano), o il numero secco al picco. Formato diverso dal badge OVR
-// per non confonderlo a colpo d'occhio: è una stima da scout, non un verdetto.
-function PotCell({ id, overall, potential, age }: { id: string; overall: number; potential: number; age: number }) {
-  const o = growthOutlook(id, overall, potential, age);
-  if (o.dir === 'flat') {
-    return (
-      <td className="pot-c">
-        <span className="pot-num" title="Al picco: nessun margine di crescita atteso">
-          {overall}
-        </span>
-      </td>
-    );
-  }
-  const arrow = o.dir === 'up' ? '▲' : '▼';
-  const title =
-    o.dir === 'up'
-      ? `Crescita stimata ~${o.lo}-${o.hi} (stima da scout, non il tetto esatto)`
-      : `Declino stimato ~${o.lo}-${o.hi} col progredire dell'età (stima da scout)`;
-  return (
-    <td className="pot-c">
-      <span className={`pot-num ${o.dir}`} title={title}>
-        {arrow}
-        {o.lo}-{o.hi}
-      </span>
-    </td>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Pagina "Roster": gestione rosa della squadra gestita, anche schermata di
 // preparazione partita. Linguette Fielders / Pitchers. Le mosse si fanno per
@@ -3194,95 +3057,6 @@ const ROSTER_STAT_LABEL: Record<RosterStat, string> = {
   hist: 'Storico',
   ratings: 'Caratteristiche',
 };
-
-const clamp01 = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-const round = (x: number) => Math.round(x);
-
-/** Media/percentuale come .312 (senza zero iniziale). */
-function pct3(x: number): string {
-  return x.toFixed(3).replace(/^0/, '');
-}
-
-/** Ruolo/i naturali del battitore (principale + eventuale secondario). */
-function rolesOf(b: Batter): string {
-  return b.secondaryPosition ? `${b.position}/${b.secondaryPosition}` : b.position;
-}
-
-interface BatLine {
-  g: number; avg: number; obp: number; slg: number;
-  h: number; d2: number; t3: number; hr: number; rbi: number; bb: number; so: number; sb: number;
-}
-
-interface PitLine {
-  w: number; l: number; g: number; gs: number; ip: number; ipOuts: number; era: number;
-  h: number; bb: number; k: number; svo: number; sv: number; whip: number; k9: number;
-}
-
-/** IP in notazione baseball: interi + terzi (es. 200.1). */
-function ipFmt(outs: number): string {
-  return `${Math.floor(outs / 3)}.${outs % 3}`;
-}
-
-/** Linea di battuta REALE dalle statistiche accumulate della stagione. */
-function seasonBatLine(a?: SeasonBat): BatLine {
-  const g = a?.g ?? 0, ab = a?.ab ?? 0, h = a?.h ?? 0, bb = a?.bb ?? 0;
-  const d2 = a?.double ?? 0, t3 = a?.triple ?? 0, hr = a?.hr ?? 0;
-  const singles = h - d2 - t3 - hr;
-  const tb = singles + 2 * d2 + 3 * t3 + 4 * hr;
-  return {
-    g,
-    avg: ab ? h / ab : 0,
-    obp: ab + bb ? (h + bb) / (ab + bb) : 0,
-    slg: ab ? tb / ab : 0,
-    h, d2, t3, hr, rbi: a?.rbi ?? 0, bb, so: a?.so ?? 0, sb: a?.sb ?? 0,
-  };
-}
-
-/** Linea di lancio REALE dalle statistiche accumulate della stagione. */
-function seasonPitLine(a?: SeasonPit): PitLine {
-  const outs = a?.outs ?? 0;
-  const ip = outs / 3;
-  const h = a?.h ?? 0, bb = a?.bb ?? 0, k = a?.so ?? 0, er = a?.er ?? 0;
-  return {
-    w: a?.w ?? 0, l: a?.l ?? 0, g: a?.g ?? 0, gs: a?.gs ?? 0, ip, ipOuts: outs,
-    era: ip ? (er / ip) * 9 : 0,
-    h, bb, k, svo: a?.svo ?? 0, sv: a?.sv ?? 0,
-    whip: ip ? (h + bb) / ip : 0, k9: ip ? (k / ip) * 9 : 0,
-  };
-}
-
-// Modello difensivo (stima): chances per gara per ruolo, quota di assist,
-// tasso base di errore. Gli eventi difensivi non sono ancora simulati dal
-// motore, quindi queste colonne sono STIME da ruolo + rating di difesa.
-const DEF_MODEL: Record<string, { ch: number; aShare: number; err: number }> = {
-  C: { ch: 7.5, aShare: 0.12, err: 0.006 },
-  '1B': { ch: 9.2, aShare: 0.08, err: 0.006 },
-  '2B': { ch: 4.6, aShare: 0.55, err: 0.02 },
-  SS: { ch: 4.4, aShare: 0.62, err: 0.025 },
-  '3B': { ch: 2.8, aShare: 0.65, err: 0.03 },
-  LF: { ch: 2.0, aShare: 0.05, err: 0.01 },
-  CF: { ch: 2.7, aShare: 0.05, err: 0.008 },
-  RF: { ch: 2.1, aShare: 0.06, err: 0.01 },
-  DH: { ch: 0, aShare: 0, err: 0 },
-};
-
-interface DefLine {
-  e: number;
-  a: number;
-  po: number;
-  fp: number;
-}
-
-/** Stima difensiva (E/A/PO/FLD%) da ruolo, partite e rating di difesa. */
-function defLine(pos: Position, g: number, fielding: number): DefLine {
-  const m = DEF_MODEL[pos] ?? DEF_MODEL.LF;
-  const chances = m.ch * g;
-  const a = round(chances * m.aShare);
-  const po = round(chances - a);
-  const e = round(chances * m.err * clamp01(1 - (fielding - RATING_AVG) / 60, 0.4, 1.7));
-  const tc = po + a + e;
-  return { e, a, po, fp: tc ? (po + a) / tc : 0 };
-}
 
 // Colonne divise per schermata: ATTACCO (lineup) vs DIFESA (schieramento).
 const BAT_ATK_COLS = ['G', 'AVG', 'OBP', 'SLG', 'H', '2B', '3B', 'HR', 'RBI', 'BB', 'SO', 'SB'];
