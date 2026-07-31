@@ -375,14 +375,31 @@ function pickReliever(l: LiveGame, s: SideState): number | null {
 }
 
 /**
- * Cambio automatico del lanciatore (CPU / quick-sim) all'affaticamento: se il
- * lanciatore corrente ha superato la sua soglia di battitori, entra il rilievo
+ * "Hook" precoce: un PARTENTE che ha già mandato la squadra sotto di troppi punti
+ * PRIMA del 5° inning va tolto anche se non è affaticato, per limitare i danni
+ * (entra un rilievo lungo, vedi `pickReliever`). Vale solo per gli SP: un rilievo
+ * in emorragia esce comunque all'affaticamento. Vedi `TUNING.earlyHook`.
+ */
+function earlyStarterBlowout(l: LiveGame, s: SideState): boolean {
+  const p = currentPitcher(s);
+  if (p.role !== 'SP') return false;
+  const H = TUNING.earlyHook;
+  if (l.inning >= H.beforeInning) return false; // solo "prima del 5°"
+  const oppRuns = (s === l.awaySide ? l.homeSide : l.awaySide).runs;
+  return oppRuns - s.runs >= H.deficit; // la squadra in difesa è sotto di deficit+
+}
+
+/**
+ * Cambio automatico del lanciatore (CPU / quick-sim): entra un rilievo se il
+ * lanciatore corrente è affaticato (superata la soglia di battitori) OPPURE se un
+ * partente sta subendo un'emorragia precoce (`earlyStarterBlowout`). Il rilievo è
  * scelto da `pickReliever` (portato in pedana come nel cambio manuale).
  */
 function autoManagePitcher(l: LiveGame, s: SideState): void {
   const p = currentPitcher(s);
   const threshold = p.stamina + (p.role === 'SP' ? 4 : 2);
-  if (s.battersFacedByCurrent < threshold) return;
+  const fatigued = s.battersFacedByCurrent >= threshold;
+  if (!fatigued && !earlyStarterBlowout(l, s)) return;
   const j = pickReliever(l, s);
   if (j == null) return;
   const [pk] = s.pitchers.splice(j, 1);

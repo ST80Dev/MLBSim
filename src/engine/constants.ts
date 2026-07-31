@@ -78,6 +78,18 @@ export const TUNING = {
   fatiguePerBatter: 0.03,
 
   /**
+   * "Hook" precoce dell'auto-manager: un PARTENTE che manda la squadra sotto di
+   * troppi punti PRIMA del 5° inning viene tolto anche se non è ancora affaticato,
+   * per limitare i danni (entra un rilievo lungo che si prende 2-3 inning). Solo
+   * auto-gestione (CPU / quick-sim), non la difesa manuale dell'umano.
+   *   scatta se: role === 'SP' && inning < beforeInning && (puntiAvversari − punti) ≥ deficit
+   */
+  earlyHook: {
+    beforeInning: 5, // solo nei primi 4 inning ("prima del 5°")
+    deficit: 4, // sotto di 4+ punti col partente in pedana
+  },
+
+  /**
    * Rubata di base (attiva doti Velocita' del corridore, Braccio del ricevitore,
    * Difesa/hold del lanciatore). Probabilita' di riuscita:
    *   base + speed*perSpeed - arm*perArm - hold*perHold - (rubata di 3a? penalita')

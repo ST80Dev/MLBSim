@@ -202,8 +202,12 @@ squadra **gestita dall'umano** resta manuale.
   l'**import storico** ora **riordina** il bullpen (prima era in ordine di dataset,
   spesso col closer per primo → l'auto-manager lo infilava come primo rilievo, "closer
   al 6°": bug corretto in `data/historical/import.ts`).
-- **Trigger**: solo affaticamento — si cambia quando il lanciatore corrente ha
-  affrontato `≥ stamina + 4` battitori (SP) o `+ 2` (rilievo).
+- **Trigger**: (a) **affaticamento** — si cambia quando il lanciatore corrente ha
+  affrontato `≥ stamina + 4` battitori (SP) o `+ 2` (rilievo); (b) **hook precoce**
+  — un **partente** che manda la squadra **sotto di ≥ 4 punti PRIMA del 5°** viene
+  tolto anche se non affaticato, per limitare i danni (`TUNING.earlyHook`). L'hook
+  vale solo per gli SP: entra un rilievo **lungo** (regola sotto: inning ≤ 6 →
+  massima resistenza) che si prende 2-3 inning finché non è a sua volta affaticato.
 - **Chi entra** (`pickReliever`, per priorità): (1) **situazione da salvezza**
   — `inning ≥ 8` e vantaggio di chi difende in `[+1, +3]` → il **CLOSER**; (2) se
   restano solo closer → il closer; (3) altrimenti un **non-closer**: presto
