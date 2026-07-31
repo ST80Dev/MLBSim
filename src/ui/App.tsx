@@ -3008,12 +3008,19 @@ function RosterPage({
   // --- Pitchers: composizione staff via drag&drop ----------------------
   const usedP = new Set([...arr.rotation, ...arr.bullpen]);
   const availP = pitchers.filter((p) => !usedP.has(p.id));
+  // Regola UNIFICATA (niente scambio tra sezioni, che disorientava):
+  //  - INTRA-sezione (stessa lista, rilasciato su un altro lanciatore) = SWAP:
+  //    i due si scambiano di posto. È l'UNICO modo per cambiare posizione dentro
+  //    la sezione (rotazione: chi parte per primo; bullpen: ordine d'uso).
+  //  - INTER-sezione = AGGIUNTA alla sezione di destinazione: il lanciatore si
+  //    sposta nella lista target (in posizione se rilasciato su una riga, in coda
+  //    se sull'area vuota) e lascia la sezione di partenza. Verso "Disponibili"
+  //    torna in riserva. Le sezioni hanno taglia LIBERA (unico vincolo: almeno
+  //    uno starter, vedi validateArrangement) — così si può ridurre la rotazione
+  //    e poi riaggiungere un partente senza slot bloccati.
   const placePitcher = (toList: 'rotation' | 'bullpen' | 'avail', targetId?: string) => {
     if (!drag) return;
     const id = drag.id;
-    // Riordino DENTRO la stessa lista (rotazione o bullpen) = SWAP: i due si
-    // scambiano di posto, gli altri restano fermi. Cross-lista resta uno spostamento
-    // (il numero di lanciatori per lista e' variabile, non c'e' una casella fissa).
     if (drag.from === toList && targetId && id !== targetId && toList !== 'avail') {
       const swap = (list: string[]) => {
         const a = list.indexOf(id);
@@ -3024,23 +3031,6 @@ function RosterPage({
         return next;
       };
       update(toList === 'rotation' ? { rotation: swap(arr.rotation) } : { bullpen: swap(arr.bullpen) });
-      setDrag(null);
-      return;
-    }
-    // Riserva -> attivi = SWAP (mai append): il lanciatore entra al posto del
-    // target (o dell'ultimo se rilasciato sull'area vuota) e il rimpiazzato torna
-    // in riserva. Cosi' la rosa attiva (rotazione+bullpen) resta a taglia costante.
-    if (drag.from === 'avail' && toList !== 'avail') {
-      const destList = toList === 'rotation' ? arr.rotation : arr.bullpen;
-      if (destList.length === 0) {
-        update(toList === 'rotation' ? { rotation: [id] } : { bullpen: [id] });
-        setDrag(null);
-        return;
-      }
-      const outId = targetId && destList.includes(targetId) ? targetId : destList[destList.length - 1];
-      const newDest = destList.map((x) => (x === outId ? id : x));
-      const closerId = arr.closerId === outId ? undefined : arr.closerId; // il rimpiazzato perde CL
-      update(toList === 'rotation' ? { rotation: newDest, closerId } : { bullpen: newDest, closerId });
       setDrag(null);
       return;
     }
@@ -3707,18 +3697,18 @@ function RosterPage({
           {pitTable(
             'Rotazione',
             canPickStarter
-              ? 'ordine · riposo a lato · “parte oggi” per scegliere il partente'
-              : 'ordine degli starter · il primo parte',
+              ? '“parte oggi” sceglie il partente · trascina su un altro = riordina'
+              : 'il primo parte · trascina su un altro = riordina',
             'rotation',
             arr.rotation.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
           )}
           {pitTable(
             'Bullpen',
-            "ordine d'ingresso · tocca CL per dare a un rilievo il ruolo di closer",
+            "ordine d'uso · trascina su un altro = riordina · CL nomina il closer",
             'bullpen',
             arr.bullpen.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
           )}
-          {pitTable('Disponibili', 'trascina in rotazione o bullpen (fa uno scambio)', 'avail', availP)}
+          {pitTable('Disponibili', 'trascina in Rotazione o Bullpen per aggiungerlo', 'avail', availP)}
         </>
       )}
 
