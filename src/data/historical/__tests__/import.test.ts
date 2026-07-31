@@ -267,14 +267,17 @@ describe('difesa individualizzata (Fielding.csv)', () => {
 // Seconde posizioni REALI (Appearances): i multi-ruolo storici sono schierabili
 // fuori ruolo (canOccupy) come nel seed generato, per gestione/ottimizzazione.
 describe('seconde posizioni storiche (Appearances)', () => {
-  it('le secondarie derivate sono SEMPRE valide (in SECONDARY_OPTIONS del primario)', () => {
+  it('secondarie SEMPRE valide e copertura maggioritaria (carriera reale + fallback ≤33)', () => {
     const players = buildHistoricalLeague(2002).flatMap((t) => [
       ...t.lineup,
       ...t.bench,
       ...t.reserveBatters,
     ]);
     const withSec = players.filter((b) => b.secondaryPosition);
-    expect(withSec.length).toBeGreaterThan(30); // esistono davvero multi-ruolo
+    // Copertura: stragrande maggioranza (storia di carriera + fallback plausibile
+    // per i giovani), ma NON il 100% (i mono-ruolo veterani restano fedeli).
+    expect(withSec.length / players.length).toBeGreaterThan(0.85);
+    expect(withSec.length / players.length).toBeLessThan(1);
     for (const b of withSec) {
       const opts = SECONDARY_OPTIONS[b.position];
       expect(opts, `${b.name} ${b.position}`).toBeTruthy();

@@ -136,6 +136,7 @@ const SECONDARY_OPTIONS = {
   RF: ['LF', 'CF', '1B'], DH: ['1B', 'LF', 'RF', '3B', 'C'],
 };
 const SEC_MIN_GAMES = 10; // partite minime a una casella per considerarla "seconda posizione"
+const SEC_FALLBACK_MAX_AGE = 33; // sotto: mono-ruolo prende una secondaria plausibile per adiacenza
 // Seconda posizione REALE: la casella più giocata (oltre la primaria) tra quelle
 // ammesse dall'archetipo, se il giocatore vi ha davvero giocato ≥ soglia. Per i DH
 // è la loro "casa" difensiva (dove scendono in campo). Da Appearances (gAt).
@@ -180,7 +181,8 @@ function main() {
   const pitchingAll = loadCsv('Pitching');
   const batting = battingAll.filter((r) => num(r.yearID) === YEAR);
   const pitching = pitchingAll.filter((r) => num(r.yearID) === YEAR);
-  const appear = loadCsv('Appearances').filter((r) => num(r.yearID) === YEAR);
+  const appearAll = loadCsv('Appearances');
+  const appear = appearAll.filter((r) => num(r.yearID) === YEAR);
   const fielding = loadCsv('Fielding').filter((r) => num(r.yearID) === YEAR);
   const peopleRows = loadCsv('People');
   const people = new Map(peopleRows.map((p) => [p.playerID, p]));
@@ -188,6 +190,21 @@ function main() {
   // Totali per (playerID, anno) sull'intera finestra Marcel, per battuta e
   // lancio. Servono a stimare il TALENTO da più stagioni (non da un anno solo).
   const winYears = new Set(MARCEL.map((m) => m.y));
+
+  // Apparizioni per casella su TUTTA LA CARRIERA fino all'anno di gioco (nessuna
+  // preveggenza: solo yearID <= YEAR): la storia posizionale completa del giocatore,
+  // per derivare la SECONDA posizione con ampia copertura — un veterano ha quasi
+  // sempre giocato più caselle nel corso della carriera (es. un ex-SS ora stabile a
+  // 3B, un ex-2B ora a 1B). La posizione PRIMARIA resta quella dell'anno (`appTot`).
+  const appCareer = new Map(); // pid -> {C,1B,...,DH} partite sommate (carriera <= YEAR)
+  for (const a of appearAll) {
+    if (num(a.yearID) > YEAR) continue; // niente futuro
+    const pid = a.playerID;
+    const c = appCareer.get(pid) ?? { C: 0, '1B': 0, '2B': 0, '3B': 0, SS: 0, LF: 0, CF: 0, RF: 0, DH: 0 };
+    c.C += num(a.G_c); c['1B'] += num(a.G_1b); c['2B'] += num(a.G_2b); c['3B'] += num(a.G_3b);
+    c.SS += num(a.G_ss); c.LF += num(a.G_lf); c.CF += num(a.G_cf); c.RF += num(a.G_rf); c.DH += num(a.G_dh);
+    appCareer.set(pid, c);
+  }
   const batByYear = new Map(); // pid -> Map(anno -> totali battuta)
   for (const r of battingAll) {
     const y = num(r.yearID);
@@ -504,7 +521,16 @@ function main() {
     const bLine = (c, pos) => {
       const def = deriveDef(c.pid); // difesa reale (null = archetipo di ruolo)
       const primary = pos ?? c.pos;
-      const sec = deriveSecondary(c.gAt, primary); // seconda posizione reale (Appearances)
+      // Seconda posizione dalla STORIA POSIZIONALE di CARRIERA (fino a quell'anno):
+      // ampia copertura senza inventare nulla — la casella che ha davvero giocato.
+      let sec = deriveSecondary(appCareer.get(c.pid), primary);
+      // Fallback PLAUSIBILE (non-dato) per i mono-ruolo GIOVANI (≤33 anni, più
+      // verosimilmente spostabili): la casella più naturale per adiacenza. I
+      // veterani mono-ruolo restano fedeli (nessuna secondaria inventata).
+      if (!sec && c.age <= SEC_FALLBACK_MAX_AGE) {
+        const opts = SECONDARY_OPTIONS[primary];
+        if (opts && opts.length) sec = opts[0];
+      }
       return {
         id: c.pid, name: c.name, pos: primary, bats: c.bats, age: c.age, ...c.line,
         ...(sec ? { sec } : {}),
