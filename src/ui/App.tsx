@@ -113,8 +113,15 @@ import {
   pitcherStatLine,
   STATS_MODE_SHORT,
   STATS_MODE_TITLE,
+  salaryFmt,
+  pct3,
+  rolesOf,
+  ipFmt,
+  seasonBatLine,
+  seasonPitLine,
+  defLine,
 } from './statlines';
-import type { StatItem, StatsMode } from './statlines';
+import type { StatItem, StatsMode, BatLine, PitLine } from './statlines';
 import { buildCommentary, logLine, PHASE_MS, HOLD_MS } from './commentary';
 import type { Commentary } from './commentary';
 import { scoreCode } from './scorecode';
@@ -2879,11 +2886,6 @@ const PM_PIT_COLS: Array<[string, (l: PitLine) => string]> = [
   ['K/9', (l) => (l.ip ? l.k9.toFixed(1) : '—')],
 ];
 
-/** Stipendio annuale (milioni) come "12.5 M$". */
-function salaryFmt(m: number): string {
-  return `${m.toFixed(1)} M$`;
-}
-
 /**
  * Mini-popup giocatore: intestazione (nome, età, ruolo/i, overall + stelle,
  * stipendio), RATING DEL MOMENTO colorati (per il fielder la DIF è calcolata
@@ -3196,93 +3198,6 @@ const ROSTER_STAT_LABEL: Record<RosterStat, string> = {
 };
 
 const clamp01 = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-const round = (x: number) => Math.round(x);
-
-/** Media/percentuale come .312 (senza zero iniziale). */
-function pct3(x: number): string {
-  return x.toFixed(3).replace(/^0/, '');
-}
-
-/** Ruolo/i naturali del battitore (principale + eventuale secondario). */
-function rolesOf(b: Batter): string {
-  return b.secondaryPosition ? `${b.position}/${b.secondaryPosition}` : b.position;
-}
-
-interface BatLine {
-  g: number; avg: number; obp: number; slg: number;
-  h: number; d2: number; t3: number; hr: number; rbi: number; bb: number; so: number; sb: number;
-}
-
-interface PitLine {
-  w: number; l: number; g: number; gs: number; ip: number; ipOuts: number; era: number;
-  h: number; bb: number; k: number; svo: number; sv: number; whip: number; k9: number;
-}
-
-/** IP in notazione baseball: interi + terzi (es. 200.1). */
-function ipFmt(outs: number): string {
-  return `${Math.floor(outs / 3)}.${outs % 3}`;
-}
-
-/** Linea di battuta REALE dalle statistiche accumulate della stagione. */
-function seasonBatLine(a?: SeasonBat): BatLine {
-  const g = a?.g ?? 0, ab = a?.ab ?? 0, h = a?.h ?? 0, bb = a?.bb ?? 0;
-  const d2 = a?.double ?? 0, t3 = a?.triple ?? 0, hr = a?.hr ?? 0;
-  const singles = h - d2 - t3 - hr;
-  const tb = singles + 2 * d2 + 3 * t3 + 4 * hr;
-  return {
-    g,
-    avg: ab ? h / ab : 0,
-    obp: ab + bb ? (h + bb) / (ab + bb) : 0,
-    slg: ab ? tb / ab : 0,
-    h, d2, t3, hr, rbi: a?.rbi ?? 0, bb, so: a?.so ?? 0, sb: a?.sb ?? 0,
-  };
-}
-
-/** Linea di lancio REALE dalle statistiche accumulate della stagione. */
-function seasonPitLine(a?: SeasonPit): PitLine {
-  const outs = a?.outs ?? 0;
-  const ip = outs / 3;
-  const h = a?.h ?? 0, bb = a?.bb ?? 0, k = a?.so ?? 0, er = a?.er ?? 0;
-  return {
-    w: a?.w ?? 0, l: a?.l ?? 0, g: a?.g ?? 0, gs: a?.gs ?? 0, ip, ipOuts: outs,
-    era: ip ? (er / ip) * 9 : 0,
-    h, bb, k, svo: a?.svo ?? 0, sv: a?.sv ?? 0,
-    whip: ip ? (h + bb) / ip : 0, k9: ip ? (k / ip) * 9 : 0,
-  };
-}
-
-// Modello difensivo (stima): chances per gara per ruolo, quota di assist,
-// tasso base di errore. Gli eventi difensivi non sono ancora simulati dal
-// motore, quindi queste colonne sono STIME da ruolo + rating di difesa.
-const DEF_MODEL: Record<string, { ch: number; aShare: number; err: number }> = {
-  C: { ch: 7.5, aShare: 0.12, err: 0.006 },
-  '1B': { ch: 9.2, aShare: 0.08, err: 0.006 },
-  '2B': { ch: 4.6, aShare: 0.55, err: 0.02 },
-  SS: { ch: 4.4, aShare: 0.62, err: 0.025 },
-  '3B': { ch: 2.8, aShare: 0.65, err: 0.03 },
-  LF: { ch: 2.0, aShare: 0.05, err: 0.01 },
-  CF: { ch: 2.7, aShare: 0.05, err: 0.008 },
-  RF: { ch: 2.1, aShare: 0.06, err: 0.01 },
-  DH: { ch: 0, aShare: 0, err: 0 },
-};
-
-interface DefLine {
-  e: number;
-  a: number;
-  po: number;
-  fp: number;
-}
-
-/** Stima difensiva (E/A/PO/FLD%) da ruolo, partite e rating di difesa. */
-function defLine(pos: Position, g: number, fielding: number): DefLine {
-  const m = DEF_MODEL[pos] ?? DEF_MODEL.LF;
-  const chances = m.ch * g;
-  const a = round(chances * m.aShare);
-  const po = round(chances - a);
-  const e = round(chances * m.err * clamp01(1 - (fielding - RATING_AVG) / 60, 0.4, 1.7));
-  const tc = po + a + e;
-  return { e, a, po, fp: tc ? (po + a) / tc : 0 };
-}
 
 // Colonne divise per schermata: ATTACCO (lineup) vs DIFESA (schieramento).
 const BAT_ATK_COLS = ['G', 'AVG', 'OBP', 'SLG', 'H', '2B', '3B', 'HR', 'RBI', 'BB', 'SO', 'SB'];
