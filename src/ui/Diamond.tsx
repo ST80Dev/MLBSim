@@ -173,24 +173,28 @@ function FielderLabel({
   pos,
   name,
   below,
+  color,
 }: {
   x: number;
   y: number;
   pos: Position;
   name: string;
   below?: boolean;
+  /** Colore della squadra in difesa: tinge il marker e il bordo dell'etichetta. */
+  color?: string;
 }) {
   const label = `${pos} ${lastNameOf(name)}`;
   const w = Math.max(40, label.length * 6.6 + 14);
   const lx = Math.min(VB.w - 8 - w / 2, Math.max(8 + w / 2, x));
   // Etichetta sopra il marker (default) o sotto (P/C/battitore: sono in basso).
   const ly = below ? y + 13 : y - 30;
+  const stroke = color ?? 'var(--fld2)';
   return (
     <g>
-      <circle cx={x} cy={y} r={7.5} fill="var(--fld)" stroke="var(--fld2)" strokeWidth={1.8} />
+      <circle cx={x} cy={y} r={7.5} fill="var(--fld)" stroke={stroke} strokeWidth={1.8} />
       <circle cx={x} cy={y - 1.6} r={3} fill="rgba(255,255,255,0.55)" />
       <g transform={`translate(${lx}, ${ly})`}>
-        <rect x={-w / 2} y={0} width={w} height={17} rx={5} fill="rgba(6,12,24,0.82)" stroke="var(--fld2)" strokeWidth={0.7} />
+        <rect x={-w / 2} y={0} width={w} height={17} rx={5} fill="rgba(6,12,24,0.82)" stroke={stroke} strokeWidth={1.1} />
         {/* Ruolo (sigla) più piccolo e attenuato del cognome, per distinguerli. */}
         <text x={0} y={12.5} textAnchor="middle" fontWeight={700} fill="#eaf1ff" fontFamily="system-ui, sans-serif">
           <tspan fontSize={8.5} fontWeight={800} fill="#9fb2d6">{pos}</tspan>
@@ -262,6 +266,12 @@ export function Diamond({
   // I difensori disegnati sono quelli della squadra in difesa (che si alterna),
   // NON per forza la squadra di casa proprietaria dello stadio.
   const fielders = defenseTeam ?? home;
+  // Ogni marker col nome è a TEMA con la squadra che rappresenta: i difensori col
+  // colore della squadra in difesa, battitore e corridori con quello dell'attacco
+  // (la squadra che NON difende). Così non sono più tutti fissi su casa/difesa.
+  const offenseTeam = fielders.id === home.id ? away : home;
+  const defColor = fielders.primaryColor || '#e3ecff';
+  const offColor = offenseTeam.primaryColor || '#ffd15c';
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
   // Foto scelta in calibrazione (variante) oppure la principale dello stadio.
@@ -411,13 +421,13 @@ export function Diamond({
               y={b.y - s}
               width={s * 2}
               height={s * 2}
-              fill={on ? '#ffd15c' : '#f4f6fb'}
-              stroke={on ? '#b5764a' : 'none'}
-              strokeWidth={on ? 2 : 0}
+              fill={on ? offColor : '#f4f6fb'}
+              stroke={on ? '#0b1220' : 'none'}
+              strokeWidth={on ? 1.5 : 0}
               transform={`rotate(45 ${b.x} ${b.y})`}
             />
             {editable && (
-              <text x={b.x} y={b.y - 12} textAnchor="middle" fontSize={10} fontWeight={800} fill="#ffd15c">
+              <text x={b.x} y={b.y - 12} textAnchor="middle" fontSize={10} fontWeight={800} fill={offColor}>
                 {lab}
               </text>
             )}
@@ -426,7 +436,7 @@ export function Diamond({
                 x={b.x}
                 y={b.y + 12}
                 name={rname ?? 'Corridore'}
-                color="#ffd15c"
+                color={offColor}
                 speed={rspeed ?? undefined}
               />
             )}
@@ -448,13 +458,13 @@ export function Diamond({
         pBatter.x,
         pBatter.y,
         <>
-          <circle cx={pBatter.x} cy={pBatter.y} r={7.5} fill={away.primaryColor || '#888'} stroke="#fff" strokeWidth={1.4} />
+          <circle cx={pBatter.x} cy={pBatter.y} r={7.5} fill={offColor} stroke="#fff" strokeWidth={1.4} />
           {(editable || !!batterName) && (
             <NameChip
               x={pBatter.x}
               y={pBatter.y + 10}
               name={batterName || 'Battitore'}
-              color={away.primaryColor || '#f4f6fb'}
+              color={offColor}
             />
           )}
         </>,
@@ -472,6 +482,7 @@ export function Diamond({
             pos={pos}
             name={pos === 'P' && pitcherName ? pitcherName : playerAt(fielders, pos)}
             below={pos === 'P' || pos === 'C'}
+            color={defColor}
           />,
         );
       })}
