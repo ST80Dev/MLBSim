@@ -136,6 +136,7 @@ const SECONDARY_OPTIONS = {
   RF: ['LF', 'CF', '1B'], DH: ['1B', 'LF', 'RF', '3B', 'C'],
 };
 const SEC_MIN_GAMES = 10; // partite minime a una casella per considerarla "seconda posizione"
+const SEC_FALLBACK_MAX_AGE = 33; // sotto: mono-ruolo prende una secondaria plausibile per adiacenza
 // Seconda posizione REALE: la casella più giocata (oltre la primaria) tra quelle
 // ammesse dall'archetipo, se il giocatore vi ha davvero giocato ≥ soglia. Per i DH
 // è la loro "casa" difensiva (dove scendono in campo). Da Appearances (gAt).
@@ -180,7 +181,8 @@ function main() {
   const pitchingAll = loadCsv('Pitching');
   const batting = battingAll.filter((r) => num(r.yearID) === YEAR);
   const pitching = pitchingAll.filter((r) => num(r.yearID) === YEAR);
-  const appear = loadCsv('Appearances').filter((r) => num(r.yearID) === YEAR);
+  const appearAll = loadCsv('Appearances');
+  const appear = appearAll.filter((r) => num(r.yearID) === YEAR);
   const fielding = loadCsv('Fielding').filter((r) => num(r.yearID) === YEAR);
   const peopleRows = loadCsv('People');
   const people = new Map(peopleRows.map((p) => [p.playerID, p]));
@@ -188,6 +190,40 @@ function main() {
   // Totali per (playerID, anno) sull'intera finestra Marcel, per battuta e
   // lancio. Servono a stimare il TALENTO da più stagioni (non da un anno solo).
   const winYears = new Set(MARCEL.map((m) => m.y));
+
+  // Apparizioni per casella su TUTTA LA CARRIERA fino all'anno di gioco (nessuna
+  // preveggenza: solo yearID <= YEAR): la storia posizionale completa del giocatore,
+  // per derivare la SECONDA posizione con ampia copertura — un veterano ha quasi
+  // sempre giocato più caselle nel corso della carriera (es. un ex-SS ora stabile a
+  // 3B, un ex-2B ora a 1B). La posizione PRIMARIA resta quella dell'anno (`appTot`).
+  const appCareer = new Map(); // pid -> {C,1B,...,DH} partite sommate (carriera <= YEAR)
+  for (const a of appearAll) {
+    if (num(a.yearID) > YEAR) continue; // niente futuro
+    const pid = a.playerID;
+    const c = appCareer.get(pid) ?? { C: 0, '1B': 0, '2B': 0, '3B': 0, SS: 0, LF: 0, CF: 0, RF: 0, DH: 0 };
+    c.C += num(a.G_c); c['1B'] += num(a.G_1b); c['2B'] += num(a.G_2b); c['3B'] += num(a.G_3b);
+    c.SS += num(a.G_ss); c.LF += num(a.G_lf); c.CF += num(a.G_cf); c.RF += num(a.G_rf); c.DH += num(a.G_dh);
+    appCareer.set(pid, c);
+  }
+
+  // Esperienza MLB PRIMA dell'anno di gioco (gate rookie, nessuna preveggenza: solo
+  // yearID < YEAR). Rookie = quasi nessun track record → più regressione nel rating
+  // (un mezzo anno caldo non diventa un OVR da stella). Soglie ~ rookie-eligibility MLB.
+  const careerBatPA = new Map();
+  for (const r of battingAll) {
+    if (num(r.yearID) >= YEAR) continue;
+    const pa = num(r.AB) + num(r.BB) + num(r.HBP) + num(r.SF) + num(r.SH);
+    careerBatPA.set(r.playerID, (careerBatPA.get(r.playerID) ?? 0) + pa);
+  }
+  const careerPitOuts = new Map();
+  for (const r of pitchingAll) {
+    if (num(r.yearID) >= YEAR) continue;
+    careerPitOuts.set(r.playerID, (careerPitOuts.get(r.playerID) ?? 0) + num(r.IPouts));
+  }
+  const ROOKIE_PA_MAX = 130; // ~ limite AB da rookie MLB
+  const ROOKIE_OUTS_MAX = 150; // ~ 50 IP (limite IP da rookie MLB)
+  const isRookieBat = (pid) => (careerBatPA.get(pid) ?? 0) < ROOKIE_PA_MAX;
+  const isRookiePit = (pid) => (careerPitOuts.get(pid) ?? 0) < ROOKIE_OUTS_MAX;
   const batByYear = new Map(); // pid -> Map(anno -> totali battuta)
   for (const r of battingAll) {
     const y = num(r.yearID);
@@ -504,12 +540,22 @@ function main() {
     const bLine = (c, pos) => {
       const def = deriveDef(c.pid); // difesa reale (null = archetipo di ruolo)
       const primary = pos ?? c.pos;
-      const sec = deriveSecondary(c.gAt, primary); // seconda posizione reale (Appearances)
+      // Seconda posizione dalla STORIA POSIZIONALE di CARRIERA (fino a quell'anno):
+      // ampia copertura senza inventare nulla — la casella che ha davvero giocato.
+      let sec = deriveSecondary(appCareer.get(c.pid), primary);
+      // Fallback PLAUSIBILE (non-dato) per i mono-ruolo GIOVANI (≤33 anni, più
+      // verosimilmente spostabili): la casella più naturale per adiacenza. I
+      // veterani mono-ruolo restano fedeli (nessuna secondaria inventata).
+      if (!sec && c.age <= SEC_FALLBACK_MAX_AGE) {
+        const opts = SECONDARY_OPTIONS[primary];
+        if (opts && opts.length) sec = opts[0];
+      }
       return {
         id: c.pid, name: c.name, pos: primary, bats: c.bats, age: c.age, ...c.line,
         ...(sec ? { sec } : {}),
         ...(def.fld != null ? { fld: def.fld } : {}),
         ...(def.arm != null ? { arm: def.arm } : {}),
+        ...(isRookieBat(c.pid) ? { rk: true } : {}),
       };
     };
     const lineup = POS_SLOTS.map((slot) => bLine(lineupSlots[slot], slot));
@@ -531,6 +577,7 @@ function main() {
       id: c.pid, name: c.name, role, throws: c.throws, age: c.age,
       gs: c.gs, outs: c.outs, h: c.h, hr: c.hr, bb: c.bb, so: c.so,
       hbp: c.hbp, er: c.er, w: c.w, l: c.l, sv: c.sv,
+      ...(isRookiePit(c.pid) ? { rk: true } : {}),
     });
 
     const starters = cand.filter((c) => c.gs >= 10).sort((a, b) => b.outs - a.outs);
@@ -600,10 +647,12 @@ function batObj(b) {
   const sec = b.sec ? `, sec: '${b.sec}'` : '';
   const def =
     (b.fld != null ? `, fld: ${b.fld}` : '') + (b.arm != null ? `, arm: ${b.arm}` : '');
-  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${sec}${def} }`;
+  const rk = b.rk ? ', rk: true' : '';
+  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${sec}${def}${rk} }`;
 }
 function pitObj(p) {
-  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv} }`;
+  const rk = p.rk ? ', rk: true' : '';
+  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv}${rk} }`;
 }
 
 function emitTs(built) {
@@ -673,6 +722,9 @@ export interface HistBatLine {
    *  esterni: assist); interni/1B usano l'archetipo. */
   fld?: number;
   arm?: number;
+  /** Esordiente MLB (nessun track record prima di quest'anno): gate rookie → più
+   *  regressione nel rating (un mezzo anno "caldo" non diventa un OVR da stella). */
+  rk?: boolean;
 }
 
 export interface HistPitLine {
@@ -693,6 +745,8 @@ export interface HistPitLine {
   w: number;
   l: number;
   sv: number;
+  /** Esordiente MLB (nessun track record prima di quest'anno): gate rookie. */
+  rk?: boolean;
 }
 
 export interface HistTeam {

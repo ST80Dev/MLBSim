@@ -264,17 +264,43 @@ describe('difesa individualizzata (Fielding.csv)', () => {
   });
 });
 
+// Gate rookie (present-only, niente preveggenza): l'esordiente non riceve lo
+// stretch, così un mezzo anno "caldo" da un-tool non si gonfia a OVR da stella.
+describe('gate rookie', () => {
+  const ovrOf = (year: number, name: string) => {
+    const b = buildHistoricalLeague(year)
+      .flatMap((t) => [...t.lineup, ...t.bench, ...t.reserveBatters])
+      .find((x) => x.name === name);
+    expect(b, `${name} ${year}`).toBeTruthy();
+    return batterOverall(b!.ratings, b!.position);
+  };
+
+  it('un rookie a profilo VUOTO (velocità/media, poca sostanza) non si gonfia', () => {
+    // Willy Taveras 2005: .291 senza potenza né walk — con lo stretch saliva a ~90.
+    expect(ovrOf(2005, 'Willy Taveras')).toBeLessThan(84);
+  });
+
+  it('un rookie a produzione GENUINA resta valorizzato (no hindsight)', () => {
+    // Pujols/Ichiro 2001: stagioni davvero elite → il gate non le affossa.
+    expect(ovrOf(2001, 'Albert Pujols')).toBeGreaterThanOrEqual(88);
+    expect(ovrOf(2001, 'Ichiro Suzuki')).toBeGreaterThanOrEqual(87);
+  });
+});
+
 // Seconde posizioni REALI (Appearances): i multi-ruolo storici sono schierabili
 // fuori ruolo (canOccupy) come nel seed generato, per gestione/ottimizzazione.
 describe('seconde posizioni storiche (Appearances)', () => {
-  it('le secondarie derivate sono SEMPRE valide (in SECONDARY_OPTIONS del primario)', () => {
+  it('secondarie SEMPRE valide e copertura maggioritaria (carriera reale + fallback ≤33)', () => {
     const players = buildHistoricalLeague(2002).flatMap((t) => [
       ...t.lineup,
       ...t.bench,
       ...t.reserveBatters,
     ]);
     const withSec = players.filter((b) => b.secondaryPosition);
-    expect(withSec.length).toBeGreaterThan(30); // esistono davvero multi-ruolo
+    // Copertura: stragrande maggioranza (storia di carriera + fallback plausibile
+    // per i giovani), ma NON il 100% (i mono-ruolo veterani restano fedeli).
+    expect(withSec.length / players.length).toBeGreaterThan(0.85);
+    expect(withSec.length / players.length).toBeLessThan(1);
     for (const b of withSec) {
       const opts = SECONDARY_OPTIONS[b.position];
       expect(opts, `${b.name} ${b.position}`).toBeTruthy();
