@@ -68,11 +68,21 @@ senza gonfiare la lega):
    0.89 … 1B 0.11, DH 0), **COERENTE col modello difensivo del motore**. Un guanto
    d'oro da SS/CF/C vale (Jeter, Andruw, i ricevitori salgono), uno da 1ª quasi no.
 
+**Credito SPECIALISTA** (`SPEC_CONTACT_GAIN`/`SPEC_SPEED_GAIN`, coda-only `topEdge`
+knee 90): le doti-vetta di **contatto** e **velocità** valgono in realtà più di
+quanto la sola wOBA sappia esprimere — il soft-cap BA (.345) nasconde le medie da
+record e il baserunning è sottopesato. Un +5/+3 punti (a contact/speed 100) sommato
+**prima** dell'`OVR_KNEE`, così lo slap-hitter estremo (Ichiro 2004 da 262 valide)
+sale verso 88-90 ma resta **appena sotto** i veri multi-tool. È coda-only: la fascia
+media e gli aggregati di lega non si muovono. **Nota**: l'OVR battitore NON entra nel
+motore di gioco (guida salary/valore/draft/potenziale) → alzarlo è **epoca-safe**.
+
 Rendimenti decrescenti sopra `OVR_KNEE` (88, ×0.3): solo i **veri fenomeni**
 sfondano i 90 (Bonds ~90, A-Rod 90), i mid-star restano sotto (evita l'inflazione
 di 5★ nella lega generata, più ricca di all-rounder). Esempi (import storico):
-Bonds 90 · A-Rod/Manny/Nomar/Chipper 89 · Andruw Jones 86 (CF Gold Glove) · Ichiro
-85 · **Jeter/Pudge/Piazza 84** · glove-only col bat debole giù (Ordóñez 69).
+Bonds 90 · A-Rod/Manny/Nomar/Chipper 89 · **Ichiro 2004 89** (record BA + speed) ·
+Andruw Jones 86 (CF Gold Glove) · **Jeter/Pudge/Piazza 84** · glove-only col bat
+debole giù (Ordóñez 69).
 
 La **coda-gemma sui tool** (tetto-stat convesso `topEdge` in `deriveBatterStats`:
 power 100 → ~60 HR, contact 100 → media ~.345) resta e **alimenta la produzione**.

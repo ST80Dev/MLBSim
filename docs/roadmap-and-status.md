@@ -94,8 +94,10 @@
     gioco). Un ROOKIE senza pregresso ricade sul solo anno di debutto. Sopra ci
     sono: **regressione per campione** (i micro-campioni — rilievi da pochi BF,
     panchinari da poche PA — tornano verso la media: niente più sconosciuti sopra
-    gli assi) e un **boost affidabilità/vittoria** per i partenti (carico di lavoro
-    IP × prevenzione ERA: gli assi-workhorse spiccano). La finestra guarda SOLO il
+    gli assi) e un **boost horse × qualità (FIP)** per i partenti: il carico è il
+    **max(volume totale, profondità per partenza in BF/GS)**, così un asso che va in
+    fondo (Halladay: 7+ IP/start) resta valorizzato anche in una stagione ACCORCIATA
+    DA INFORTUNIO — si premia la durata reale, non le partite saltate. La finestra guarda SOLO il
     passato: **nessuna preveggenza** (il potenziale resta una stima cieca; non sai
     in anticipo chi diventerà campione — vedi `players-and-ratings.md`).
 

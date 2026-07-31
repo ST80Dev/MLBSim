@@ -8,7 +8,7 @@ import {
 } from '../league';
 import { SAMPLE_CLE_1999, SAMPLE_BOS_1999 } from './fixtures';
 import { simulateGame } from '../../../engine/game';
-import { batterOverall } from '../../../engine/ratings';
+import { batterOverall, pitcherOverall } from '../../../engine/ratings';
 import { FRANCHISES } from '../../franchises';
 
 // Property test dell'IMPORTATORE su fixture curate (dati noti e stabili).
@@ -93,6 +93,19 @@ describe('importHistoricalTeam (fixture CLE/BOS 1999)', () => {
     // Gli id restano unici tra i gruppi.
     const ids = [...t.lineup, ...t.bench].map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  // Bonus "horse" = max(volume, profondità/BF-per-partenza): un asso a stagione
+  // corta ma PROFONDO (Halladay infortunato: pochi start, 7+ IP/start) non è più
+  // punito come uno spot-starter shallow. Stessi totali/rate, solo GS diverso.
+  it('l\'asso profondo-per-partenza batte lo shallow a parità di totali', () => {
+    const base = { name: 'X', role: 'SP' as const, throws: 'R' as const, age: 28,
+      outs: 425, h: 127, hr: 12, bb: 24, so: 103, hbp: 5, er: 48, w: 12, l: 4, sv: 0 };
+    const deep = { ...SAMPLE_CLE_1999, pitchers: [{ ...base, id: 'deep', gs: 19 }] };   // 7.5 IP/start
+    const shallow = { ...SAMPLE_CLE_1999, pitchers: [{ ...base, id: 'shallow', gs: 28 }] }; // ~5 IP/start
+    const dOvr = pitcherOverall(importHistoricalTeam(deep).team.rotation[0].ratings);
+    const sOvr = pitcherOverall(importHistoricalTeam(shallow).team.rotation[0].ratings);
+    expect(dOvr).toBeGreaterThan(sOvr);
   });
 });
 

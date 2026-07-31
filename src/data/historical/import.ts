@@ -120,18 +120,29 @@ function spreadPitcher(r: PitcherRatings): PitcherRatings {
   };
 }
 
-/** Bonus (punti overall) da carico di lavoro (IP) × qualità DE-CONTESTUALIZZATA.
+/** Bonus (punti overall) da carico-da-horse × qualità DE-CONTESTUALIZZATA.
  *  Usa il FIP (13·HR + 3·(BB+HBP) − 2·K, peripherals) invece dell'ERA: un
  *  workhorse con ottimi K/BB/HR prende il boost anche dietro una difesa scarsa
- *  (l'ERA reale la assorbe la forza-squadra ibrida, non il rating individuale). */
+ *  (l'ERA reale la assorbe la forza-squadra ibrida, non il rating individuale).
+ *
+ *  "Horse" = il MASSIMO tra due vie, così l'archetipo è premiato comunque:
+ *   - VOLUME: inning totali di stagione (il mangia-inning, Colon/Lima a 240 IP);
+ *   - PROFONDITÀ per partenza (BF/GS, la stessa base della Resistenza): un asso
+ *     che va in fondo (Halladay, 7+ IP/start, 70 CG in carriera) resta un horse
+ *     anche in una stagione ACCORCIATA DA INFORTUNIO (poche partenze, non uscite
+ *     brevi). Prima il bonus usava solo il volume totale → puniva le partite
+ *     SALTATE, non la durata reale. Il max non toglie mai credito a nessuno. */
 function pitcherQualityBonus(l: HistPitLine): number {
   const ip = l.outs / 3;
   if (ip <= 0) return 0;
   const fip = (13 * l.hr + 3 * (l.bb + l.hbp) - 2 * l.so) / ip + 3.2;
-  const workload = clamp((ip - 100) / 140, 0, 1); // 0 a 100 IP → 1 a 240 IP
+  const volume = clamp((ip - 100) / 140, 0, 1); // 0 a 100 IP → 1 a 240 IP
+  const bf = pitcherBf(l);
+  const depth = l.gs > 0 ? clamp((bf / l.gs - 24) / 9, 0, 1) : 0; // 24→33 BF/start
+  const horse = Math.max(volume, depth);
   const fipEdge = clamp((LG_ERA_BASE - fip) / LG_ERA_BASE, -0.4, 0.5);
   const factor = clamp(0.4 + fipEdge, 0, 1);
-  return BOOST_MAX_PIT * workload * factor;
+  return BOOST_MAX_PIT * horse * factor;
 }
 
 /** Applica il bonus alle doti che pesano nell'overall (stuff/control/movement
