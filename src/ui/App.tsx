@@ -121,9 +121,10 @@ import { StatLegend, InfoDot } from './glossary';
 import { PlayerLink, PlayerModal, PlayerModalContext, isBatter } from './player-modal';
 import type { PlayerModalRequest } from './player-modal';
 import { TeamBadge, BaseDiamond, OutsDots, strengthColor } from './widgets';
-import { LineScore, BoxScore } from './game-boxscore';
+import { LineScore } from './game-boxscore';
 import { PlayBanner, CronacaTeam } from './game-cronaca';
 import { StatsToggle, FinalOverlay, LineupSide } from './game-lineup';
+import { RecapModal } from './game-recap';
 import type { Side } from './types';
 
 type View =
@@ -2148,49 +2149,6 @@ function SubModal({
 
 
 
-function RecapModal({
-  result,
-  statsMode,
-  setStatsMode,
-  onClose,
-}: {
-  result: GameResult;
-  statsMode: StatsMode;
-  setStatsMode: (m: StatsMode) => void;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal recap" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <div className="modal-title">
-            Recap · {result.away.abbrev} {result.final.away} – {result.final.home}{' '}
-            {result.home.abbrev}
-          </div>
-          <StatsToggle mode={statsMode} setMode={setStatsMode} />
-          <button className="modal-close" onClick={onClose} aria-label="Chiudi">
-            ✕
-          </button>
-        </div>
-        <div className="modal-body">
-          <LineScore result={result} />
-          <div className="grid2">
-            <BoxScore team={result.away} stats={result.awayStats} mode={statsMode} />
-            <BoxScore team={result.home} stats={result.homeStats} mode={statsMode} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 
 // ---------------------------------------------------------------------------
