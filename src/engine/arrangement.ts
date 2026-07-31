@@ -44,6 +44,12 @@ export interface MatchArrangement {
    */
   benchOrder?: string[];
   /**
+   * Ordine PREFERITO dei lanciatori disponibili (fuori da rotazione/bullpen),
+   * per riordinare la sezione "Disponibili". Come `benchOrder`: solo
+   * presentazione, opzionale e auto-riconciliato con l'insieme corrente.
+   */
+  availPitchOrder?: string[];
+  /**
    * Closer designato: il rilievo che CHIUDE (usato per ultimo), mostrato come CL.
    * Il ruolo NON e' rigido: qualsiasi rilievo puo' essere nominato closer per la
    * stagione. Se assente, chiude semplicemente l'ultimo del bullpen.

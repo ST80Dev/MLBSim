@@ -3007,7 +3007,12 @@ function RosterPage({
 
   // --- Pitchers: composizione staff via drag&drop ----------------------
   const usedP = new Set([...arr.rotation, ...arr.bullpen]);
-  const availP = pitchers.filter((p) => !usedP.has(p.id));
+  // Disponibili ORDINATI secondo la preferenza salvata (come le riserve battitori):
+  // così la sezione è riordinabile via swap intra-lista.
+  const availP = orderByPref(
+    pitchers.filter((p) => !usedP.has(p.id)),
+    arr.availPitchOrder,
+  );
   // Regola UNIFICATA (niente scambio tra sezioni, che disorientava):
   //  - INTRA-sezione (stessa lista, rilasciato su un altro lanciatore) = SWAP:
   //    i due si scambiano di posto. È l'UNICO modo per cambiare posizione dentro
@@ -3021,7 +3026,9 @@ function RosterPage({
   const placePitcher = (toList: 'rotation' | 'bullpen' | 'avail', targetId?: string) => {
     if (!drag) return;
     const id = drag.id;
-    if (drag.from === toList && targetId && id !== targetId && toList !== 'avail') {
+    if (drag.from === toList && targetId && id !== targetId) {
+      // SWAP intra-sezione (vale anche per i Disponibili, riordinati via
+      // `availPitchOrder`): i due si scambiano di posto, gli altri restano fermi.
       const swap = (list: string[]) => {
         const a = list.indexOf(id);
         const b = list.indexOf(targetId);
@@ -3030,7 +3037,11 @@ function RosterPage({
         [next[a], next[b]] = [next[b], next[a]];
         return next;
       };
-      update(toList === 'rotation' ? { rotation: swap(arr.rotation) } : { bullpen: swap(arr.bullpen) });
+      if (toList === 'avail') {
+        update({ availPitchOrder: swap(availP.map((p) => p.id)) });
+      } else {
+        update(toList === 'rotation' ? { rotation: swap(arr.rotation) } : { bullpen: swap(arr.bullpen) });
+      }
       setDrag(null);
       return;
     }
@@ -3708,7 +3719,7 @@ function RosterPage({
             'bullpen',
             arr.bullpen.map((id) => pById.get(id)).filter(Boolean) as Pitcher[],
           )}
-          {pitTable('Disponibili', 'trascina in Rotazione o Bullpen per aggiungerlo', 'avail', availP)}
+          {pitTable('Disponibili', 'trascina in Rotazione/Bullpen per aggiungerlo · su un altro = riordina', 'avail', availP)}
         </>
       )}
 
