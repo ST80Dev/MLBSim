@@ -264,6 +264,29 @@ describe('difesa individualizzata (Fielding.csv)', () => {
   });
 });
 
+// Gate rookie (present-only, niente preveggenza): l'esordiente non riceve lo
+// stretch, così un mezzo anno "caldo" da un-tool non si gonfia a OVR da stella.
+describe('gate rookie', () => {
+  const ovrOf = (year: number, name: string) => {
+    const b = buildHistoricalLeague(year)
+      .flatMap((t) => [...t.lineup, ...t.bench, ...t.reserveBatters])
+      .find((x) => x.name === name);
+    expect(b, `${name} ${year}`).toBeTruthy();
+    return batterOverall(b!.ratings, b!.position);
+  };
+
+  it('un rookie a profilo VUOTO (velocità/media, poca sostanza) non si gonfia', () => {
+    // Willy Taveras 2005: .291 senza potenza né walk — con lo stretch saliva a ~90.
+    expect(ovrOf(2005, 'Willy Taveras')).toBeLessThan(84);
+  });
+
+  it('un rookie a produzione GENUINA resta valorizzato (no hindsight)', () => {
+    // Pujols/Ichiro 2001: stagioni davvero elite → il gate non le affossa.
+    expect(ovrOf(2001, 'Albert Pujols')).toBeGreaterThanOrEqual(88);
+    expect(ovrOf(2001, 'Ichiro Suzuki')).toBeGreaterThanOrEqual(87);
+  });
+});
+
 // Seconde posizioni REALI (Appearances): i multi-ruolo storici sono schierabili
 // fuori ruolo (canOccupy) come nel seed generato, per gestione/ottimizzazione.
 describe('seconde posizioni storiche (Appearances)', () => {

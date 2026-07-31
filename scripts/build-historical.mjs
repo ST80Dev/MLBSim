@@ -205,6 +205,25 @@ function main() {
     c.SS += num(a.G_ss); c.LF += num(a.G_lf); c.CF += num(a.G_cf); c.RF += num(a.G_rf); c.DH += num(a.G_dh);
     appCareer.set(pid, c);
   }
+
+  // Esperienza MLB PRIMA dell'anno di gioco (gate rookie, nessuna preveggenza: solo
+  // yearID < YEAR). Rookie = quasi nessun track record → più regressione nel rating
+  // (un mezzo anno caldo non diventa un OVR da stella). Soglie ~ rookie-eligibility MLB.
+  const careerBatPA = new Map();
+  for (const r of battingAll) {
+    if (num(r.yearID) >= YEAR) continue;
+    const pa = num(r.AB) + num(r.BB) + num(r.HBP) + num(r.SF) + num(r.SH);
+    careerBatPA.set(r.playerID, (careerBatPA.get(r.playerID) ?? 0) + pa);
+  }
+  const careerPitOuts = new Map();
+  for (const r of pitchingAll) {
+    if (num(r.yearID) >= YEAR) continue;
+    careerPitOuts.set(r.playerID, (careerPitOuts.get(r.playerID) ?? 0) + num(r.IPouts));
+  }
+  const ROOKIE_PA_MAX = 130; // ~ limite AB da rookie MLB
+  const ROOKIE_OUTS_MAX = 150; // ~ 50 IP (limite IP da rookie MLB)
+  const isRookieBat = (pid) => (careerBatPA.get(pid) ?? 0) < ROOKIE_PA_MAX;
+  const isRookiePit = (pid) => (careerPitOuts.get(pid) ?? 0) < ROOKIE_OUTS_MAX;
   const batByYear = new Map(); // pid -> Map(anno -> totali battuta)
   for (const r of battingAll) {
     const y = num(r.yearID);
@@ -536,6 +555,7 @@ function main() {
         ...(sec ? { sec } : {}),
         ...(def.fld != null ? { fld: def.fld } : {}),
         ...(def.arm != null ? { arm: def.arm } : {}),
+        ...(isRookieBat(c.pid) ? { rk: true } : {}),
       };
     };
     const lineup = POS_SLOTS.map((slot) => bLine(lineupSlots[slot], slot));
@@ -557,6 +577,7 @@ function main() {
       id: c.pid, name: c.name, role, throws: c.throws, age: c.age,
       gs: c.gs, outs: c.outs, h: c.h, hr: c.hr, bb: c.bb, so: c.so,
       hbp: c.hbp, er: c.er, w: c.w, l: c.l, sv: c.sv,
+      ...(isRookiePit(c.pid) ? { rk: true } : {}),
     });
 
     const starters = cand.filter((c) => c.gs >= 10).sort((a, b) => b.outs - a.outs);
@@ -626,10 +647,12 @@ function batObj(b) {
   const sec = b.sec ? `, sec: '${b.sec}'` : '';
   const def =
     (b.fld != null ? `, fld: ${b.fld}` : '') + (b.arm != null ? `, arm: ${b.arm}` : '');
-  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${sec}${def} }`;
+  const rk = b.rk ? ', rk: true' : '';
+  return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${sec}${def}${rk} }`;
 }
 function pitObj(p) {
-  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv} }`;
+  const rk = p.rk ? ', rk: true' : '';
+  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv}${rk} }`;
 }
 
 function emitTs(built) {
@@ -699,6 +722,9 @@ export interface HistBatLine {
    *  esterni: assist); interni/1B usano l'archetipo. */
   fld?: number;
   arm?: number;
+  /** Esordiente MLB (nessun track record prima di quest'anno): gate rookie → più
+   *  regressione nel rating (un mezzo anno "caldo" non diventa un OVR da stella). */
+  rk?: boolean;
 }
 
 export interface HistPitLine {
@@ -719,6 +745,8 @@ export interface HistPitLine {
   w: number;
   l: number;
   sv: number;
+  /** Esordiente MLB (nessun track record prima di quest'anno): gate rookie. */
+  rk?: boolean;
 }
 
 export interface HistTeam {

@@ -62,7 +62,7 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
     position: l.pos,
     fld: l.fld,
     arm: l.arm,
-  }));
+  }), l.rk);
   const stats = deriveBatterStats(ratings, l.pa);
   const ovr = batterOverall(ratings, l.pos);
   const nm = splitName(l.name);
@@ -111,12 +111,21 @@ const PREVENT_SLOPE = 9; // punti-rating per 1.0 di ERA sotto/sopra l'epoca (con
 // ---------------------------------------------------------------------------
 const HIST_SPREAD = 1.4;
 const spread = (v: number): number => clampRating(RATING_AVG + (v - RATING_AVG) * HIST_SPREAD);
-function spreadBatter(r: Batter['ratings']): Batter['ratings'] {
+// GATE ROOKIE (present-only, niente preveggenza): un esordiente senza track record
+// MLB NON riceve lo stretch. Lo stretch riespande il TALENTO PROVATO (compresso dalla
+// regressione); un rookie ha una sola annata incerta a definirlo, spesso un mezzo
+// anno "caldo" di contatto/velocità che, stirato, saturava i tool e faceva scattare
+// il credito specialista → OVR da stella (Singleton/Taveras a 90). Senza stretch i
+// tool restano sotto la soglia specialista e il rookie resta "buono ma incerto". La
+// sua eventuale ascesa la gestiscono potenziale + aging + sim (NON il futuro reale).
+// Costo accettato: abbassa anche i rookie-stella veri — a pari annata sono
+// indistinguibili dai fluke senza guardare avanti. NON tocca i giocatori con track record.
+const noStretch = (v: number): number => clampRating(v);
+function spreadBatter(r: Batter['ratings'], rookie?: boolean): Batter['ratings'] {
+  const s = rookie ? noStretch : spread;
   return {
-    contact: spread(r.contact), power: spread(r.power), eye: spread(r.eye),
-    speed: spread(r.speed),
-    // Difesa/Braccio NON si stirano: lo stretch riespande il TALENTO offensivo/di
-    // lancio compresso dalla regressione; la difesa ora è REALE (da Fielding.csv,
+    contact: s(r.contact), power: s(r.power), eye: s(r.eye), speed: s(r.speed),
+    // Difesa/Braccio NON si stirano mai: la difesa è REALE (da Fielding.csv,
     // normalizzata per ruolo) e ha già la sua varianza — il ×1.4 la gonfierebbe.
     fielding: r.fielding, arm: r.arm,
   };
@@ -179,6 +188,9 @@ function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
     role: l.role,
     gs: l.gs,
   });
+  // NB: nessun gate-rookie sui lanciatori — non gonfiano da esordienti (il bonus-
+  // workload richiede inning, la regressione per campione già doma i micro-campioni)
+  // e lo skip-stretch li affosserebbe (un Felix/CC dominante a poche partenze).
   const ratings = spreadPitcher(boostPitcher(raw, pitcherQualityBonus(l)));
   const stats = derivePitcherStats(ratings, bf);
   const ovr = pitcherOverall(ratings);
