@@ -10,13 +10,13 @@ import type { HistBatLine, HistPitLine } from './season1999';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_1999: HistBatLine[] = [
-  { id: 'clybuda01', name: 'Danny Clyburn', pos: 'LF', bats: 'R', age: 25, pa: 89, h: 17, double: 3, triple: 0, hr: 3, bb: 6, so: 23, hbp: 1, sb: 0, cs: 0, fld: 80, arm: 88 },
+  { id: 'clybuda01', name: 'Danny Clyburn', pos: 'LF', bats: 'R', age: 25, pa: 89, h: 17, double: 3, triple: 0, hr: 3, bb: 6, so: 23, hbp: 1, sb: 0, cs: 0, sec: 'RF', fld: 80, arm: 88 },
   { id: 'pritcch01', name: 'Chris Pritchett', pos: '1B', bats: 'L', age: 29, pa: 49, h: 10, double: 1, triple: 0, hr: 1, bb: 2, so: 9, hbp: 0, sb: 1, cs: 0 },
   { id: 'vitiejo01', name: 'Joe Vitiello', pos: '1B', bats: 'R', age: 29, pa: 45, h: 8, double: 1, triple: 0, hr: 1, bb: 3, so: 10, hbp: 1, sb: 0, cs: 0 },
   { id: 'matthga02', name: 'Gary Matthews', pos: 'RF', bats: 'S', age: 24, pa: 45, h: 8, double: 0, triple: 0, hr: 0, bb: 9, so: 9, hbp: 0, sb: 2, cs: 0 },
   { id: 'newhada01', name: 'David Newhan', pos: '2B', bats: 'L', age: 25, pa: 44, h: 6, double: 1, triple: 0, hr: 2, bb: 1, so: 11, hbp: 0, sb: 2, cs: 1 },
   { id: 'cabrejo02', name: 'Jolbert Cabrera', pos: 'CF', bats: 'R', age: 26, pa: 39, h: 7, double: 1, triple: 0, hr: 0, bb: 1, so: 8, hbp: 1, sb: 3, cs: 0 },
-  { id: 'morame01', name: 'Melvin Mora', pos: 'LF', bats: 'R', age: 27, pa: 39, h: 5, double: 0, triple: 0, hr: 0, bb: 4, so: 7, hbp: 1, sb: 2, cs: 1 },
+  { id: 'morame01', name: 'Melvin Mora', pos: 'LF', bats: 'R', age: 27, pa: 39, h: 5, double: 0, triple: 0, hr: 0, bb: 4, so: 7, hbp: 1, sb: 2, cs: 1, sec: 'CF' },
   { id: 'perezed01', name: 'Eduardo Perez', pos: 'LF', bats: 'R', age: 29, pa: 39, h: 9, double: 1, triple: 0, hr: 1, bb: 4, so: 9, hbp: 0, sb: 0, cs: 0 },
   { id: 'melusmi01', name: 'Mitch Meluskey', pos: 'C', bats: 'S', age: 25, pa: 38, h: 7, double: 1, triple: 0, hr: 1, bb: 5, so: 7, hbp: 0, sb: 1, cs: 0 },
   { id: 'wittke01', name: 'Kevin Witt', pos: 'DH', bats: 'L', age: 23, pa: 37, h: 7, double: 1, triple: 0, hr: 1, bb: 2, so: 10, hbp: 0, sb: 0, cs: 0 },

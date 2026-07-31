@@ -73,6 +73,9 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
     lastName: nm.last,
     bats: l.bats,
     position: l.pos,
+    // Seconda posizione difensiva REALE (dalle Appearances): abilita lo
+    // schieramento fuori-ruolo per gestione/ottimizzazione lineup (come il seed).
+    ...(l.sec ? { secondaryPosition: l.sec } : {}),
     ratings,
     stats,
     age: l.age,

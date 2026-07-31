@@ -12,6 +12,7 @@ import { simulateGame } from '../../../engine/game';
 import { batterOverall, pitcherOverall } from '../../../engine/ratings';
 import { startOffseason } from '../../offseason';
 import { HISTORICAL_MODE } from '../../leagueMode';
+import { SECONDARY_OPTIONS } from '../../../engine/positions';
 import { FRANCHISES } from '../../franchises';
 
 // Property test dell'IMPORTATORE su fixture curate (dati noti e stabili).
@@ -260,6 +261,34 @@ describe('difesa individualizzata (Fielding.csv)', () => {
     expect(Math.min(...fld)).toBeLessThanOrEqual(60); // e qualcuno è scarso
     expect(median).toBeGreaterThanOrEqual(66);
     expect(median).toBeLessThanOrEqual(74); // mediana ~70 (archetipo baseline)
+  });
+});
+
+// Seconde posizioni REALI (Appearances): i multi-ruolo storici sono schierabili
+// fuori ruolo (canOccupy) come nel seed generato, per gestione/ottimizzazione.
+describe('seconde posizioni storiche (Appearances)', () => {
+  it('le secondarie derivate sono SEMPRE valide (in SECONDARY_OPTIONS del primario)', () => {
+    const players = buildHistoricalLeague(2002).flatMap((t) => [
+      ...t.lineup,
+      ...t.bench,
+      ...t.reserveBatters,
+    ]);
+    const withSec = players.filter((b) => b.secondaryPosition);
+    expect(withSec.length).toBeGreaterThan(30); // esistono davvero multi-ruolo
+    for (const b of withSec) {
+      const opts = SECONDARY_OPTIONS[b.position];
+      expect(opts, `${b.name} ${b.position}`).toBeTruthy();
+      expect(opts).toContain(b.secondaryPosition);
+      expect(b.secondaryPosition).not.toBe(b.position);
+    }
+  });
+
+  it('Garciaparra 2005 (3B primario, 26 partite a SS) ha SS come secondaria', () => {
+    const nomar = buildHistoricalLeague(2005)
+      .flatMap((t) => [...t.lineup, ...t.bench, ...t.reserveBatters])
+      .find((b) => b.name === 'Nomar Garciaparra');
+    expect(nomar).toBeTruthy();
+    expect(nomar!.secondaryPosition).toBe('SS');
   });
 });
 
