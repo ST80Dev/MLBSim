@@ -106,10 +106,10 @@ function loadCsv(name) {
 // Le franchigie del gioco sono le 30 moderne; le storiche vi si mappano 1:1
 // (Expos->WSH, Devil Rays->TBR, Anaheim->LAA, Florida->MIA, ecc.).
 const TEAM_TO_FRANCHISE = {
-  ANA: 'LAA', ARI: 'ARI', ATL: 'ATL', BAL: 'BAL', BOS: 'BOS',
+  ANA: 'LAA', LAA: 'LAA', ARI: 'ARI', ATL: 'ATL', BAL: 'BAL', BOS: 'BOS',
   CHA: 'CWS', CHN: 'CHC', CIN: 'CIN', CLE: 'CLE', COL: 'COL',
   DET: 'DET', FLO: 'MIA', HOU: 'HOU', KCA: 'KCR', LAN: 'LAD',
-  MIL: 'MIL', ML4: 'MIL', MIN: 'MIN', MON: 'WSH', NYA: 'NYY', NYN: 'NYM',
+  MIL: 'MIL', ML4: 'MIL', MIN: 'MIN', MON: 'WSH', WAS: 'WSH', NYA: 'NYY', NYN: 'NYM',
   OAK: 'OAK', PHI: 'PHI', PIT: 'PIT', SDN: 'SDP', SEA: 'SEA',
   SFN: 'SFG', SLN: 'STL', TBA: 'TBR', TEX: 'TEX', TOR: 'TOR',
 };

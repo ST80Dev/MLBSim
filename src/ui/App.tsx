@@ -5435,7 +5435,10 @@ const HISTORICAL_YEAR_BLURB: Record<number, string> = {
   1999: "L'attacco da 1009 punti di Cleveland, il Pedro Martinez da 2.07/313K, e tutti gli altri.",
   2000: 'Offesa alle stelle e il Pedro Martinez da 1.74 di ERA: forse la miglior stagione da lanciatore dell\'epoca.',
   2001: 'I 73 fuoricampo di Barry Bonds, i 372 K di Randy Johnson, l\'esordio di Ichiro da .350 e 242 valide.',
+  2002: 'Bonds da .370 e OBP .582, gli A\'s di Moneyball con 20 vittorie di fila, Randy Johnson di nuovo a 334 K.',
   2003: 'Il breakout di Pujols (.359/43 HR), le 55/55 salvezze di Éric Gagné a 1.20 di ERA, Bonds ancora devastante.',
+  2004: 'La stagione da .372/232 valide di Ichiro (record MLB), Bonds con OBP .609, i Cardinals da 105 vittorie.',
+  2005: 'La rimonta iridata dei White Sox, Derrek Lee sfiora la Tripla Corona, gli Angels e i Nationals cambiano casa.',
 };
 
 function StartScreen({
