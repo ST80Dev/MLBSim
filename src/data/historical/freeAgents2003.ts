@@ -10,10 +10,10 @@ import type { HistBatLine, HistPitLine } from './season2003';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_2003: HistBatLine[] = [
-  { id: 'hummeti01', name: 'Tim Hummel', pos: '3B', bats: 'R', age: 24, pa: 94, h: 19, double: 5, triple: 0, hr: 2, bb: 8, so: 13, hbp: 0, sb: 0, cs: 0 },
-  { id: 'stensde01', name: 'Dernell Stenson', pos: 'LF', bats: 'L', age: 25, pa: 93, h: 20, double: 5, triple: 0, hr: 3, bb: 11, so: 24, hbp: 0, sb: 0, cs: 0 },
+  { id: 'hummeti01', name: 'Tim Hummel', pos: '3B', bats: 'R', age: 24, pa: 94, h: 19, double: 5, triple: 0, hr: 2, bb: 8, so: 13, hbp: 0, sb: 0, cs: 0, fld: 52 },
+  { id: 'stensde01', name: 'Dernell Stenson', pos: 'LF', bats: 'L', age: 25, pa: 93, h: 20, double: 5, triple: 0, hr: 3, bb: 11, so: 24, hbp: 0, sb: 0, cs: 0, fld: 78, arm: 79 },
   { id: 'garcida03', name: 'Daniel Garcia', pos: '2B', bats: 'R', age: 23, pa: 63, h: 12, double: 2, triple: 0, hr: 2, bb: 2, so: 11, hbp: 3, sb: 0, cs: 0 },
-  { id: 'rivermi02', name: 'Mike Rivera', pos: 'C', bats: 'R', age: 26, pa: 58, h: 11, double: 3, triple: 0, hr: 1, bb: 3, so: 13, hbp: 0, sb: 0, cs: 0 },
+  { id: 'rivermi02', name: 'Mike Rivera', pos: 'C', bats: 'R', age: 26, pa: 58, h: 11, double: 3, triple: 0, hr: 1, bb: 3, so: 13, hbp: 0, sb: 0, cs: 0, fld: 62, arm: 64 },
   { id: 'gutieri01', name: 'Ricky Gutierrez', pos: 'SS', bats: 'R', age: 33, pa: 56, h: 14, double: 2, triple: 0, hr: 1, bb: 3, so: 6, hbp: 1, sb: 0, cs: 0 },
   { id: 'smithst02', name: 'Stephen Smitherman', pos: 'LF', bats: 'R', age: 24, pa: 47, h: 7, double: 2, triple: 0, hr: 1, bb: 3, so: 9, hbp: 0, sb: 1, cs: 0 },
   { id: 'selbybi01', name: 'Bill Selby', pos: '3B', bats: 'L', age: 33, pa: 44, h: 8, double: 2, triple: 0, hr: 1, bb: 3, so: 8, hbp: 0, sb: 0, cs: 0 },

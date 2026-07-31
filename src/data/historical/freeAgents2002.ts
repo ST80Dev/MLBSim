@@ -10,7 +10,7 @@ import type { HistBatLine, HistPitLine } from './season2002';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_2002: HistBatLine[] = [
-  { id: 'infanom01', name: 'Omar Infante', pos: 'SS', bats: 'R', age: 20, pa: 75, h: 24, double: 3, triple: 0, hr: 1, bb: 3, so: 10, hbp: 0, sb: 0, cs: 1 },
+  { id: 'infanom01', name: 'Omar Infante', pos: 'SS', bats: 'R', age: 20, pa: 75, h: 24, double: 3, triple: 0, hr: 1, bb: 3, so: 10, hbp: 0, sb: 0, cs: 1, fld: 64 },
   { id: 'hafnetr01', name: 'Travis Hafner', pos: 'DH', bats: 'L', age: 25, pa: 70, h: 15, double: 4, triple: 1, hr: 1, bb: 8, so: 15, hbp: 0, sb: 0, cs: 1 },
   { id: 'munsoer01', name: 'Eric Munson', pos: 'DH', bats: 'L', age: 24, pa: 67, h: 10, double: 1, triple: 0, hr: 2, bb: 5, so: 15, hbp: 1, sb: 0, cs: 0 },
   { id: 'smithbo06', name: 'Bob Smith', pos: '3B', bats: 'R', age: 28, pa: 66, h: 12, double: 2, triple: 0, hr: 1, bb: 4, so: 23, hbp: 0, sb: 0, cs: 0 },

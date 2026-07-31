@@ -3,12 +3,15 @@ import { importHistoricalTeam } from '../import';
 import { SEASON_1999 } from '../season1999';
 import {
   buildHistoricalLeague,
+  buildHistoricalFreeAgents,
   HISTORICAL_SEASONS,
   HISTORICAL_YEARS,
 } from '../league';
 import { SAMPLE_CLE_1999, SAMPLE_BOS_1999 } from './fixtures';
 import { simulateGame } from '../../../engine/game';
 import { batterOverall, pitcherOverall } from '../../../engine/ratings';
+import { startOffseason } from '../../offseason';
+import { HISTORICAL_MODE } from '../../leagueMode';
 import { FRANCHISES } from '../../franchises';
 
 // Property test dell'IMPORTATORE su fixture curate (dati noti e stabili).
@@ -230,5 +233,62 @@ describe('Annate storiche multiple (1997→2005)', () => {
     expect(bonds!.stats.hr).toBeGreaterThanOrEqual(54);
     expect(bonds!.ratings.power).toBe(100);
     expect(bonds!.ratings.eye).toBe(100);
+  });
+});
+
+// Difesa REALE (Fielding.csv): individualizzata per giocatore, non più un archetipo
+// piatto per ruolo. Prima ogni SS/C era identico e nessuno superava ~84.
+describe('difesa individualizzata (Fielding.csv)', () => {
+  it('la difesa NON è più piatta per ruolo: c\'è varianza dentro ogni casella', () => {
+    const league = buildHistoricalLeague(2002);
+    const ssFld = league
+      .flatMap((t) => [...t.lineup, ...t.bench])
+      .filter((b) => b.position === 'SS')
+      .map((b) => b.ratings.fielding);
+    // Almeno 5 SS titolari con valori DISTINTI (prima erano tutti uguali).
+    expect(ssFld.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(ssFld).size).toBeGreaterThanOrEqual(5);
+  });
+
+  it('i difensori elite sfondano 90 e la mediana resta ~media (fascia comune intatta)', () => {
+    const fld = buildHistoricalLeague(2002)
+      .flatMap((t) => [...t.lineup, ...t.bench])
+      .map((b) => b.ratings.fielding)
+      .sort((a, b) => a - b);
+    const median = fld[Math.floor(fld.length / 2)];
+    expect(Math.max(...fld)).toBeGreaterThanOrEqual(90); // qualcuno arriva a 90+
+    expect(Math.min(...fld)).toBeLessThanOrEqual(60); // e qualcuno è scarso
+    expect(median).toBeGreaterThanOrEqual(66);
+    expect(median).toBeLessThanOrEqual(74); // mediana ~70 (archetipo baseline)
+  });
+});
+
+// Pool FREE AGENT storico cablato: i fuori rosa non spariscono, alimentano il
+// mercato dell'off-season (startOffseason).
+describe('pool free agent storico', () => {
+  it('buildHistoricalFreeAgents istanzia i fuori rosa come giocatori del motore', () => {
+    const fa = buildHistoricalFreeAgents(2002);
+    expect(fa.batters.length + fa.pitchers.length).toBeGreaterThan(20);
+    for (const p of [...fa.batters, ...fa.pitchers]) {
+      expect(p.id.startsWith('hist-')).toBe(true);
+      expect(p.salary).toBeGreaterThan(0);
+    }
+  });
+
+  it('startOffseason semina il pool coi FA storici (mercato con profondità reale)', () => {
+    const teams = buildHistoricalLeague(2002);
+    const fa = buildHistoricalFreeAgents(2002);
+    const state = startOffseason(teams, 1, 2002, undefined, HISTORICAL_MODE, [
+      ...fa.batters,
+      ...fa.pitchers,
+    ]);
+    expect(state.pool.length).toBeGreaterThan(20);
+    // Dedup: nessun giocatore già a roster finisce nel pool.
+    const rostered = new Set(
+      Object.values(state.rosters).flatMap((s) =>
+        [...s.batters, ...s.pitchers].map((p) => p.id),
+      ),
+    );
+    expect(state.pool.some((p) => rostered.has(p.id))).toBe(false);
   });
 });

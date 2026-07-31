@@ -124,6 +124,7 @@ export function startOffseason(
   year: number,
   managedId?: string,
   mode: LeagueMode = GENERATED_MODE,
+  initialPool: FreeAgent[] = [],
 ): OffseasonState {
   const rosters: Record<string, RosterSet> = {};
   const targets: Record<string, { bat: number; pit: number }> = {};
@@ -131,6 +132,13 @@ export function startOffseason(
     rosters[t.id] = flatten(t);
     targets[t.id] = { bat: TARGET_BATTERS, pit: TARGET_PITCHERS };
   }
+  // Pool iniziale: nella lega generata è vuoto (si riempie coi rilasci); nell'import
+  // storico riceve i FREE AGENT reali (fuori rosa), così il mercato ha profondità
+  // vera fin da subito. Dedup difensivo: mai un giocatore già a roster nel pool.
+  const rostered = new Set(
+    Object.values(rosters).flatMap((s) => [...s.batters, ...s.pitchers].map((p) => p.id)),
+  );
+  const pool = initialPool.filter((p) => !rostered.has(p.id));
   return {
     year, seed, mode,
     round: 0,
@@ -139,7 +147,7 @@ export function startOffseason(
     teamOrder: teams.map((t) => t.id),
     rosters,
     targets,
-    pool: [],
+    pool,
     log: [],
   };
 }

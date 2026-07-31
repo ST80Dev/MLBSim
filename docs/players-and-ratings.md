@@ -110,6 +110,23 @@ ruolo (reliever, short-start) sono valutati per efficienza, non per volume; è l
 parte "nuova" della WHIP che il FIP non vede (i walk sono già pieni nel control).
 Alza la varianza tra lanciatori, epoca-safe (R/G ~invariato nel Log5).
 
+**Difesa REALE (import, da `Fielding.csv`).** Prima la difesa storica era un
+ARCHETIPO piatto per ruolo (ogni SS identico, tetto ~84). Ora `fielding`/`arm` si
+derivano dai **dati difensivi reali**, normalizzati PER RUOLO vs i pari-ruolo
+dell'annata (z-score → 70 = media di ruolo): **fielding** ← Range Factor (PO+A/inn)
++ errori (+ DP interni, + PB ricevitori); **arm** ← CS% (ricevitori) e assist
+(esterni), dove c'è dato reale (interni/1B → archetipo). Chi ha pochi inning (<~133)
+ricade sull'archetipo. La difesa **non si stira** (è già reale): i fenomeni sfondano
+**90** (~2/lega), gli scarsi scendono a ~50, la mediana resta ~70. Limite noto: il
+Range Factor è imperfetto (dipende dal contatto concesso dallo staff) — senza ZR/UZR
+(0% di copertura nell'epoca) è il miglior segnale disponibile.
+
+**Pool free agent storico (cablato).** I fuori rosa (`freeAgents<ANNO>`) sono
+istanziati come giocatori del motore (`buildHistoricalFreeAgents`, stessa inversione
+delle rose) e seminati nel pool dell'off-season (`startOffseason(..., pool)`): non
+spariscono più, alimentano il mercato con profondità reale. La UI di gestione che li
+mostra/ingaggia è il passo Fase 5 successivo.
+
 **Perché è epoca-safe** (contro-intuitivo): stirare i rating *sembra* gonfiare
 l'offesa (misurando un battitore vs lancio medio, `deriveBatterStats` convessa
 inflaziona). Ma nel **sim vero** i battitori stirati affrontano i **lanciatori

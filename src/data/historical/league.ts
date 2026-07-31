@@ -1,15 +1,24 @@
-import type { Team } from '../../engine/types';
+import type { Batter, Pitcher, Team } from '../../engine/types';
 import { FRANCHISES } from '../franchises';
-import { importHistoricalTeam } from './import';
+import { importHistoricalTeam, importHistoricalPool } from './import';
 import { SEASON_1997 } from './season1997';
 import { SEASON_1998 } from './season1998';
-import { SEASON_1999, type HistTeam } from './season1999';
+import { SEASON_1999, type HistTeam, type HistBatLine, type HistPitLine } from './season1999';
 import { SEASON_2000 } from './season2000';
 import { SEASON_2001 } from './season2001';
 import { SEASON_2002 } from './season2002';
 import { SEASON_2003 } from './season2003';
 import { SEASON_2004 } from './season2004';
 import { SEASON_2005 } from './season2005';
+import { FREE_AGENT_BATTERS_1997, FREE_AGENT_PITCHERS_1997 } from './freeAgents1997';
+import { FREE_AGENT_BATTERS_1998, FREE_AGENT_PITCHERS_1998 } from './freeAgents1998';
+import { FREE_AGENT_BATTERS_1999, FREE_AGENT_PITCHERS_1999 } from './freeAgents1999';
+import { FREE_AGENT_BATTERS_2000, FREE_AGENT_PITCHERS_2000 } from './freeAgents2000';
+import { FREE_AGENT_BATTERS_2001, FREE_AGENT_PITCHERS_2001 } from './freeAgents2001';
+import { FREE_AGENT_BATTERS_2002, FREE_AGENT_PITCHERS_2002 } from './freeAgents2002';
+import { FREE_AGENT_BATTERS_2003, FREE_AGENT_PITCHERS_2003 } from './freeAgents2003';
+import { FREE_AGENT_BATTERS_2004, FREE_AGENT_PITCHERS_2004 } from './freeAgents2004';
+import { FREE_AGENT_BATTERS_2005, FREE_AGENT_PITCHERS_2005 } from './freeAgents2005';
 
 // ---------------------------------------------------------------------------
 // Lega STORICA: le 30 rose reali di un'annata importate come squadre del motore,
@@ -55,4 +64,36 @@ export function buildHistoricalLeague(year = DEFAULT_HISTORICAL_YEAR): Team[] {
     if (h) teams.push(importHistoricalTeam(h).team);
   }
   return teams;
+}
+
+/** Pool FREE AGENT storico per annata (battitori/lanciatori reali fuori dalle 30
+ *  rose): i "fuori rosa" che alimentano il mercato dell'off-season. Vuoto per gli
+ *  anni senza dataset FA. Seed deterministico per annata (solo potenziale). */
+const HISTORICAL_FREE_AGENTS: Record<
+  number,
+  { bat: HistBatLine[]; pit: HistPitLine[] }
+> = {
+  1997: { bat: FREE_AGENT_BATTERS_1997, pit: FREE_AGENT_PITCHERS_1997 },
+  1998: { bat: FREE_AGENT_BATTERS_1998, pit: FREE_AGENT_PITCHERS_1998 },
+  1999: { bat: FREE_AGENT_BATTERS_1999, pit: FREE_AGENT_PITCHERS_1999 },
+  2000: { bat: FREE_AGENT_BATTERS_2000, pit: FREE_AGENT_PITCHERS_2000 },
+  2001: { bat: FREE_AGENT_BATTERS_2001, pit: FREE_AGENT_PITCHERS_2001 },
+  2002: { bat: FREE_AGENT_BATTERS_2002, pit: FREE_AGENT_PITCHERS_2002 },
+  2003: { bat: FREE_AGENT_BATTERS_2003, pit: FREE_AGENT_PITCHERS_2003 },
+  2004: { bat: FREE_AGENT_BATTERS_2004, pit: FREE_AGENT_PITCHERS_2004 },
+  2005: { bat: FREE_AGENT_BATTERS_2005, pit: FREE_AGENT_PITCHERS_2005 },
+};
+
+/**
+ * Costruisce il pool free agent storico (istanziato come `Batter[]`/`Pitcher[]`)
+ * dell'annata: i giocatori reali fuori dalle 30 rose attive. Alimenta il mercato
+ * dell'off-season (`startOffseason(..., pool)`), così i fuori rosa restano
+ * disponibili invece di sparire. Vuoto per gli anni senza dataset.
+ */
+export function buildHistoricalFreeAgents(
+  year = DEFAULT_HISTORICAL_YEAR,
+): { batters: Batter[]; pitchers: Pitcher[] } {
+  const fa = HISTORICAL_FREE_AGENTS[year];
+  if (!fa) return { batters: [], pitchers: [] };
+  return importHistoricalPool(fa.bat, fa.pit, year * 7919);
 }

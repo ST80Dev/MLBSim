@@ -10,7 +10,7 @@ import type { HistBatLine, HistPitLine } from './season1997';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_1997: HistBatLine[] = [
-  { id: 'tejadmi01', name: 'Miguel Tejada', pos: 'SS', bats: 'R', age: 23, pa: 104, h: 20, double: 3, triple: 2, hr: 2, bb: 2, so: 22, hbp: 3, sb: 2, cs: 0 },
+  { id: 'tejadmi01', name: 'Miguel Tejada', pos: 'SS', bats: 'R', age: 23, pa: 104, h: 20, double: 3, triple: 2, hr: 2, bb: 2, so: 22, hbp: 3, sb: 2, cs: 0, fld: 72 },
   { id: 'owenser01', name: 'Eric Owens', pos: 'LF', bats: 'R', age: 26, pa: 61, h: 12, double: 1, triple: 0, hr: 0, bb: 5, so: 10, hbp: 0, sb: 4, cs: 1 },
   { id: 'spehrti01', name: 'Tim Spehr', pos: 'C', bats: 'R', age: 30, pa: 52, h: 8, double: 2, triple: 0, hr: 2, bb: 3, so: 15, hbp: 1, sb: 1, cs: 0 },
   { id: 'booneaa01', name: 'Aaron Boone', pos: '3B', bats: 'R', age: 24, pa: 52, h: 12, double: 1, triple: 0, hr: 0, bb: 2, so: 5, hbp: 0, sb: 1, cs: 0 },
