@@ -134,7 +134,10 @@ function spreadPitcher(r: PitcherRatings): PitcherRatings {
   return {
     ...r,
     stuff: spread(r.stuff), control: spread(r.control), movement: spread(r.movement),
-    groundball: spread(r.groundball), fielding: spread(r.fielding),
+    groundball: spread(r.groundball),
+    // Difesa NON stirata: è reale (Fielding.csv) o archetipo neutro (70) — il ×1.4
+    // la gonfierebbe, come per i battitori.
+    fielding: r.fielding,
   };
 }
 
@@ -187,6 +190,8 @@ function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
     hbp: l.hbp,
     role: l.role,
     gs: l.gs,
+    g: l.g,
+    fld: l.fld,
   });
   // NB: nessun gate-rookie sui lanciatori — non gonfiano da esordienti (il bonus-
   // workload richiede inning, la regressione per campione già doma i micro-campioni)

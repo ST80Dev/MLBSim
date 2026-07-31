@@ -152,6 +152,10 @@ export interface PitcherImportInput extends PitcherStats {
   role?: PitcherRole;
   /** Partite iniziate: stima la Resistenza (battitori affrontati per start). */
   gs?: number;
+  /** Apparizioni totali: stima la Resistenza dei RILIEVI (battitori per apparizione). */
+  g?: number;
+  /** Difesa REALE del lanciatore (40-100) da Fielding.csv, se disponibile. */
+  fld?: number;
 }
 
 /**
@@ -183,14 +187,30 @@ export function ratingsFromPitcherStats(s: PitcherImportInput): PitcherRatings {
   const movMultDips = 1 + (movMultRaw - 1) * DIPS_HIT_CONTROL;
   const movement = ratingFromMult(reg(movMultDips), 0.9);
 
-  // Resistenza: inverte deriveStamina per gli SP (24 + sigma*3 battitori/start).
-  let stamina: number;
+  // Resistenza: INVERTE deriveStamina dai battitori affrontati per uscita — così è
+  // REALE, non un archetipo piatto per ruolo (i rilievi erano tutti 65). SP: BF per
+  // partenza (24 = ~6 inning a rating 70). RP/CL: BF per APPARIZIONE (un LOOGY da un
+  // out ha poca Resistenza, un long-man molta). Le costanti 3/1.2/0.8 combaciano con
+  // deriveStamina (round-trip fedele).
+  // REGRESSIONE PER CAMPIONE: chi ha POCHE partenze/apparizioni ha un rapporto sballato
+  // (magari usato pochissimo quell'anno) → si regredisce verso il CENTRO di ruolo
+  // (neutro), così un micro-campione non produce una Resistenza estrema. Campione pieno
+  // → valore reale quasi intatto. Fallback al centro se mancano i conteggi.
+  const staminaCenter =
+    role === 'CL' ? RATING_AVG - 8 : role === 'RP' ? RATING_AVG - 5 : RATING_AVG;
+  let staminaRaw = staminaCenter;
+  let staminaW = 0;
   if (role === 'SP' && s.gs && s.gs > 0) {
-    const bfPerStart = bf / s.gs;
-    stamina = RATING_AVG + ((bfPerStart - 24) / 3) * 10;
-  } else {
-    stamina = role === 'CL' ? RATING_AVG - 8 : role === 'RP' ? RATING_AVG - 5 : RATING_AVG + 10;
+    staminaRaw = RATING_AVG + ((bf / s.gs - 24) / 3) * 10;
+    staminaW = s.gs / (s.gs + 10); // ~10 partenze di prior
+  } else if ((role === 'RP' || role === 'CL') && s.g && s.g > 0) {
+    const bfPerApp = bf / s.g;
+    staminaRaw = role === 'CL'
+      ? RATING_AVG + ((bfPerApp - 5) / 0.8) * 10
+      : RATING_AVG + ((bfPerApp - 7) / 1.2) * 10;
+    staminaW = s.g / (s.g + 22); // ~22 apparizioni di prior
   }
+  const stamina = staminaCenter + staminaW * (staminaRaw - staminaCenter);
 
   return {
     stuff: clampRating(stuff),
@@ -198,6 +218,7 @@ export function ratingsFromPitcherStats(s: PitcherImportInput): PitcherRatings {
     movement: clampRating(movement),
     groundball: clampRating(groundball),
     stamina: clampRating(stamina),
-    fielding: RATING_AVG,
+    // Difesa: reale (da Fielding.csv POS=P) se disponibile, altrimenti archetipo lega.
+    fielding: s.fld != null ? clampRating(s.fld) : RATING_AVG,
   };
 }

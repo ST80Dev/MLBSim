@@ -443,6 +443,26 @@ function main() {
     return { fld: roundR(fld), arm: arm == null ? null : roundR(arm) };
   };
 
+  // DIFESA del LANCIATORE (POS=P in Fielding.csv): comebacker, coprire prima,
+  // assist. Range Factor (PO+A/inn) + errori, normalizzati vs i lanciatori pari
+  // campione (z-score → 70 media). Individualizza il fielding dei partenti (era
+  // tutto 70): Maddux/Kenny Rogers elite, gli scarsi sotto. Chi ha pochi inning →
+  // archetipo (70). Segnale rumoroso (poche palle giocate) → coefficiente prudente.
+  const pitFieldRaw = new Map(); // pid -> {rf, err}
+  for (const [key, c] of fldAgg) {
+    if (!key.endsWith('|P') || c.inn < 400) continue;
+    const pid = key.slice(0, -2);
+    const chances = c.po + c.a + c.e;
+    pitFieldRaw.set(pid, { rf: ((c.po + c.a) * 27) / c.inn, err: chances > 0 ? c.e / chances : 0 });
+  }
+  const pfRf = meanSd([...pitFieldRaw.values()].map((d) => d.rf));
+  const pfErr = meanSd([...pitFieldRaw.values()].map((d) => d.err));
+  const derivePitField = (pid) => {
+    const d = pitFieldRaw.get(pid);
+    if (!d) return null;
+    return roundR(70 + 6 * z(d.rf, pfRf) - 2.5 * z(d.err, pfErr));
+  };
+
   // Assegnazione unica alla squadra primaria.
   const teamBatCand = new Map(); // teamID -> [cand battitore]
   for (const [pid, s] of batTot) {
@@ -573,12 +593,16 @@ function main() {
 
   function buildPitchers(teamID) {
     const cand = teamPitCand.get(teamID) ?? [];
-    const line = (c, role) => ({
-      id: c.pid, name: c.name, role, throws: c.throws, age: c.age,
-      gs: c.gs, outs: c.outs, h: c.h, hr: c.hr, bb: c.bb, so: c.so,
-      hbp: c.hbp, er: c.er, w: c.w, l: c.l, sv: c.sv,
-      ...(isRookiePit(c.pid) ? { rk: true } : {}),
-    });
+    const line = (c, role) => {
+      const fld = derivePitField(c.pid); // difesa reale del lanciatore (null = archetipo 70)
+      return {
+        id: c.pid, name: c.name, role, throws: c.throws, age: c.age,
+        g: c.g, gs: c.gs, outs: c.outs, h: c.h, hr: c.hr, bb: c.bb, so: c.so,
+        hbp: c.hbp, er: c.er, w: c.w, l: c.l, sv: c.sv,
+        ...(fld != null ? { fld } : {}),
+        ...(isRookiePit(c.pid) ? { rk: true } : {}),
+      };
+    };
 
     const starters = cand.filter((c) => c.gs >= 10).sort((a, b) => b.outs - a.outs);
     const relievers = cand.filter((c) => c.gs < 10).sort((a, b) => b.outs - a.outs);
@@ -651,8 +675,9 @@ function batObj(b) {
   return `{ id: ${q(b.id)}, name: ${q(b.name)}, pos: '${b.pos}', bats: '${b.bats}', age: ${b.age}, pa: ${b.pa}, h: ${b.h}, double: ${b.double}, triple: ${b.triple}, hr: ${b.hr}, bb: ${b.bb}, so: ${b.so}, hbp: ${b.hbp}, sb: ${b.sb}, cs: ${b.cs}${sec}${def}${rk} }`;
 }
 function pitObj(p) {
+  const fld = p.fld != null ? `, fld: ${p.fld}` : '';
   const rk = p.rk ? ', rk: true' : '';
-  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv}${rk} }`;
+  return `{ id: ${q(p.id)}, name: ${q(p.name)}, role: '${p.role}', throws: '${p.throws}', age: ${p.age}, g: ${p.g}, gs: ${p.gs}, outs: ${p.outs}, h: ${p.h}, hr: ${p.hr}, bb: ${p.bb}, so: ${p.so}, hbp: ${p.hbp}, er: ${p.er}, w: ${p.w}, l: ${p.l}, sv: ${p.sv}${fld}${rk} }`;
 }
 
 function emitTs(built) {
@@ -734,6 +759,9 @@ export interface HistPitLine {
   role: PitcherRole;
   throws: ThrowHand;
   age: number;
+  /** Apparizioni totali (Resistenza dei rilievi: BF/apparizione). Opzionale per le
+   *  fixture a mano; i dataset generati la includono sempre. */
+  g?: number;
   gs: number;
   outs: number; // IP*3 (es. 213.1 IP = 640 out)
   h: number;
@@ -745,6 +773,9 @@ export interface HistPitLine {
   w: number;
   l: number;
   sv: number;
+  /** Difesa REALE del lanciatore (40-100) da Fielding.csv (POS=P): range factor +
+   *  errori sul monte. Assente = pochi inning → l'importatore usa l'archetipo (70). */
+  fld?: number;
   /** Esordiente MLB (nessun track record prima di quest'anno): gate rookie. */
   rk?: boolean;
 }
