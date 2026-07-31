@@ -1,5 +1,5 @@
 import type { BatterRatings, PitcherRatings, Team, Batter, Pitcher } from './types';
-import { clampRating, pitcherOverall } from './ratings';
+import { clampRating, pitcherOverall, RATING_AVG } from './ratings';
 
 // Punteggio di forza della squadra, comparabile fra squadre e scomposto in
 // Totale / Attacco / Difesa / Lancio. Deriva SOLO dai giocatori "in formazione":
@@ -63,15 +63,27 @@ export function teamStrength(team: Team): TeamStrength {
   const def = (b: Batter) => batterDefense(b.ratings);
   const pit = (p: Pitcher) => pitchValue(p.ratings);
 
-  const attack = starMean(team.lineup.map(off), team.bench.map(off), 0.4);
-  const pitching = starMean(team.rotation.map(pit), team.bullpen.map(pit), 0.6);
+  let attack = starMean(team.lineup.map(off), team.bench.map(off), 0.4);
+  let pitching = starMean(team.rotation.map(pit), team.bullpen.map(pit), 0.6);
   let defense = starMean(team.lineup.map(def), team.bench.map(def), 0.4);
 
   // Forza IBRIDA: i rating individuali restano peripherals (abilita' controllabile),
   // ma la DIFESA della squadra assorbe la PREVENZIONE-PUNTI reale (ERA vera del team:
   // difesa+park+staff, l'edge che i peripherals dei singoli non colgono). Solo import
   // storico (context presente); la lega generata resta 100% rating.
-  if (team.context) defense = 0.5 * defense + 0.5 * team.context.prevent;
+  if (team.context) {
+    defense = 0.5 * defense + 0.5 * team.context.prevent;
+    // DISACCOPPIAMENTO (solo import storico): i rating INDIVIDUALI restano FEDELI
+    // (nessuno stretch che li caricaturi), e la VARIANZA TRA SQUADRE nasce QUI, a
+    // livello aggregato — dove è il suo posto. Le rose reali hanno talento-medio
+    // simile (25-man convergente) ma le corazzate concentrano i fenomeni: una
+    // convessità sui sotto-punteggi allarga le distanze (Δ~5 → ~8-9) senza toccare
+    // un solo rating. teamStrength è SOLO display (non entra nel sim) → epoca-safe.
+    // La lega generata (context assente) non è convessa: i suoi rating già spaziano.
+    attack = convex(attack);
+    defense = convex(defense);
+    pitching = convex(pitching);
+  }
 
   // Attacco e prevenzione (lancio+difesa) guidano; la difesa pesa un filo di piu'
   // (ibrido) cosi' i team run-prevention leggono forte senza gonfiare i lanciatori.
@@ -83,4 +95,11 @@ export function teamStrength(team: Team): TeamStrength {
     defense: clampRating(defense),
     pitching: clampRating(pitching),
   };
+}
+
+/** Convessità aggregata della forza-squadra (solo storico): allarga le distanze
+ *  attorno alla media di lega senza toccare i rating individuali. Vedi teamStrength. */
+const TEAM_CONVEX = 1.6;
+function convex(x: number): number {
+  return clampRating(RATING_AVG + (x - RATING_AVG) * TEAM_CONVEX);
 }

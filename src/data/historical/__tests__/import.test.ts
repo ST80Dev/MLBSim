@@ -283,9 +283,12 @@ describe('gate rookie', () => {
   });
 
   it('un rookie a produzione GENUINA resta valorizzato (no hindsight)', () => {
-    // Pujols/Ichiro 2001: stagioni davvero elite → il gate non le affossa.
+    // Pujols/Ichiro 2001: stagioni davvero elite → il gate non le affossa. La soglia
+    // di Ichiro è 86 (non 87): la correzione round-trip del contatto lima ~1 punto i
+    // profili elite di contatto — è calibrazione globale (aggregato→BA reale), non il
+    // gate; Ichiro resta top-tier (contatto ~95, un no-power da .350 vale così).
     expect(ovrOf(2001, 'Albert Pujols')).toBeGreaterThanOrEqual(88);
-    expect(ovrOf(2001, 'Ichiro Suzuki')).toBeGreaterThanOrEqual(87);
+    expect(ovrOf(2001, 'Ichiro Suzuki')).toBeGreaterThanOrEqual(86);
   });
 });
 

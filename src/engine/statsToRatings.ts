@@ -128,10 +128,18 @@ export function ratingsFromBatterStats(s: BatterImportInput): BatterRatings {
   // Parte-K isolata dalla forward (SO = abBase·so·mult(contact,0.88)·mult(eye,0.97)).
   const eyeSoMult = Math.pow(0.97, (eye - RATING_AVG) / 10);
   const contactSo = ratingFromMult(reg(s.so / abBase / LEAGUE.so / eyeSoMult), 0.88);
-  // Rifinitura-K limitata: il basso K aggiunge poco (+), l'alto K toglie di più (−),
-  // ma mai tanto da ribaltare l'ancora-BA.
-  const kAdj = Math.max(-24, Math.min(13, contactSo - RATING_AVG)) * 0.5;
-  const contact = contactBa + kAdj;
+  // Rifinitura-K asimmetrica: il basso K aggiunge poco (+), l'alto K toglie di più
+  // (−) — un forte strikeout-prone (Glaus) ha meno contatto reale, e non deve alzare
+  // il pavimento (che gonfiava l'offesa di lega). Non ribalta mai l'ancora-BA.
+  const kAdj = Math.max(-32, Math.min(10, contactSo - RATING_AVG)) * 0.6;
+  // Correzione ROUND-TRIP: l'inversione BA→rating (perSigma 1.12) sovra-legge rispetto
+  // alla forward deriveBatterStats (singoli perSigma 1.1 + contributo XBH sulla BA), così
+  // il round-trip gonfiava l'aggregato di lega (.286 vs il reale ~.275 degli starter) e
+  // con esso l'R/G storico. Il ritocco riporta l'aggregato al BA reale — è FEDELTÀ, non
+  // soppressione: contact scende quel tanto che serve perché deriveBatterStats(contact)
+  // riproduca la BA d'ingresso. Proporzionale alla distanza da 70 (l'errore è lì).
+  const RT = 0.78;
+  const contact = RATING_AVG + (contactBa + kAdj - RATING_AVG) * RT;
 
   // Velocita: SB e' la leva diretta (invertendo la formula lineare di sb);
   // i tripli confermano (data la Potenza gia' stimata).
