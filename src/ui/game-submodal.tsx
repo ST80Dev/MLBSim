@@ -143,7 +143,8 @@ export function SubModal({
     incoming = off.team.bench.map((b) => ({
       id: b.id,
       player: b,
-      subtitle: `panchina · ${b.position}`,
+      // È già la vista dei panchinari: esplicita il RUOLO naturale, non "panchina".
+      subtitle: b.position,
       onPick: () => {
         act((g) => pinchHit(g, b.id));
         onClose();
@@ -207,7 +208,8 @@ export function SubModal({
       incoming = off.team.bench.map((b) => ({
         id: b.id,
         player: b,
-        subtitle: `panchina · VEL ${b.ratings.speed}`,
+        // Ruolo naturale + velocità (dote chiave del corridore).
+        subtitle: `${b.position} · VEL ${b.ratings.speed}`,
         onPick: () => {
           act((g) => pinchRun(g, offenseSide(g), outBase, b.id));
           onClose();
