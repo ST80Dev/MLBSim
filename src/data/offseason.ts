@@ -165,12 +165,24 @@ export function currentBlock(state: OffseasonState): string | null {
 
 const cloneSet = (s: RosterSet): RosterSet => ({ batters: [...s.batters], pitchers: [...s.pitchers] });
 
-/** Il giocatore di valore piu' BASSO di una rosa (candidato allo scarico). */
-function worstReleasable(set: RosterSet): FreeAgent | null {
+/**
+ * Candidato allo scarico per PRESSIONE DA CAP. Non il valore piu' basso in assoluto
+ * (sarebbe uno scrub economico: liberarlo NON alleggerisce il monte-ingaggi, e la
+ * dinastia non rientrerebbe mai — deriva verso l'alto). Invece: tra i giocatori
+ * MENO preziosi (meta' inferiore per `playerValue`, l'elite e' protetto) libera il
+ * piu' CARO — massimo sollievo di cap cedendo un "maturo caro senza prospettiva",
+ * cioe' proprio l'attrito che il design vuole (docs/franchise.md § Riconciliazione:
+ * "deve lasciar partire buoni giocatori verso i deboli", senso unico verso il basso).
+ */
+function pricyExpendable(set: RosterSet): FreeAgent | null {
   const all: FreeAgent[] = [...set.batters, ...set.pitchers];
   if (!all.length) return null;
-  return all.reduce((w, p) =>
-    playerValue(p) < playerValue(w) || (playerValue(p) === playerValue(w) && p.id < w.id) ? p : w,
+  const byValue = [...all].sort(
+    (a, b) => playerValue(a) - playerValue(b) || (a.id < b.id ? -1 : 1),
+  );
+  const expendable = byValue.slice(0, Math.max(1, Math.ceil(byValue.length / 2)));
+  return expendable.reduce((w, p) =>
+    p.salary > w.salary || (p.salary === w.salary && p.id < w.id) ? p : w,
   );
 }
 
@@ -269,7 +281,8 @@ export function humanSign(state: OffseasonState, playerId: string): OffseasonSta
 /**
  * Elabora una singola AI per il blocco corrente (al piu' UNA mossa, cosi' il
  * mercato si schiarisce gradualmente):
- *   1) se sopra il proprio tetto → rilascia il giocatore di valore piu' basso;
+ *   1) se sopra il proprio tetto → rilascia il piu' CARO tra gli espendibili
+ *      (sollievo di cap reale; l'elite resta, docs/franchise.md § Riconciliazione);
  *   2) altrimenti, se sotto taglia e c'e' spazio-cap → firma il miglior FA del
  *      tipo mancante che rientra nel tetto;
  *   3) altrimenti nessuna mossa.
@@ -287,9 +300,9 @@ function stepAiTeam(state: OffseasonState, teamId: string): OffseasonState {
   const cap = capOf(state, teamId);
   const tgt = state.targets[teamId];
 
-  // 1) Pressione da CAP: scarica il peggiore in assoluto.
+  // 1) Pressione da CAP: scarica il piu' caro tra gli espendibili (sollievo vero).
   if (payroll > cap + 1e-9) {
-    const worst = worstReleasable(set);
+    const worst = pricyExpendable(set);
     if (worst) return release(state, teamId, worst, false);
   }
 

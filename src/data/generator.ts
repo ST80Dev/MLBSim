@@ -44,6 +44,12 @@ const BENCH_POSITIONS: Position[] = ['C', 'CF', 'SS', '3B', 'RF'];
 // Profondita' (depth) oltre i 25 attivi: riserve per gestione/scambi.
 const DEPTH_BATTER_POSITIONS: Position[] = ['C', '1B', '2B', 'LF', '3B', 'CF'];
 
+// Taglie rosa a regime (9+5+6 battitori, 5+6+4 lanciatori) — la stessa taglia
+// bersaglio dell'off-season (`ROSTER_BATTERS`/`ROSTER_PITCHERS`): il reslot ci
+// riporta la rosa dopo aging/mercato, completandola coi replacement se serve.
+const ROSTER_BATTERS = 20;
+const ROSTER_PITCHERS = 15;
+
 // Pavimenti realistici. ROT_FLOOR: un partente titolare, anche il #5 di una
 // squadra scarsa, e' sotto media ma di livello MLB (mai un braccio da Tripla-A
 // in rotazione). STAR_FLOOR: ogni squadra ha almeno una stella.
@@ -626,6 +632,145 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
     usesDH: true,
     reserveBatters,
     reservePitchers,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// RESLOT — ricompone una squadra COMPLETA (lineup/panca/rotazione/bullpen/depth)
+// da ROSTER PIATTI di battitori e lanciatori (Fase 5A, step 6 finalize/reslot).
+//
+// È il duale di `flatten` (offseason): dopo aging/ritiri/draft/mercato la rosa
+// vive come due liste piatte; qui torna una squadra schierabile. Deterministico
+// (l'RNG serve solo per l'eventuale RIEMPIMENTO a taglia coi replacement, mai per
+// riordinare i giocatori esistenti — quelli si dispongono per merito). Preserva i
+// metadati della squadra base (id, nome, colori, lega, division, DH, contesto).
+// ---------------------------------------------------------------------------
+
+/** Ordine di SCARSITÀ delle 9 caselle: le difficili da coprire prima, DH per ultimo. */
+const SCARCITY_ORDER: Position[] = ['C', 'SS', 'CF', '2B', '3B', 'RF', 'LF', '1B', 'DH'];
+
+/** Sistema `b` alla casella `slot` (naturale → invariato; spostato → penalità di
+ *  posizione + naturale come secondaria se ammessa). Come la coda di `alignLineupDefense`. */
+function seatAt(b: Batter, slot: Position): Batter {
+  if (slot === b.position) return b;
+  const opts = SECONDARY_OPTIONS[slot];
+  const sec = opts?.includes(b.position)
+    ? b.position
+    : b.secondaryPosition && opts?.includes(b.secondaryPosition)
+      ? b.secondaryPosition
+      : undefined;
+  return { ...b, position: slot, secondaryPosition: sec, ratings: ratingsAtPosition(b, slot) };
+}
+
+/**
+ * Sceglie i 9 titolari dalle liste piatte coprendo tutte le caselle: greedy per
+ * scarsità (casella difficile prima), miglior fit disponibile per ogni casella
+ * (naturale preferito; fuori-ruolo penalizzato; DH al miglior bat rimasto).
+ */
+function seatLineup(pool: Batter[]): { lineup: Batter[]; rest: Batter[] } {
+  const avail = [...pool];
+  const seated: Batter[] = [];
+  for (const slot of SCARCITY_ORDER) {
+    if (!avail.length) break;
+    let bestIdx = 0;
+    let bestScore = -Infinity;
+    for (let i = 0; i < avail.length; i++) {
+      const p = avail[i];
+      let score: number;
+      if (slot === 'DH') {
+        score = batterOverall(p.ratings, p.position); // DH: solo la mazza
+      } else {
+        const natural = p.position === slot;
+        const occ = canOccupy(p, slot);
+        score =
+          (occ
+            ? batterOverall(ratingsAtPosition(p, slot), slot)
+            : batterOverall(p.ratings, p.position) - 20) + (natural ? 100 : occ ? 0 : -1000);
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    }
+    const [p] = avail.splice(bestIdx, 1);
+    seated.push(seatAt(p, slot));
+  }
+  return { lineup: seated, rest: avail };
+}
+
+/** Punteggio "attitudine a partire": qualità + resistenza pesata (come il generatore). */
+const startScoreOf = (p: Pitcher): number =>
+  pitcherOverall(p.ratings) + 0.9 * (p.ratings.stamina - RATING_AVG);
+/** Punteggio "attitudine a chiudere": qualità + stoffa (dominio in 1 ripresa). */
+const closerScoreOf = (p: Pitcher): number =>
+  pitcherOverall(p.ratings) + 0.4 * (p.ratings.stuff - RATING_AVG);
+
+/**
+ * Ricompone una squadra schierabile da liste piatte di battitori e lanciatori.
+ * Se un tipo è sotto la taglia bersaglio (20 bat / 15 pit) la completa con
+ * giocatori **replacement** (sotto media, deterministici dall'`rng`), così la
+ * squadra resta sempre valida e simulabile. Non muta gli input (clona ciò che tocca).
+ */
+export function assembleTeam(base: Team, batters: Batter[], pitchers: Pitcher[], rng: Rng): Team {
+  const names = makeNameFactory(rng);
+  const bats: Batter[] = batters.map((b) => structuredClone(b));
+  const pits: Pitcher[] = pitchers.map((p) => structuredClone(p));
+
+  // Riempimento a taglia con replacement (teamTalent negativo → sotto media).
+  let fillB = 0;
+  while (bats.length < ROSTER_BATTERS) {
+    const pos = DEPTH_BATTER_POSITIONS[fillB % DEPTH_BATTER_POSITIONS.length];
+    bats.push(makeBatter(rng, names, `${base.id}-fill-b${fillB++}`, pos, -8, 0, 0));
+  }
+  let fillP = 0;
+  while (pits.length < ROSTER_PITCHERS) {
+    pits.push(makePitcher(rng, names, `${base.id}-fill-p${fillP++}`, 'RP', -8, 0));
+  }
+
+  // Battitori: 9 titolari (best-fit per casella) → panca (i 5 migliori rimasti) → depth.
+  const { lineup: seated, rest } = seatLineup(bats);
+  const lineup = autoLineup(seated);
+  const restSorted = [...rest].sort(
+    (a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position),
+  );
+  const bench = restSorted.slice(0, BENCH_POSITIONS.length);
+  const reserveBatters = restSorted.slice(BENCH_POSITIONS.length);
+
+  // Lanciatori: i 5 con più attitudine a partire → rotazione (asso in testa);
+  // il miglior braccio rimasto orientato al dominio → closer; poi 5 RP; resto depth.
+  const byStart = [...pits].sort((a, b) => startScoreOf(b) - startScoreOf(a));
+  const rotation = byStart
+    .slice(0, 5)
+    .map((p) => setPitcherRole(p, 'SP'))
+    .sort((a, b) => pitcherOverall(b.ratings) - pitcherOverall(a.ratings));
+  const restArms = [...byStart.slice(5)].sort((a, b) => closerScoreOf(b) - closerScoreOf(a));
+  const closer = restArms.length ? setPitcherRole(restArms[0], 'CL') : null;
+  const bullpen: Pitcher[] = [
+    ...restArms.slice(1, 6).map((p) => setPitcherRole(p, 'RP')),
+    ...(closer ? [closer] : []),
+  ];
+  const reservePitchers = restArms.slice(6).map((p) => setPitcherRole(p, 'RP'));
+
+  // Pavimenti realistici come nel generatore: nessun partente titolare sotto ROT_FLOOR.
+  for (const p of rotation) floorPitcher(p, ROT_FLOOR);
+
+  return {
+    id: base.id,
+    name: base.name,
+    abbrev: base.abbrev,
+    primaryColor: base.primaryColor,
+    secondaryColor: base.secondaryColor,
+    ballpark: base.ballpark,
+    league: base.league,
+    division: base.division,
+    lineup,
+    bench,
+    rotation,
+    bullpen,
+    usesDH: base.usesDH,
+    reserveBatters,
+    reservePitchers,
+    ...(base.context ? { context: base.context } : {}),
   };
 }
 
