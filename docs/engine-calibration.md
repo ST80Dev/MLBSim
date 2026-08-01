@@ -511,7 +511,56 @@ tutte uguali. **Disaccoppiamento**: una leva per obiettivo.
 `deriveBatterStats` (singoli perSigma 1.1 + contributo XBH sulla BA): il round-trip
 gonfiava l'aggregato di lega (BA .286 vs il reale ~.275 degli starter) e con esso
 l'R/G storico (5,98 → 6,3). Il fattore `RT` (0.78, proporzionale alla distanza da
-70) riporta l'aggregato al BA reale → **R/G ~6,0** (banda alta-offesa) con i profili
-elite preservati (Ichiro C95). NB: `HR/squadra ~200` **non** è gonfio — è ≈ il reale
-AL 2001, on-design "alta offesa". La lega *generata* (senza `context`) non è toccata
-da nulla di tutto questo: gira sul suo path (R/G ~4,7, i suoi rating già spaziano).
+70) riporta l'aggregato al BA reale → BA più fedele con i profili elite preservati
+(Ichiro C95). NB: `HR/squadra ~200` **non** è gonfio — è ≈ il reale AL 2001,
+on-design "alta offesa". La lega *generata* (senza `context`) non è toccata da
+nulla di tutto questo: gira sul suo path (i suoi rating già spaziano).
+
+### Ri-centratura dell'offesa d'epoca (`import.ts`: `recenter` + `PITCH_MOVE`)
+
+Anche col round-trip, la **ri-simulazione** dell'import storico (round-robin doppio,
+tutte e 30 le rose) sfornava un ambiente-punti **fuori banda**: R/G ~7,3, BA ~.299,
+HR/G ~1,7 — vs il ~5,9/.264/1,50 della lega **generata** e il target d'epoca. Causa
+(misurata, non a occhio): battitori e lanciatori ri-derivati sono internamente
+**incoerenti**. In una lega chiusa i rate del battitore e quelli concessi dal
+lanciatore descrivono gli **stessi eventi** e devono coincidere; qui i **lanciatori**
+invertivano ~neutri (≈ `LEAGUE`) mentre i **battitori** stavano **~+20-35% sopra**
+(BB/PA .103 vs .085, HR .035 vs .026). Siccome `combineRates ≈ batt·lanc / lega`, con
+i lanciatori a lega il sim segue i **rate caldi dei battitori**. Il calore batte da
+due sorgenti: la forward `deriveBatterStats` è **convessa** (Jensen) e lo stretch
+`HIST_SPREAD` allarga la coda → l'aggregato battitori sale sopra la media anche a
+popolazione centrata. *(La differenza di K lanciatori generata vs storica — .209 vs
+.177 — è un depistaggio: in `combineRates` gli strikeout e gli out-su-palla-in-gioco
+sono **entrambi out**, scambiarli non muove i corridori.)*
+
+Due leve **disaccoppiate**, entrambe **solo storico**, riportano l'ambiente in banda
+senza falsare i profili elite:
+
+- **`recenter` (battitori)** — tira giù contatto/potenza/occhio, ma **solo la parte
+  sopra la media** (`above`, pieno da rating ~74): le doti sotto-media non gonfiano
+  e abbassarle punirebbe a torto i profili tutto-contatto (Ichiro C95/P49→resta
+  intatto sotto i 70). La **cima-gemma è protetta** sopra `RECENTER_FULLPROT` (95)
+  con sfumatura lineare da `RECENTER_GEM_KNEE` (90): Bonds P98/E98, Ichiro C95,
+  Helton P98/C95 **restano fenomeni** (i test lo esigono). Abbassa la **media** della
+  popolazione mantenendo **ordine relativo** e **varianza-squadra** (tutti scendono
+  in proporzione allo scarto sopra 70).
+- **`PITCH_MOVE` (lanciatori, +4)** — piccolo `+movimento` che assorbe il residuo
+  delle annate di **picco** (1999-2001) portandole in linea col motore. È
+  **DIPS-puro**: tocca **solo** le palle in gioco (soppressione-valide di **contesto
+  d'epoca**, mai HR/BB/SO) → **non** abbassa l'OVR né le gemme dei battitori.
+
+**Misurato** dopo il rientro (round-robin doppio, per annata):
+
+| Annata | R/G | BA | HR/G | | Annata | R/G | BA | HR/G |
+|---|---|---|---|---|---|---|---|---|
+| 1997 | 5,30 | .264 | 1,17 | | 2002 | 5,20 | .261 | 1,21 |
+| 1998 | 5,29 | .266 | 1,20 | | 2003 | 4,89 | .257 | 1,16 |
+| 1999 | 5,70 | .268 | 1,26 | | 2004 | 5,12 | .262 | 1,23 |
+| 2000 | 6,10 | .273 | 1,48 | | 2005 | 5,22 | .261 | 1,25 |
+| 2001 | 5,56 | .269 | 1,38 | | *media* | *~5,4* | *~.264* | *~1,3* |
+
+Media d'epoca **~5,4 R/G** (era ~7,3), forma **fedele al reale** (2000 il picco, 2003
+il minimo), tutti dentro la banda del motore e coerenti con la generata (5,9). I test
+gemma di `import.test.ts` restano verdi. Vale per **tutte** le annate senza taratura
+per-anno (stesso baseline `LEAGUE`). Verificare **sempre** dopo modifiche con uno
+script round-robin nello scratchpad (non committato).
