@@ -48,10 +48,12 @@ Caratteristiche (40-100) ──derive──►  Statistiche di conteggio  ──
   - `index.ts` — barrel dell'API pubblica.
   - `__tests__/` — test Vitest (determinismo, realismo, cime di eccellenza).
 - `src/data/` — generazione procedurale e dati.
-  - **Roster (Fase 2)** — una rosa ha **25 attivi** (9 lineup + 5 bench / 5 SP +
-    6 bullpen, split 14/11) più `reserveBatters`/`reservePitchers` di
-    **profondità** (~10, rosa totale ~35). Il motore usa solo i 25 attivi; il
-    depth è per il layer di gestione (swap tra le partite, scambi, draft).
+  - **Roster (Fase 2)** — una rosa ha **26 attivi** (9 lineup + 5 bench / 5 SP +
+    7 bullpen, split 14/12) più `reserveBatters`/`reservePitchers` di
+    **profondità** (~9, rosa totale ~35). Il motore usa solo gli attivi; il pool di
+    gara è `[starter, ...bullpen]` = **8 lanciatori** (bullpen a 7: 6 rilievi + closer,
+    così gli extra inning non restano a secco). Il depth è per il layer di gestione
+    (swap tra le partite, scambi, draft).
   - `generator.ts` — genera giocatori/rose da caratteristiche + franchigie;
     `makeNameFactory` pesca nomi per **origine** (peso ~ demografia MLB). I
     doppioni di cognome **non** sono vietati: capitano in modo casuale e

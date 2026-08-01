@@ -85,15 +85,19 @@ describe('importHistoricalTeam (fixture CLE/BOS 1999)', () => {
     expect(a.winner === 'away' || a.winner === 'home').toBe(true);
   });
 
-  it('importa anche panca e riserve quando presenti', () => {
+  it('importa panca e riserve; una riserva sale nel bullpen (depth extra inning)', () => {
     const withBench: typeof SAMPLE_CLE_1999 = {
       ...SAMPLE_CLE_1999,
       bench: [SAMPLE_CLE_1999.batters[0]],
       reservePitchers: [SAMPLE_CLE_1999.pitchers[0]],
     };
+    const base = importHistoricalTeam(SAMPLE_CLE_1999).team;
     const t = importHistoricalTeam(withBench).team;
     expect(t.bench).toHaveLength(1);
-    expect(t.reservePitchers).toHaveLength(1);
+    // La riserva presente NON è persa: viene importata e promossa nel bullpen (un
+    // rilievo in più per non restare a secco agli extra inning) → +1 vs senza riserve.
+    expect(t.bullpen.length).toBe(base.bullpen.length + 1);
+    expect(t.reservePitchers).toHaveLength(0);
     // Gli id restano unici tra i gruppi.
     const ids = [...t.lineup, ...t.bench].map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);

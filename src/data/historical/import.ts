@@ -276,17 +276,29 @@ export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
   // Lo staff attivo si divide per ruolo: SP -> rotazione, RP/CL -> bullpen. I
   // lanciatori di profondità restano fuori dai 25 attivi (role preservato).
   const rotation = mkPitchers(h.pitchers.filter((p) => p.role === 'SP'), 'SP');
+  // Un rilievo in PIÙ nel bullpen attivo (come nella generazione): il pool di gara
+  // `[starter, ...bullpen]` sale a ~8, così una gara lunga agli extra inning non
+  // resta a secco. Si promuove il MIGLIOR arm di riserva a rilievo (resistenza
+  // ri-derivata da RP). Se il dataset non ha riserve, il bullpen resta com'è.
+  const bpActive = mkPitchers(h.pitchers.filter((p) => p.role !== 'SP'), 'RP');
+  const reserveArms = mkPitchers(h.reservePitchers ?? [], 'PR');
+  let reservePitchers = reserveArms;
+  if (reserveArms.length > 0) {
+    const byOvr = [...reserveArms].sort((a, b) => pitcherOverall(b.ratings) - pitcherOverall(a.ratings));
+    const top = byOvr[0];
+    bpActive.push({ ...top, role: 'RP', stamina: deriveStamina(top.ratings.stamina, 'RP') });
+    reservePitchers = byOvr.slice(1);
+  }
   // Bullpen ORDINATO: rilievi "lunghi" (alta resistenza) prima, closer per ULTIMO
   // (chiude, non apre). Il dataset storico spesso elenca il closer per primo:
   // senza riordino l'auto-manager (che pesca il "prossimo in lista") lo infilava
   // come primo rilievo -> closer al 6° inning. Vedi `autoManagePitcher`.
-  const bullpen = mkPitchers(h.pitchers.filter((p) => p.role !== 'SP'), 'RP').sort((a, b) => {
+  const bullpen = bpActive.sort((a, b) => {
     const ca = a.role === 'CL' ? 1 : 0;
     const cb = b.role === 'CL' ? 1 : 0;
     if (ca !== cb) return ca - cb; // closer in fondo
     return b.stamina - a.stamina; // più resistente prima (rilievo lungo)
   });
-  const reservePitchers = mkPitchers(h.reservePitchers ?? [], 'PR');
 
   // Contesto REALE: prevenzione-punti del team dall'ERA vera (difesa + park + staff,
   // cioè l'edge dei team run-prevention che i peripherals dei singoli non colgono).
