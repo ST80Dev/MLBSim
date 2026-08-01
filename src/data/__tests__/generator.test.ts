@@ -78,9 +78,9 @@ describe('distribuzione talento per livello di rosa', () => {
 });
 
 describe('bullpen coerente per ruoli', () => {
-  it('ogni bullpen ha esattamente un closer (CL) e 6 arm', () => {
+  it('ogni bullpen ha esattamente un closer (CL) e 7 arm', () => {
     for (const t of teams) {
-      expect(t.bullpen).toHaveLength(6);
+      expect(t.bullpen).toHaveLength(7);
       expect(t.bullpen.filter((p) => p.role === 'CL')).toHaveLength(1);
     }
   });

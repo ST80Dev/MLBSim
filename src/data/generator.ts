@@ -44,11 +44,18 @@ const BENCH_POSITIONS: Position[] = ['C', 'CF', 'SS', '3B', 'RF'];
 // Profondita' (depth) oltre i 25 attivi: riserve per gestione/scambi.
 const DEPTH_BATTER_POSITIONS: Position[] = ['C', '1B', '2B', 'LF', '3B', 'CF'];
 
-// Taglie rosa a regime (9+5+6 battitori, 5+6+4 lanciatori) — la stessa taglia
+// Taglie rosa a regime (9+5+6 battitori, 5+7+3 lanciatori) — la stessa taglia
 // bersaglio dell'off-season (`ROSTER_BATTERS`/`ROSTER_PITCHERS`): il reslot ci
 // riporta la rosa dopo aging/mercato, completandola coi replacement se serve.
 const ROSTER_BATTERS = 20;
 const ROSTER_PITCHERS = 15;
+
+// Rilievi nel bullpen ATTIVO oltre al closer: 6 (+ closer = 7). Il pool di gara è
+// `[starter, ...bullpen]` = 8 lanciatori, così una partita lunga e ricca di valide
+// agli extra inning non resta a secco (con 5 RP il pool era 7 e all'11° si finivano
+// i lanciatori). Il pool totale resta 15 (seed-stabile): il 7° rilievo viene dai
+// depth, quindi reserve 3 invece di 4 — invisibile in gara (i reserve non giocano).
+const BULLPEN_RELIEVERS = 6;
 
 // Pavimenti realistici. ROT_FLOOR: un partente titolare, anche il #5 di una
 // squadra scarsa, e' sotto media ma di livello MLB (mai un braccio da Tripla-A
@@ -576,7 +583,7 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   // non nascono reliever più forti dei titolari e la rotazione ha varianza vera di
   // resistenza (cavalli e partenti corti). Chi ha stoffa ma non regge → bullpen.
   // L'eventuale asso-stella entra nel pool col bonus di specializzazione. ---
-  const arms = Array.from({ length: 15 }, (_, i) =>
+  const arms = Array.from({ length: ROSTER_PITCHERS }, (_, i) =>
     makePitcher(
       rng,
       names,
@@ -601,8 +608,13 @@ export function generateTeamFromFranchise(rng: Rng, f: Franchise): Team {
   const closerScore = (p: Pitcher) => pitcherOverall(p.ratings) + 0.4 * (p.ratings.stuff - RATING_AVG);
   const restByCloser = [...rest].sort((a, b) => closerScore(b) - closerScore(a));
   const closer = setPitcherRole(restByCloser[0], 'CL');
-  const bullpen: Pitcher[] = [...restByCloser.slice(1, 6).map((p) => setPitcherRole(p, 'RP')), closer];
-  const reservePitchers: Pitcher[] = restByCloser.slice(6).map((p) => setPitcherRole(p, 'RP'));
+  const bullpen: Pitcher[] = [
+    ...restByCloser.slice(1, 1 + BULLPEN_RELIEVERS).map((p) => setPitcherRole(p, 'RP')),
+    closer,
+  ];
+  const reservePitchers: Pitcher[] = restByCloser
+    .slice(1 + BULLPEN_RELIEVERS)
+    .map((p) => setPitcherRole(p, 'RP'));
 
   // Pavimenti realistici: nessun partente titolare sotto ROT_FLOOR (via i bracci
   // da Tripla-A), e almeno una stella 80+ in lineup (rete di sicurezza se le
@@ -746,10 +758,10 @@ export function assembleTeam(base: Team, batters: Batter[], pitchers: Pitcher[],
   const restArms = [...byStart.slice(5)].sort((a, b) => closerScoreOf(b) - closerScoreOf(a));
   const closer = restArms.length ? setPitcherRole(restArms[0], 'CL') : null;
   const bullpen: Pitcher[] = [
-    ...restArms.slice(1, 6).map((p) => setPitcherRole(p, 'RP')),
+    ...restArms.slice(1, 1 + BULLPEN_RELIEVERS).map((p) => setPitcherRole(p, 'RP')),
     ...(closer ? [closer] : []),
   ];
-  const reservePitchers = restArms.slice(6).map((p) => setPitcherRole(p, 'RP'));
+  const reservePitchers = restArms.slice(1 + BULLPEN_RELIEVERS).map((p) => setPitcherRole(p, 'RP'));
 
   // Pavimenti realistici come nel generatore: nessun partente titolare sotto ROT_FLOOR.
   for (const p of rotation) floorPitcher(p, ROT_FLOOR);

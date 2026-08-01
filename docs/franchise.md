@@ -328,8 +328,12 @@ da un **mercato a più blocchi**:
   il `playerValue` più basso del tipo in eccesso. **Firma per bisogno**: dal pool il
   `playerValue` più alto del **tipo mancante** (verso 20/15) che **sta sotto il
   proprio tetto effettivo**.
-- **Taglie rosa**: 20 battitori + 15 lanciatori per squadra (9+5+6 / 5+6+4). I
-  rilasci non scendono sotto la taglia; le firme non la superano.
+- **Taglie rosa**: 20 battitori + 15 lanciatori per squadra (9+5+6 / 5+7+3). Il
+  bullpen è a **7** (6 rilievi + closer) così il pool di gara `[starter, ...bullpen]`
+  è di **8 lanciatori** e gli extra inning non restano a secco; il 7° rilievo viene
+  dai depth (reserve 3, non 4) mantenendo il pool totale a 15 (seed-stabile). In
+  import storico il 7° rilievo è il miglior arm di riserva promosso. I rilasci non
+  scendono sotto la taglia; le firme non la superano.
 - **L'utente agisce con le STESSE primitive** in qualunque blocco (rilascia/firma
   sulla propria franchigia): la CPU è semplicemente l'automa che le applica alle
   altre 29. Fine off-season → **ricomposizione** di lineup/rotazione dai set piatti
