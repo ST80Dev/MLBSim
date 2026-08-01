@@ -421,13 +421,13 @@ export function Diamond({
               y={b.y - s}
               width={s * 2}
               height={s * 2}
-              fill={on ? offColor : '#f4f6fb'}
-              stroke={on ? '#0b1220' : 'none'}
-              strokeWidth={on ? 1.5 : 0}
+              fill={on ? '#ffd15c' : '#f4f6fb'}
+              stroke={on ? '#b5764a' : 'none'}
+              strokeWidth={on ? 2 : 0}
               transform={`rotate(45 ${b.x} ${b.y})`}
             />
             {editable && (
-              <text x={b.x} y={b.y - 12} textAnchor="middle" fontSize={10} fontWeight={800} fill={offColor}>
+              <text x={b.x} y={b.y - 12} textAnchor="middle" fontSize={10} fontWeight={800} fill="#ffd15c">
                 {lab}
               </text>
             )}
