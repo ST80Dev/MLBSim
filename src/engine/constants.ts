@@ -112,10 +112,17 @@ export const TUNING = {
   },
 
   /**
-   * Hit-and-run: il corridore parte, il battitore protegge (bias al contatto).
-   * `contactSaveBase` = prob. che uno strikeout diventi palla in gioco (piu' il
-   * contatto e' alto, piu' sale). `firstToThird` = prob. che su groundout il
-   * corridore dalla prima arrivi in terza (di solito va in seconda).
+   * Hit-and-run (corridori in movimento): il corridore "lanciato" parte col lancio
+   * e il battitore protegge (bias al contatto). Disponibile con un corridore in 1ª
+   * (2ª libera) O in 2ª (3ª libera): dalla 2ª su singolo SEGNA, ma su rimbalzo
+   * rischia di più l'eliminazione alla base d'arrivo.
+   * - `contactSaveBase` = prob. che uno strikeout diventi palla in gioco (sale col
+   *   contatto). `firstToThird` = prob. che su groundout il corridore dalla 1ª
+   *   arrivi in 3ª (di solito va in 2ª).
+   * - `caughtAdvancingFrom1st/2nd` = su rimbalzo, prob. che la difesa elimini il
+   *   corridore lanciato alla base d'arrivo (più alta dalla 2ª verso la 3ª, palla
+   *   agli interni): è il RISCHIO della giocata. Se preso, il battitore è salvo in
+   *   prima (scelta difensiva).
    */
   hitAndRun: {
     contactSaveBase: 0.35,
@@ -123,6 +130,8 @@ export const TUNING = {
     contactSaveMin: 0.1,
     contactSaveMax: 0.6,
     firstToThird: 0.3,
+    caughtAdvancingFrom1st: 0.1,
+    caughtAdvancingFrom2nd: 0.3,
   },
 
   /**

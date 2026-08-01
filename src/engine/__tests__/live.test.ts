@@ -145,6 +145,21 @@ describe('rubata — attiva Velocita', () => {
     expect(stealableBases(live)).toEqual([]);
     expect(attemptSteal(live, 1)).toBe(false);
   });
+
+  it('rubata della 3ª: la giocata riporta base=3 e il testo dice "terza"', () => {
+    // Su molti semi, ogni tentativo dalla 2ª (fromBase=2) deve etichettare la
+    // TERZA base, mai la seconda (bug: "eliminato in 2B" rubando la 3ª).
+    for (let s = 0; s < 40; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 3 + 1);
+      putRunner(live, 1, 6); // corridore in 2ª
+      attemptSteal(live, 2); // ruba la 3ª
+      const p = live.play.at(-1)!;
+      expect(p.base).toBe(3);
+      expect(p.text).toContain('terza');
+      expect(p.text).not.toContain('seconda');
+    }
+  });
 });
 
 describe('bunt — attiva Difesa del lanciatore e Velocita', () => {
@@ -331,15 +346,42 @@ describe('azioni interattive', () => {
 });
 
 describe('hit-and-run', () => {
-  it('richiede corridore in prima, seconda libera e <2 out', () => {
+  it('disponibile con un corridore lanciabile (1ª→2ª o 2ª→3ª), <2 out', () => {
     const { away, home } = generateMatchup(4);
     const live = createLiveGame(away, home, 4);
     expect(canHitAndRun(live)).toBe(false); // niente corridori
     expect(hitAndRun(live)).toBe(false);
+    // Corridore in 1ª, 2ª libera → sì.
     putRunner(live, 0, 8);
     expect(canHitAndRun(live)).toBe(true);
-    putRunner(live, 1, 7); // seconda occupata
+    // 1ª + 2ª, 3ª libera → sì (si lancia il corridore dalla 2ª verso la 3ª).
+    putRunner(live, 1, 7);
+    expect(canHitAndRun(live)).toBe(true);
+    // 1ª + 2ª + 3ª (nessuna base davanti libera) → no.
+    putRunner(live, 2, 6);
     expect(canHitAndRun(live)).toBe(false);
+  });
+
+  it('solo corridore in 2ª (3ª libera): disponibile; 2 out: no', () => {
+    const { away, home } = generateMatchup(9);
+    const live = createLiveGame(away, home, 9);
+    putRunner(live, 1, 8); // corridore in 2ª, 3ª libera
+    expect(canHitAndRun(live)).toBe(true);
+    live.outs = 2;
+    expect(canHitAndRun(live)).toBe(false);
+  });
+
+  it('con corridore in 2ª resta coerente su molti semi', () => {
+    for (let s = 0; s < 80; s++) {
+      const { away, home } = generateMatchup(s);
+      const live = createLiveGame(away, home, s * 5 + 1);
+      putRunner(live, 1, 8); // corridore in 2ª
+      const ok = hitAndRun(live);
+      expect(ok).toBe(true);
+      expect(live.outs).toBeGreaterThanOrEqual(0);
+      expect(live.outs).toBeLessThanOrEqual(3);
+      expect(live.bases.length).toBe(3);
+    }
   });
 
   it('con corridore in prima esegue l azione e aggiunge un play', () => {

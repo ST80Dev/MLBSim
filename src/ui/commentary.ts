@@ -432,17 +432,21 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
           'Sei-quattro-tre: DOPPIO GIOCO da manuale!',
         ]),
       ];
-    case 'caughtstealing':
+    case 'caughtstealing': {
+      const baseTo = ev.base === 3 ? 'terza' : 'seconda';
       return [
         pick(ev, [`${b} prova la fuga…`, `${b} scatta col lancio…`]),
-        'Il ricevitore spara in seconda…',
-        `Preso! ${b} ELIMINATO in rubata.`,
+        `Il ricevitore spara in ${baseTo}…`,
+        `Preso! ${b} ELIMINATO in rubata della ${baseTo}.`,
       ];
-    case 'steal':
+    }
+    case 'steal': {
+      const baseTo = ev.base === 3 ? 'terza' : 'seconda';
       return [
         pick(ev, [`${b} studia il lanciatore…`, `${b} allunga il piede…`]),
-        `Parte… e ruba la base! ${b} sicuro.`,
+        `Parte… e ruba la ${baseTo}! ${b} sicuro.`,
       ];
+    }
     case 'wildpitch':
       return [
         pick(ev, ['Il lanciatore carica…', 'Sul monte si prepara il lancio…']),
