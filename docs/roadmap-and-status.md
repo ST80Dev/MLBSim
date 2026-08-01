@@ -205,7 +205,9 @@
     cap reale, riconciliazione a senso unico verso il basso;
     4) draft inverso (`draft.ts`: classe prospetti giovani/grezzi deterministica,
     ordine inverso alla classifica, BPA per `playerValue`, immessi nella **depth**)
-    — **FATTO**; 5) valutazione scambi umano→1 AI (con **premio di consolidamento**);
+    — **FATTO**; 5) valutazione scambi umano→1 AI (`trades.ts`: `evaluateTrade` — equità di
+    `playerValue` + cap-legalità bilaterale sul tetto **effettivo** + **premio di
+    consolidamento** per gli slot roster finiti) — **FATTO**;
     6) `runOffseason` (perf=0) + **finalize/reslot** — **FATTO**: `assembleTeam`
     (reslot delle rose piatte in lineup/rotazione/depth, riempimento a taglia coi
     replacement), `offseasonRun.ts` (aging+ritiri → draft inverso → mercato a blocchi

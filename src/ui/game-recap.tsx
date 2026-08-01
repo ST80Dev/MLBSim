@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { GameResult } from '../engine/game';
 import type { StatsMode } from './statlines';
 import { StatsToggle } from './game-lineup';
@@ -6,20 +6,17 @@ import { LineScore, BoxScore } from './game-boxscore';
 
 // ---------------------------------------------------------------------------
 // Modale "Recap" di fine partita: line score + i due box score, con toggle
-// modalità statistiche. Estratto da App.tsx.
+// modalità statistiche (LOCALE al recap). Estratto da App.tsx.
 // ---------------------------------------------------------------------------
 
 export function RecapModal({
   result,
-  statsMode,
-  setStatsMode,
   onClose,
 }: {
   result: GameResult;
-  statsMode: StatsMode;
-  setStatsMode: (m: StatsMode) => void;
   onClose: () => void;
 }) {
+  const [statsMode, setStatsMode] = useState<StatsMode>('game');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
