@@ -128,6 +128,22 @@ spostano gli aggregati di lega.
   Netto: il punto dalla terza arriva ~2× più spesso di uno swing, al costo di meno
   valide. Il flag `seekFly` è passato **solo** da `flyBallAtBat`: il quick-sim non
   lo usa mai → Fase 0 invariata.
+- **Hit-and-run / corridori in movimento** (`canHitAndRun`, `hitAndRun`) —
+  disponibile **quasi sempre** che ci sia un corridore "lanciabile": in 1ª (2ª
+  libera) **o in 2ª** (3ª libera), `<2 out`. Il corridore più avanzato con la base
+  davanti libera parte col lancio (priorità alla 2ª→3ª: più valore, più rischio) e
+  il battitore protegge (bias al contatto: parte degli strikeout diventa palla in
+  gioco, `contactSave*`). Esiti:
+  - **singolo** → dalla 2ª il corridore **SEGNA** (lanciato col lancio), dalla 1ª
+    vola in 3ª;
+  - **rimbalzo** → o il battitore è out in prima e il corridore avanza (niente DP),
+    **oppure** la difesa prende il corridore alla base d'arrivo (RISCHIO:
+    `caughtAdvancingFrom2nd` .30 dalla 2ª, `From1st` .10 dalla 1ª) e il battitore
+    è salvo in prima (scelta difensiva);
+  - **strikeout** → il corridore tenta comunque la rubata (verso la 3ª è più
+    rischiosa): riuscita = furto, fallita = doppio gioco strike/tiro.
+  Costanti in `TUNING.hitAndRun`. Come le altre tattiche **non entra nel quick-sim**
+  → nessun impatto sulla calibrazione.
 - **Base intenzionale** (`intentionalWalk`) — avanzamento forzato deterministico
   (nessun RNG); conta come BB.
 - **Interni a doppio gioco** (`setDpDepth`, flag `LiveGame.dpDepth`) — difensiva,

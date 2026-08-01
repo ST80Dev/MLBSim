@@ -79,6 +79,8 @@ export interface PlayEvent {
   batter?: string;
   /** Solo per gli out su palla in gioco: dettaglio di campo (vedi OutInfo). */
   outInfo?: OutInfo;
+  /** Base di destinazione (2 = seconda, 3 = terza) per rubata / eliminato in rubata. */
+  base?: number;
 }
 
 export interface TeamGameStats {
@@ -314,6 +316,7 @@ function pushPlay(
   kind: PlayKind = 'other',
   batter?: string,
   outInfo?: OutInfo,
+  base?: number,
 ): void {
   const off = offense(l);
   const def = defense(l);
@@ -327,6 +330,7 @@ function pushPlay(
     kind,
     batter,
     outInfo,
+    base,
   });
 }
 
@@ -815,18 +819,19 @@ export function attemptSteal(l: LiveGame, fromBase: 1 | 2): boolean {
   const name = shortName(runner.batter.name);
   const baseName = toIdx === 1 ? 'seconda' : 'terza';
 
+  const toBase = toIdx + 1; // 2 = seconda, 3 = terza
   if (l.rng.chance(p)) {
     l.bases[toIdx] = runner;
     l.bases[idx] = null;
     bLine.sb += 1;
-    pushPlay(l, `${name} ruba la ${baseName} base`, 0, 'steal', name);
+    pushPlay(l, `${name} ruba la ${baseName} base`, 0, 'steal', name, undefined, toBase);
   } else {
     l.bases[idx] = null;
     bLine.cs += 1;
     l.outs += 1;
     const pLine = def.pitchingLines.get(pitcher.id);
     if (pLine) pLine.outs += 1;
-    pushPlay(l, `${name} eliminato in rubata`, 0, 'caughtstealing', name);
+    pushPlay(l, `${name} eliminato in rubata della ${baseName}`, 0, 'caughtstealing', name, undefined, toBase);
   }
   afterPlay(l, 0);
   return true;
@@ -864,9 +869,14 @@ export function intentionalWalk(l: LiveGame): void {
   afterPlay(l, runsScored);
 }
 
-/** Condizione per l'hit-and-run: corridore in prima, seconda libera, <2 out. */
+/**
+ * Condizione per l'hit-and-run: <2 out e c'è un corridore "lanciabile", cioè in
+ * 1ª con la 2ª libera OPPURE in 2ª con la 3ª libera (non si manda un corridore su
+ * una base occupata). Disponibile quasi sempre che ci sia un corridore da spedire.
+ */
 export function canHitAndRun(l: LiveGame): boolean {
-  return l.status === 'live' && !!l.bases[0] && !l.bases[1] && l.outs < 2;
+  if (l.status !== 'live' || l.outs >= 2) return false;
+  return (!!l.bases[0] && !l.bases[1]) || (!!l.bases[1] && !l.bases[2]);
 }
 
 /**
@@ -887,11 +897,20 @@ export function hitAndRun(l: LiveGame): boolean {
   pLine.bf += 1;
   const bLine = off.battingLines.get(batter.id)!;
   const scoreRunner = makeScoreRunner(l, off, def);
-  const runner1 = l.bases[0]!; // il corridore che parte
   const catcher = def.team.lineup.find((b) => b.position === 'C');
   const name = shortName(batter.name);
   const runsBefore = off.runs;
   const bases = l.bases;
+  const H = TUNING.hitAndRun;
+
+  // Corridore "lanciato": il più avanzato con la base davanti libera (2ª→3ª ha la
+  // priorità: più valore ma più rischio). `canHitAndRun` garantisce che esista.
+  const sentIdx = bases[1] && !bases[2] ? 1 : 0;
+  const sent = bases[sentIdx]!;
+  const toIdx = sentIdx + 1;
+  const toBase = toIdx + 1; // 2 = seconda, 3 = terza
+  const toName = toIdx === 1 ? 'seconda' : 'terza';
+  const sentLine = off.battingLines.get(sent.batter.id);
 
   const { event } = resolveAtBat(
     batter,
@@ -903,7 +922,6 @@ export function hitAndRun(l: LiveGame): boolean {
   let ev = event;
   // Il battitore protegge: parte degli strikeout diventa palla in gioco.
   if (ev === 'SO') {
-    const H = TUNING.hitAndRun;
     const contact = (batter.ratings.contact - RATING_AVG) / 10;
     const save = clamp(
       H.contactSaveBase + contact * H.contactSavePerContact,
@@ -916,59 +934,115 @@ export function hitAndRun(l: LiveGame): boolean {
   let text: string;
   let kind: PlayKind;
   let outInfo: OutInfo | undefined;
+  let base: number | undefined;
+
   if (ev === 'SO') {
+    // Strikeout: il corridore lanciato tenta comunque la rubata (rischio furto, più
+    // alto verso la 3ª). Riuscita = furto; fallita = doppio gioco strike/tiro.
     bLine.ab += 1;
     bLine.so += 1;
     pLine.so += 1;
     pLine.outs += 1;
     l.outs += 1;
-    const sp = stealSuccessProb(runner1.batter, catcher, pitcher, 1);
+    base = toBase;
+    const sp = stealSuccessProb(sent.batter, catcher, pitcher, toIdx as 1 | 2);
     if (l.rng.chance(sp)) {
-      bases[1] = runner1;
-      bases[0] = null;
-      const rl = off.battingLines.get(runner1.batter.id);
-      if (rl) rl.sb += 1;
-      text = `${name} strikeout, ma il corridore ruba la seconda`;
+      bases[toIdx] = sent;
+      bases[sentIdx] = null;
+      if (sentLine) sentLine.sb += 1;
+      // Doppio furto: il corridore che segue sale nella base liberata.
+      if (sentIdx === 1 && bases[0]) {
+        const trail = bases[0];
+        bases[1] = trail;
+        bases[0] = null;
+        const tl = off.battingLines.get(trail.batter.id);
+        if (tl) tl.sb += 1;
+      }
+      text = `${name} strikeout, ma il corridore ruba la ${toName}`;
       kind = 'strikeout';
     } else {
-      bases[0] = null;
+      bases[sentIdx] = null;
       l.outs += 1;
       pLine.outs += 1;
-      const rl = off.battingLines.get(runner1.batter.id);
-      if (rl) rl.cs += 1;
-      text = `${name} strikeout e corridore eliminato: doppio gioco`;
-      kind = 'gidp';
+      if (sentLine) sentLine.cs += 1;
+      text = `${name} strikeout e corridore eliminato in ${toName}: doppio gioco`;
+      kind = 'caughtstealing';
     }
   } else if (ev === 'IPO') {
-    // Groundout col corridore in movimento: niente doppio gioco, avanzamento.
+    // Rimbalzo col corridore in movimento. RISCHIO: la difesa può prenderlo alla
+    // base d'arrivo (più probabile dalla 2ª verso la 3ª); altrimenti avanza (no DP).
     bLine.ab += 1;
-    pLine.outs += 1;
     l.outs += 1;
-    if (bases[2]) {
-      scoreRunner(bases[2]);
-      bases[2] = null;
-      bLine.rbi += 1;
+    pLine.outs += 1;
+    const caught = l.rng.chance(
+      sentIdx === 1 ? H.caughtAdvancingFrom2nd : H.caughtAdvancingFrom1st,
+    );
+    if (caught) {
+      // Scelta difensiva sul corridore lanciato: OUT alla base d'arrivo, battitore
+      // SALVO in prima; il corridore che segue (se c'è) sale in seconda.
+      bases[sentIdx] = null;
+      if (sentIdx === 1 && bases[0]) {
+        bases[1] = bases[0];
+        bases[0] = null;
+      }
+      bases[0] = { batter, pitcherId: pitcher.id };
+      text = `${name} salvo in prima, ma il corridore è eliminato in ${toName}`;
+      kind = 'inplayout';
+      outInfo = { ball: 'ground', advanced: false, fc: true };
+    } else {
+      // Battitore eliminato in prima, il corridore avanza (niente doppio gioco).
+      if (sentIdx === 1) {
+        bases[1] = null;
+        bases[2] = sent; // dalla 2ª alla 3ª
+        if (bases[0]) {
+          bases[1] = bases[0];
+          bases[0] = null;
+        }
+      } else {
+        // Corridore in 3ª (caso 1ª+3ª) segna; il lanciato dalla 1ª va in 2ª o 3ª.
+        if (bases[2]) {
+          scoreRunner(bases[2]);
+          bases[2] = null;
+          bLine.rbi += 1;
+        }
+        bases[0] = null;
+        if (l.rng.chance(H.firstToThird)) bases[2] = sent;
+        else bases[1] = sent;
+      }
+      text = `${name} eliminato, il corridore avanza in ${toName}`;
+      kind = 'inplayout';
+      outInfo = { ball: 'ground', advanced: true };
     }
-    if (!bases[2] && l.rng.chance(TUNING.hitAndRun.firstToThird)) bases[2] = runner1;
-    else bases[1] = runner1;
-    bases[0] = null;
-    text = `${name} eliminato, il corridore avanza in movimento`;
-    kind = 'inplayout';
-    outInfo = { ball: 'ground', advanced: true };
   } else if (ev === '1B') {
-    // Singolo con corridore lanciato: dalla prima vola in terza.
+    // Singolo col corridore lanciato: dalla 2ª SEGNA, dalla 1ª vola in 3ª.
     bLine.ab += 1;
     bLine.h += 1;
     pLine.h += 1;
     off.hits += 1;
-    if (bases[2]) {
-      scoreRunner(bases[2]);
-      bases[2] = null;
-      bLine.rbi += 1;
+    let rbi = 0;
+    if (sentIdx === 1) {
+      scoreRunner(sent); // il corridore dalla 2ª segna (lanciato col lancio)
+      rbi += 1;
+      bases[1] = null;
+      if (bases[0]) {
+        bases[2] = bases[0]; // il corridore che segue dalla 1ª vola in 3ª
+        bases[0] = null;
+      }
+    } else {
+      if (bases[2]) {
+        scoreRunner(bases[2]);
+        bases[2] = null;
+        rbi += 1;
+      }
+      bases[2] = sent; // dalla 1ª vola in 3ª
+      bases[0] = null;
     }
-    bases[2] = runner1;
     bases[0] = { batter, pitcherId: pitcher.id };
-    text = `${name} singolo, il corridore vola in terza`;
+    bLine.rbi += rbi;
+    text =
+      sentIdx === 1
+        ? `${name} singolo, il corridore segna dalla seconda`
+        : `${name} singolo, il corridore vola in terza`;
     kind = 'single';
   } else {
     // BB/HBP/HR/2B/3B: corsa sulle basi normale.
@@ -982,7 +1056,7 @@ export function hitAndRun(l: LiveGame): boolean {
 
   const runsScored = off.runs - runsBefore;
   const rr = runsScored > 0 ? ` (${runsScored} ${runsScored === 1 ? 'punto' : 'punti'})` : '';
-  pushPlay(l, text + rr, runsScored, kind, name, outInfo);
+  pushPlay(l, text + rr, runsScored, kind, name, outInfo, base);
   afterPlay(l, runsScored);
   return true;
 }

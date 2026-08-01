@@ -101,10 +101,13 @@ const DOUBLE_PLAYS: Array<[number[], number]> = [
   [[1, 6, 3], 8],
   [[3, 6, 3], 6],
 ];
-const CAUGHT_STEALING: Array<[number[], number]> = [
-  [[2, 4], 44], // rubata di 2ª: ricevitore → 2B
-  [[2, 6], 40], // rubata di 2ª: ricevitore → SS
-  [[2, 5], 16], // rubata di 3ª: ricevitore → 3B
+// Eliminato in rubata: la giocata dipende dalla base rubata (tiro a 2ª vs a 3ª).
+const CAUGHT_STEALING_2B: Array<[number[], number]> = [
+  [[2, 4], 52], // ricevitore → 2B
+  [[2, 6], 48], // ricevitore → SS
+];
+const CAUGHT_STEALING_3B: Array<[number[], number]> = [
+  [[2, 5], 100], // ricevitore → 3B
 ];
 const BUNT_OUTS: Array<[number[], number]> = [
   [[1, 3], 38],
@@ -169,7 +172,7 @@ export function scoreCode(ev: PlayEvent): ScoreCode | null {
     case 'hbp':
       return { code: 'HBP', title: 'battitore colpito dal lancio' };
     case 'steal':
-      return { code: 'SB', title: 'base rubata' };
+      return { code: 'SB', title: ev.base === 3 ? 'rubata della terza' : 'rubata della seconda' };
     case 'wildpitch':
       return { code: 'WP', title: 'lancio pazzo' };
     case 'passedball':
@@ -189,8 +192,10 @@ export function scoreCode(ev: PlayEvent): ScoreCode | null {
       return { code: `${s.code} DP`, title: `doppio gioco: ${s.parts}` };
     }
     case 'caughtstealing': {
-      const s = seq(wpick(mix(h, 4), CAUGHT_STEALING));
-      return { code: `CS ${s.code}`, title: `eliminato in rubata: ${s.parts}` };
+      const table = ev.base === 3 ? CAUGHT_STEALING_3B : CAUGHT_STEALING_2B;
+      const baseName = ev.base === 3 ? 'terza' : 'seconda';
+      const s = seq(wpick(mix(h, 4), table));
+      return { code: `CS ${s.code}`, title: `eliminato in rubata della ${baseName}: ${s.parts}` };
     }
     case 'buntout': {
       const s = seq(wpick(mix(h, 5), BUNT_OUTS));
