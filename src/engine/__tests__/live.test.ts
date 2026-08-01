@@ -185,7 +185,7 @@ describe('metadati narrativi (kind) per il banner di cronaca', () => {
   const HIT_KINDS = new Set(['single', 'double', 'triple', 'homerun']);
   const KNOWN = new Set([
     'single', 'double', 'triple', 'homerun', 'walk', 'hbp', 'ibb', 'strikeout',
-    'inplayout', 'gidp', 'sacfly', 'sacbunt', 'bunthit', 'buntout', 'steal',
+    'inplayout', 'gidp', 'sacfly', 'sacbunt', 'bunthit', 'buntout', 'buntfc', 'steal',
     'caughtstealing', 'sub', 'other',
   ]);
 

@@ -201,6 +201,11 @@ export function scoreCode(ev: PlayEvent): ScoreCode | null {
       const s = seq(wpick(mix(h, 5), BUNT_OUTS));
       return { code: s.code, title: `eliminato su smorzata: ${s.parts}` };
     }
+    case 'buntfc':
+      return {
+        code: 'FCᵇ',
+        title: 'bunt, scelta difensiva: corridore di testa eliminato, battitore salvo in prima',
+      };
     case 'inplayout': {
       // Scelta difensiva: out sul corridore (in 3ª), battitore salvo in prima.
       if (ev.outInfo?.fc) {
