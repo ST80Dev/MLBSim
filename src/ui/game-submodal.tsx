@@ -26,6 +26,11 @@ const SUB_TITLE: Record<SubMode, string> = {
 
 const BASE_LABEL = ['1ª', '2ª', '3ª'];
 
+/** Etichetta ruoli del battitore: principale + eventuale seconda posizione. */
+function roleLabel(b: Batter): string {
+  return b.secondaryPosition ? `${b.position} / ${b.secondaryPosition}` : b.position;
+}
+
 /** Caratteristiche fondamentali per la riga sostituto (come nel roster). */
 export function subRatingChips(p: Batter | Pitcher): Array<[string, number]> {
   if (isBatter(p)) {
@@ -143,8 +148,9 @@ export function SubModal({
     incoming = off.team.bench.map((b) => ({
       id: b.id,
       player: b,
-      // È già la vista dei panchinari: esplicita il RUOLO naturale, non "panchina".
-      subtitle: b.position,
+      // È già la vista dei panchinari: esplicita i RUOLI (principale + secondo),
+      // non "panchina".
+      subtitle: roleLabel(b),
       onPick: () => {
         act((g) => pinchHit(g, b.id));
         onClose();
@@ -208,8 +214,8 @@ export function SubModal({
       incoming = off.team.bench.map((b) => ({
         id: b.id,
         player: b,
-        // Ruolo naturale + velocità (dote chiave del corridore).
-        subtitle: `${b.position} · VEL ${b.ratings.speed}`,
+        // Ruoli (principale + secondo) + velocità (dote chiave del corridore).
+        subtitle: `${roleLabel(b)} · VEL ${b.ratings.speed}`,
         onPick: () => {
           act((g) => pinchRun(g, offenseSide(g), outBase, b.id));
           onClose();
