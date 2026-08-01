@@ -5,6 +5,8 @@ import { recordOf, sortByRecord, gamesBehind } from '../data/season';
 import type { ScheduleGame, Schedule } from '../data/schedule';
 import { teamById, divisionRivals, LEAGUE_LABEL, DIVISION_LABEL } from '../data/league';
 import { rosterBatters, rosterPitchers } from '../engine/arrangement';
+import { pitcherOverall } from '../engine/ratings';
+import { ratingColor } from './format';
 import { TeamBadge } from './widgets';
 import { PlayerLink, isBatter } from './player-modal';
 import type { PlayoffState, NextGame } from '../data/playoff';
@@ -324,6 +326,7 @@ export function HomePage({
                 result={season.results[i]}
                 myRec={recordOf(season, managedTeam.id)}
                 oppRec={recordOf(season, opp.id)}
+                season={season}
                 onPlay={onPlay}
               />
             );
@@ -356,6 +359,7 @@ function MatchCard({
   result,
   myRec,
   oppRec,
+  season,
   onPlay,
 }: {
   g: ScheduleGame;
@@ -366,11 +370,24 @@ function MatchCard({
   result?: { us: number; them: number };
   myRec: { w: number; l: number };
   oppRec: { w: number; l: number };
+  season: SeasonState;
   onPlay: (g: ScheduleGame) => void;
 }) {
   const mySP = managedTeam.rotation[i % managedTeam.rotation.length];
   const oppSP = opp.rotation[i % opp.rotation.length];
   const won = result ? result.us > result.them : false;
+  // OVR + record di stagione (W-L) del partente probabile, accanto al nome.
+  const spMeta = (sp?: Pitcher) => {
+    if (!sp) return null;
+    const ovr = pitcherOverall(sp.ratings);
+    const rec = season.pit[sp.id];
+    return (
+      <span className="mc-sp-meta">
+        <b className="mc-sp-ovr" style={{ background: ratingColor(ovr) }}>{ovr}</b>
+        <span className="mc-sp-rec">{rec ? `${rec.w}-${rec.l}` : '0-0'}</span>
+      </span>
+    );
+  };
   return (
     <div className={`match-card ${state}`}>
       <div className="mc-head">
@@ -388,10 +405,16 @@ function MatchCard({
           <span className="mc-rec">{oppRec.w}-{oppRec.l}</span>
         </span>
       </div>
-      <div className="mc-sp" title="Lanciatori partenti probabili">
-        <span className="mc-spn">{mySP?.name ?? '—'}</span>
+      <div className="mc-sp" title="Lanciatori partenti probabili (OVR · record di stagione)">
+        <span className="mc-spn">
+          <span className="mc-sp-name">{mySP?.name ?? '—'}</span>
+          {spMeta(mySP)}
+        </span>
         <span className="mc-vs2">SP</span>
-        <span className="mc-spn">{oppSP?.name ?? '—'}</span>
+        <span className="mc-spn">
+          <span className="mc-sp-name">{oppSP?.name ?? '—'}</span>
+          {spMeta(oppSP)}
+        </span>
       </div>
       <div className="mc-foot">
         {state === 'current' ? (
