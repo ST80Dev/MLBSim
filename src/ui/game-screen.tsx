@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Batter, Pitcher, Team } from '../engine/types';
 import type { GameResult, LiveSituation } from '../engine/game';
@@ -28,8 +29,6 @@ export function GameScreen({
   sit,
   displayResult,
   displaySit,
-  statsMode,
-  setStatsMode,
   editing,
   cal,
   onMarkerMove,
@@ -50,8 +49,6 @@ export function GameScreen({
   // Se omesse si usano result/sit reali (schermata calibrazione).
   displayResult?: GameResult;
   displaySit?: LiveSituation;
-  statsMode: StatsMode;
-  setStatsMode: (m: StatsMode) => void;
   editing: boolean;
   cal: FieldCalibration;
   onMarkerMove: (id: string, pos: { x: number; y: number }) => void;
@@ -72,13 +69,7 @@ export function GameScreen({
   const fieldBases = basesShown ?? dSit.bases;
   return (
     <div className="game-screen">
-      <StatBar
-        result={dResult}
-        sit={dSit}
-        basesShown={fieldBases}
-        statsMode={statsMode}
-        setStatsMode={setStatsMode}
-      />
+      <StatBar result={dResult} sit={dSit} basesShown={fieldBases} />
 
       <div className={editing ? 'gamefield editing' : 'gamefield'}>
         <Diamond
@@ -106,24 +97,10 @@ export function GameScreen({
         </div>
 
         <div className="lineup-corner left">
-          <LineupSide
-            side="away"
-            team={dResult.away}
-            stats={dResult.awayStats}
-            sit={dSit}
-            mode={statsMode}
-            setMode={setStatsMode}
-          />
+          <LineupSide side="away" team={dResult.away} stats={dResult.awayStats} sit={dSit} />
         </div>
         <div className="lineup-corner right">
-          <LineupSide
-            side="home"
-            team={dResult.home}
-            stats={dResult.homeStats}
-            sit={dSit}
-            mode={statsMode}
-            setMode={setStatsMode}
-          />
+          <LineupSide side="home" team={dResult.home} stats={dResult.homeStats} sit={dSit} />
         </div>
 
         <div className="controls-overlay">{controls}</div>
@@ -159,14 +136,10 @@ function StatBar({
   result,
   sit,
   basesShown,
-  statsMode,
-  setStatsMode,
 }: {
   result: GameResult;
   sit: LiveSituation;
   basesShown?: [boolean, boolean, boolean];
-  statsMode: StatsMode;
-  setStatsMode: (m: StatsMode) => void;
 }) {
   const arrow = sit.half === 'top' ? '▲' : '▼';
   const halfLabel = sit.half === 'top' ? 'attacco' : 'chiusura';
@@ -178,8 +151,6 @@ function StatBar({
         team={result.away}
         score={result.final.away}
         involved={involvedFor(result, sit, 'away')}
-        mode={statsMode}
-        setMode={setStatsMode}
         win={decided && sit.winner === 'away'}
       />
 
@@ -199,8 +170,6 @@ function StatBar({
         team={result.home}
         score={result.final.home}
         involved={involvedFor(result, sit, 'home')}
-        mode={statsMode}
-        setMode={setStatsMode}
         win={decided && sit.winner === 'home'}
       />
     </div>
@@ -212,18 +181,17 @@ function TeamStatSide({
   team,
   score,
   involved,
-  mode,
-  setMode,
   win,
 }: {
   side: Side;
   team: Team;
   score: number;
   involved: Involved;
-  mode: StatsMode;
-  setMode: (m: StatsMode) => void;
   win: boolean;
 }) {
+  // Selettore stat LOCALE a questo lato dello scoreboard (indipendente dagli altri
+  // blocchi della schermata).
+  const [mode, setMode] = useState<StatsMode>('game');
   // Sintesi dei TITOLARI COINVOLTI ora (il lineup riflette i pinch-hit) + il
   // lanciatore sul monte quando la squadra difende (staff se sta battendo).
   const synth = teamSynthesis(team.lineup.map((b) => ({ b, pos: b.position })));

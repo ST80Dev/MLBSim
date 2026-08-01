@@ -1106,40 +1106,40 @@ table {
   font-size: 9px;
   vertical-align: middle;
 }
-/* Elenco lanciatori usati (partente + rilievi): ogni cambio una riga. */
-.ls-pits {
-  border-top: 1px solid var(--line);
-  flex: 0 0 auto;
-  overflow-y: auto;
-  position: relative;
+/* Due BLOCCHI indipendenti (battitori / lanciatori), ognuno con sotto-testata
+   (titolo + selettore stat) e tabella scrollabile con proprie intestazioni. */
+.ls-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
-.ls-pit {
+.ls-section.pit {
+  border-top: 1px solid var(--line);
+}
+.ls-subhead {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  padding: 6px 10px;
-  font-family: var(--mono);
-  font-size: 13px;
+  padding: 4px 10px;
+  background: rgba(8, 14, 26, 0.55);
 }
-.ls-pit + .ls-pit {
-  border-top: 1px solid rgba(38, 55, 92, 0.4);
-}
-.ls-pit.cur {
-  background: rgba(79, 157, 255, 0.14);
-}
-.ls-pit-tag {
+.ls-subtitle {
+  font-size: 10px;
   font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
   color: var(--muted);
-  letter-spacing: 0.5px;
-  min-width: 32px;
 }
-.ls-pit-name {
-  font-weight: 800;
-  color: var(--text);
-  font-family: system-ui, sans-serif;
+.ls-subhead .stats-toggle {
+  margin-left: auto;
 }
-.ls-pit-stat {
+/* Affaticamento del lanciatore attuale (PT ~stima · BF/Resistenza), accanto al
+   nome nella tabella lanciatori. */
+.pit-fat {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--mono);
   color: #aab8d6;
 }
 
@@ -1577,7 +1577,7 @@ table {
 .lineup-corner {
   position: absolute;
   bottom: 8px;
-  width: min(380px, 31%);
+  width: min(460px, 37%);
   z-index: 3;
   max-height: 62%;
   overflow: hidden;
@@ -1598,18 +1598,31 @@ table {
   max-height: 100%;
   overflow: hidden;
 }
-/* Battitori scrollabili; la lista lanciatori resta agganciata sotto. */
+/* Il blocco battitori prende lo spazio residuo e scorre; il blocco lanciatori è
+   ad ALTEZZA FISSA con scroll interno (non fa crescere il riquadro sotto la
+   cronaca) e resta centrato sul lanciatore attuale (auto-scroll in LineupSide). */
+.lineup-corner .ls-section.bat {
+  flex: 1 1 auto;
+}
+.lineup-corner .ls-section.pit {
+  flex: 0 0 auto;
+}
 .lineup-corner .ls-scroll {
   overflow-y: auto;
   min-height: 0;
+}
+.lineup-corner .ls-section.bat .ls-scroll {
   flex: 1 1 auto;
 }
-/* Lista lanciatori ad altezza FISSA con scroll interno: aggiungendo rilievi il
-   riquadro NON cresce più verso l'alto (sotto la cronaca); si scorre e resta
-   centrata sul lanciatore attuale (vedi auto-scroll in LineupSide). */
-.lineup-corner .ls-pits {
-  height: 60px;
-  flex: 0 0 auto;
+.lineup-corner .ls-pit-scroll {
+  height: 84px; /* ~2-3 lanciatori: oltre, scroll interno centrato sul corrente */
+}
+/* Le intestazioni restano visibili durante lo scroll interno di ogni tabella. */
+.lineup-corner .ls-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
 }
 .lineup-corner .ls-table {
   font-size: 12px;
