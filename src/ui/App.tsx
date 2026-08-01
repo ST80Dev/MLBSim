@@ -734,7 +734,13 @@ export function App() {
                 onRecap={() => setRecapOpen(true)}
               />
             ) : (
-              <ActionBar live={live} sit={sit} act={act} onSub={revealField} />
+              <ActionBar
+                live={live}
+                sit={sit}
+                act={act}
+                onSub={revealField}
+                waiting={result.play.length > shownPlays}
+              />
             )
           }
         />

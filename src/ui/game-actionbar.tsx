@@ -26,6 +26,7 @@ export function ActionBar({
   sit,
   act,
   onSub,
+  waiting,
 }: {
   live: LiveGame;
   sit: LiveSituation;
@@ -35,6 +36,10 @@ export function ActionBar({
   // deve rivelare immediatamente marker/testata/boxscore invece di aspettare il
   // verdetto della telecronaca del turno successivo.
   onSub?: () => void;
+  // true mentre la telecronaca del turno APPENA giocato non è ancora arrivata al
+  // verdetto: la barra NON deve proporre i comandi del turno successivo (non sai
+  // ancora se sei stato eliminato o è stata una valida). Mostra un'attesa.
+  waiting?: boolean;
 }) {
   // Modale di sostituzione (popup a tutto schermo): rimpiazza i vecchi menu a
   // discesa che restavano nascosti dietro la barra comandi.
@@ -47,7 +52,13 @@ export function ActionBar({
   // Il primario (Battuta/Lancia) è ancorato al centro (sotto casa base) e NON si
   // sposta al variare dei tattici (che compaiono a destra): così il mouse resta
   // dov'è e si clicca senza riguardare. Una sola riga (altezza invariata).
-  const bar = sit.controlledBatting ? (
+  const bar = waiting ? (
+    // Turno in corso: si aspetta il verdetto della telecronaca prima di mostrare
+    // i comandi del turno successivo.
+    <div className="card actionbar compact waiting" aria-live="polite">
+      <span className="turn-tag wait">⏳ Turno in corso…</span>
+    </div>
+  ) : sit.controlledBatting ? (
     <div className="card actionbar compact">
       <div className="ab-side left">
         <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
