@@ -4487,3 +4487,98 @@ table {
 }
 .type-chip.bat { color: #7fd7ff; border: 1px solid rgba(127, 215, 255, 0.55); }
 .type-chip.pit { color: #ff9d6b; border: 1px solid rgba(255, 157, 107, 0.55); }
+
+/* --- Riepilogo di off-season / rollover (Fase 5B) -------------------- */
+.modal.rollover-recap {
+  width: min(980px, 96vw);
+  max-height: min(90vh, 860px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal.rollover-recap .modal-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+.modal.rollover-recap .modal-head .btn.ghost {
+  margin-left: auto;
+}
+.modal.rollover-recap .po-champion {
+  margin: 14px 16px 0;
+}
+.rollover-recap .recap-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+}
+@media (max-width: 720px) {
+  .rollover-recap .recap-grid { grid-template-columns: 1fr; }
+}
+.rollover-recap .recap-sec {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.rollover-recap .recap-sec h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.rollover-recap .recap-block { margin-bottom: 12px; }
+.rollover-recap .recap-lbl {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.rollover-recap .recap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+}
+.rollover-recap .recap-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.rollover-recap .recap-totals b { color: var(--text); }
+.rollover-recap .txn-tag {
+  display: inline-block;
+  min-width: 62px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.rollover-recap .txn-tag.release { color: #ff9d6b; border-color: rgba(255, 157, 107, 0.5); }
+.rollover-recap .txn-tag.sign { color: var(--win); border-color: rgba(56, 211, 159, 0.5); }
+.rollover-recap .txn-tag.trade { color: #7fd7ff; border-color: rgba(127, 215, 255, 0.5); }
+.modal.rollover-recap .modal-foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--card2);
+  display: flex;
+  justify-content: flex-end;
+}
+.po-next-season {
+  margin-left: auto;
+  align-self: center;
+}

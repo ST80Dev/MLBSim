@@ -60,6 +60,9 @@ import { HomePage } from './pages-home';
 import { StartScreen, LeagueOverview, GameInfoBadge, FranchisePage } from './pages-start';
 import { LeaderboardPage } from './pages-leaderboard';
 import { StandingsPage, PlayoffPage } from './pages-standings';
+import { RolloverRecap } from './rollover-recap';
+import type { RolloverRecapData } from './rollover-recap';
+import { rolloverSeason } from '../data/rollover';
 import { CalibrationScreen, CalibrationPanel } from './calibration';
 import type { Side, SavedGame } from './types';
 
@@ -181,6 +184,8 @@ export function App() {
   // di stagione o uno scambio umano) diventa la fonte di verità e va salvata. `null`
   // = lega ancora coincidente con la derivazione da seed/sorgente (nessuna divergenza).
   const [leagueTeams, setLeagueTeams] = useState<Team[] | null>(null);
+  // Riepilogo dell'off-season appena eseguita (modale post-rollover). `null` = chiuso.
+  const [rolloverRecap, setRolloverRecap] = useState<RolloverRecapData | null>(null);
 
   // Politica di cap derivata dalla sorgente (vedi leagueMode.ts).
   const leagueMode: LeagueMode = source === 'historical' ? HISTORICAL_MODE : GENERATED_MODE;
@@ -570,6 +575,42 @@ export function App() {
     persist(arrangements, season, np);
   };
 
+  // --- Rollover di stagione (Fase 5B) --------------------------------------
+  // A postseason conclusa (campione deciso): esegue l'off-season automatica
+  // (`rolloverSeason`: aging+ritiri → draft inverso → mercato → finalize), sostituisce
+  // la lega con quella dell'anno successivo (rose PERSISTITE, ora divergenti dal seed),
+  // apre la stagione nuova e mostra il riepilogo. Gli assetti vecchi si azzerano (le
+  // rose sono cambiate: la squadra riparte dal lineup di default ricomposto).
+  const startNextSeason = () => {
+    const before = managedTeam;
+    const beforeIds = [
+      ...before.lineup, ...before.bench, ...before.reserveBatters,
+      ...before.rotation, ...before.bullpen, ...before.reservePitchers,
+    ].map((p) => p.id);
+    const championId = playoff?.championId;
+    const result = rolloverSeason({
+      teams: league,
+      season,
+      seed: leagueSeed,
+      options: { managedId: myId, mode: leagueMode },
+    });
+    setLeagueTeams(result.teams);
+    setSeason(result.season);
+    setPlayoff(null);
+    setPlayoffCtx(null);
+    setActiveGame(null);
+    setArrangements({});
+    setView('home');
+    persist({}, result.season, null, result.teams);
+    setRolloverRecap({
+      summary: result.summary,
+      nextLeague: result.teams,
+      managedId: myId,
+      managedBeforeIds: beforeIds,
+      championId,
+    });
+  };
+
   // Etichetta/azione del pulsante di fine gara secondo la fase.
   const finishLabel = isSeasonGame
     ? 'Conferma e avanza ▸'
@@ -813,6 +854,7 @@ export function App() {
           nextGame={nextPlayoffGame}
           onPlay={playPlayoffGame}
           onSimRest={simPlayoffRest}
+          onNextSeason={playoff.championId ? startNextSeason : undefined}
         />
       )}
       {view === 'franchise' && <FranchisePage team={managedTeam} mode={leagueMode} />}
@@ -849,6 +891,10 @@ export function App() {
           seed={leagueSeed}
           onClose={() => setPlayerModal(null)}
         />
+      )}
+
+      {rolloverRecap && (
+        <RolloverRecap data={rolloverRecap} onClose={() => setRolloverRecap(null)} />
       )}
     </div>
     </PlayerModalContext.Provider>
