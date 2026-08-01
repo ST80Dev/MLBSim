@@ -1,5 +1,9 @@
 import type { Team } from '../engine/types';
 import { RATING_AVG } from '../engine/ratings';
+import { ratingColor } from './format';
+import { outerWall, capZone } from '../data/leagueMode';
+import type { LeagueMode, CapZone } from '../data/leagueMode';
+import type { TeamStrength } from '../engine/strength';
 
 // ---------------------------------------------------------------------------
 // Widget di visualizzazione puri e riusabili (estratti da App.tsx): basi,
@@ -88,4 +92,72 @@ export function pitcherFatigue(
   if (bf >= stamina + margin) return { state: 'spent', tone: '#ff6b6b' };
   if (bf >= stamina - 2) return { state: 'tiring', tone: '#ffcf5c' };
   return { state: 'fresh' };
+}
+
+export const CAP_ZONE: Record<CapZone, { label: string; cls: string }> = {
+  under: { label: 'Sotto cap', cls: 'under' },
+  tax: { label: 'Fascia tassa', cls: 'tax' },
+  over: { label: 'Oltre il muro', cls: 'over' },
+};
+
+/** Barra monte-ingaggi con tacche cap base e muro esterno; zona colorata. */
+export function CapIndicator({
+  payroll,
+  mode,
+  compact,
+}: {
+  payroll: number;
+  mode: LeagueMode;
+  compact?: boolean;
+}) {
+  const base = mode.cap.amount;
+  const wall = outerWall(base);
+  const z = CAP_ZONE[capZone(payroll, mode)];
+  const scale = wall * 1.12; // margine oltre il muro, così la tacca resta visibile
+  const pct = (v: number) => `${Math.max(0, Math.min(100, (v / scale) * 100))}%`;
+  return (
+    <div className={`cap-ind${compact ? ' compact' : ''}`}>
+      <div
+        className="cap-bar"
+        title={`Monte-ingaggi $${payroll.toFixed(0)}M · cap base $${base}M · muro $${wall.toFixed(0)}M`}
+      >
+        <div className={`cap-fill ${z.cls}`} style={{ width: pct(payroll) }} />
+        <div className="cap-mark base" style={{ left: pct(base) }} title={`Cap base $${base}M`} />
+        <div className="cap-mark wall" style={{ left: pct(wall) }} title={`Muro $${wall.toFixed(0)}M`} />
+      </div>
+      {!compact && (
+        <div className="cap-row">
+          <span className={`cap-chip ${z.cls}`}>{z.label}</span>
+          <span className="muted">
+            ${payroll.toFixed(0)}M / cap ${base}M · muro ${wall.toFixed(0)}M
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tre barrette Attacco/Difesa/Lancio (scala 40-100). */
+export function StrengthBars({ s }: { s: TeamStrength }) {
+  const rows: Array<[string, number]> = [
+    ['ATT', s.attack],
+    ['DIF', s.defense],
+    ['LAN', s.pitching],
+  ];
+  return (
+    <div className="str-bars">
+      {rows.map(([k, v]) => (
+        <div className="str-row" key={k}>
+          <span className="str-k">{k}</span>
+          <span className="str-track">
+            <span
+              className="str-fill"
+              style={{ width: `${((v - 40) / 60) * 100}%`, background: ratingColor(v) }}
+            />
+          </span>
+          <span className="str-v">{v.toFixed(0)}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
