@@ -375,14 +375,37 @@ function pickReliever(l: LiveGame, s: SideState): number | null {
 }
 
 /**
- * Cambio automatico del lanciatore (CPU / quick-sim) all'affaticamento: se il
- * lanciatore corrente ha superato la sua soglia di battitori, entra il rilievo
+ * "Hook" sul PARTENTE (oltre l'affaticamento): va tolto se sta andando male —
+ *  (a) EMORRAGIA PRECOCE: sotto di molti punti PRIMA del 5° (limita i danni), o
+ *  (b) BOMBARDATO: ha subìto troppi punti, a QUALSIASI inning (un manager non
+ *      lascia in campo chi prende una valanga anche se non è ancora affaticato).
+ * Vale solo per gli SP (un rilievo esce comunque all'affaticamento). Entra un
+ * rilievo lungo (`pickReliever`). Vedi `TUNING.earlyHook`.
+ */
+function starterKnockedOut(l: LiveGame, s: SideState): boolean {
+  const p = currentPitcher(s);
+  if (p.role !== 'SP') return false;
+  const H = TUNING.earlyHook;
+  // (a) Emorragia precoce: sotto di deficit+ punti prima del 5°.
+  const oppRuns = (s === l.awaySide ? l.homeSide : l.awaySide).runs;
+  if (l.inning < H.beforeInning && oppRuns - s.runs >= H.deficit) return true;
+  // (b) Bombardato: troppi punti subiti dal partente, a qualsiasi inning.
+  const line = s.pitchingLines.get(p.id);
+  if (line && line.r >= H.shelledRuns) return true;
+  return false;
+}
+
+/**
+ * Cambio automatico del lanciatore (CPU / quick-sim): entra un rilievo se il
+ * lanciatore corrente è affaticato (superata la soglia di battitori) OPPURE se un
+ * partente va tolto perché sta andando male (`starterKnockedOut`). Il rilievo è
  * scelto da `pickReliever` (portato in pedana come nel cambio manuale).
  */
 function autoManagePitcher(l: LiveGame, s: SideState): void {
   const p = currentPitcher(s);
   const threshold = p.stamina + (p.role === 'SP' ? 4 : 2);
-  if (s.battersFacedByCurrent < threshold) return;
+  const fatigued = s.battersFacedByCurrent >= threshold;
+  if (!fatigued && !starterKnockedOut(l, s)) return;
   const j = pickReliever(l, s);
   if (j == null) return;
   const [pk] = s.pitchers.splice(j, 1);
