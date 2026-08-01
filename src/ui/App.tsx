@@ -25,7 +25,7 @@ import {
   buildHistoricalLeague,
   DEFAULT_HISTORICAL_YEAR,
 } from '../data/historical/league';
-import { generateSchedule, REGULAR_GAMES } from '../data/schedule';
+import { generateSchedule, REGULAR_GAMES, TRADE_DEADLINE_GAME } from '../data/schedule';
 import type { ScheduleGame } from '../data/schedule';
 import {
   createSeason,
@@ -63,6 +63,7 @@ import { StandingsPage, PlayoffPage } from './pages-standings';
 import { RolloverRecap } from './rollover-recap';
 import type { RolloverRecapData } from './rollover-recap';
 import { rolloverSeason } from '../data/rollover';
+import { TradeScreen } from './trade-screen';
 import { CalibrationScreen, CalibrationPanel } from './calibration';
 import type { Side, SavedGame } from './types';
 
@@ -74,6 +75,7 @@ type View =
   | 'standings'
   | 'playoff'
   | 'franchise'
+  | 'trades'
   | 'calibrate'
   | 'game';
 
@@ -611,6 +613,21 @@ export function App() {
     });
   };
 
+  // Scambio umano→1 CPU applicato (Fase 5B): la lega diventa PERSISTITA (divergente
+  // dal seed). Le rose sono ricomposte, quindi l'assetto salvato della gestita non
+  // vale più: si azzera (riparte dal lineup di default; l'utente può rifinirlo).
+  const commitTrade = (nextLeague: Team[]) => {
+    const nextArr = { ...arrangements };
+    delete nextArr[myId];
+    setLeagueTeams(nextLeague);
+    setArrangements(nextArr);
+    persist(nextArr, season, playoff, nextLeague);
+  };
+
+  // Finestra scambi: in stagione (o prestagione) fino alla trade deadline; chiusa
+  // in postseason e a stagione conclusa.
+  const tradesOpen = stage === 'play' && !regularOver && season.day < TRADE_DEADLINE_GAME;
+
   // Etichetta/azione del pulsante di fine gara secondo la fase.
   const finishLabel = isSeasonGame
     ? 'Conferma e avanza ▸'
@@ -712,6 +729,7 @@ export function App() {
               ['standings', 'Classifiche'],
               ...(playoff ? ([['playoff', '🏆 Playoff']] as Array<[View, string]>) : []),
               ['franchise', 'Franchigia'],
+              ...(tradesOpen ? ([['trades', 'Scambi']] as Array<[View, string]>) : []),
               ['calibrate', '🎯 Stadi'],
             ] as Array<[View, string]>
           ).map(([v, label]) => (
@@ -858,6 +876,19 @@ export function App() {
         />
       )}
       {view === 'franchise' && <FranchisePage team={managedTeam} mode={leagueMode} />}
+      {view === 'trades' && (
+        <TradeScreen
+          league={league}
+          managedId={myId}
+          mode={leagueMode}
+          seed={leagueSeed}
+          year={season.year}
+          open={tradesOpen}
+          deadlineGame={TRADE_DEADLINE_GAME}
+          currentGame={season.day}
+          onCommit={commitTrade}
+        />
+      )}
       {view === 'calibrate' && (
         <CalibrationScreen
           league={league}
