@@ -43,142 +43,158 @@ export function ActionBar({
   const noRelievers = availableRelievers(defenseSide(live)).length === 0;
   const hasRunner = sit.bases.some(Boolean);
 
+  // Layout a 3 ZONE: [turn-tag] [AZIONE PRIMARIA centrata FISSA] [tattici].
+  // Il primario (Battuta/Lancia) è ancorato al centro (sotto casa base) e NON si
+  // sposta al variare dei tattici (che compaiono a destra): così il mouse resta
+  // dov'è e si clicca senza riguardare. Una sola riga (altezza invariata).
   const bar = sit.controlledBatting ? (
     <div className="card actionbar compact">
-      <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
-      <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
-        Battuta
-      </button>
-      <button
-        className="btn sm"
-        disabled={!sit.canBunt}
-        onClick={() => act((g) => playOffense(g, 'bunt'))}
-        title={sit.canBunt ? 'Bunt di sacrificio' : 'Bunt inutile con 2 out'}
-      >
-        Bunt
-      </button>
-      {sit.canSqueeze && (
+      <div className="ab-side left">
+        <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
+      </div>
+      <div className="ab-main">
+        <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
+          Battuta
+        </button>
+      </div>
+      <div className="ab-side right">
         <button
           className="btn sm"
-          onClick={() => act((g) => playOffense(g, 'squeeze'))}
-          title="Squeeze: il corridore in terza parte al lancio. Se il bunt è sbagliato, è spacciato a casa"
+          disabled={!sit.canBunt}
+          onClick={() => act((g) => playOffense(g, 'bunt'))}
+          title={sit.canBunt ? 'Bunt di sacrificio' : 'Bunt inutile con 2 out'}
         >
-          Squeeze
+          Bunt
         </button>
-      )}
-      {sit.canFlyBall && (
-        <button
-          className="btn sm"
-          onClick={() => act((g) => playOffense(g, 'flyball'))}
-          title="Cerca fly: il battitore eleva per la volata di sacrificio. Segna il corridore dalla terza, ma meno valide"
-        >
-          Cerca fly
-        </button>
-      )}
-      {sit.stealFrom.includes(1) && (
-        <button
-          className="btn sm"
-          onClick={() => act((g) => attemptSteal(g, 1))}
-          title="La rubata non consuma il turno: puoi tentarla e poi battere"
-        >
-          Ruba 2ª
-        </button>
-      )}
-      {sit.stealFrom.includes(2) && (
-        <button
-          className="btn sm"
-          onClick={() => act((g) => attemptSteal(g, 2))}
-          title="La rubata non consuma il turno: puoi tentarla e poi battere"
-        >
-          Ruba 3ª
-        </button>
-      )}
-      {sit.canHitAndRun && (
-        <button
-          className="btn sm"
-          onClick={() => act((g) => hitAndRun(g))}
-          title="Hit-and-run: il corridore parte, il battitore protegge"
-        >
-          Mob &amp; corri
-        </button>
-      )}
-      <button
-        className="btn sm"
-        disabled={noBench}
-        onClick={() => setSub('pinchhit')}
-        title="Pinch-hit: sostituisci il battitore"
-      >
-        Pinch-hit
-      </button>
-      {hasRunner && (
+        {sit.canSqueeze && (
+          <button
+            className="btn sm"
+            onClick={() => act((g) => playOffense(g, 'squeeze'))}
+            title="Squeeze: il corridore in terza parte al lancio. Se il bunt è sbagliato, è spacciato a casa"
+          >
+            Squeeze
+          </button>
+        )}
+        {sit.canFlyBall && (
+          <button
+            className="btn sm"
+            onClick={() => act((g) => playOffense(g, 'flyball'))}
+            title="Cerca fly: il battitore eleva per la volata di sacrificio. Segna il corridore dalla terza, ma meno valide"
+          >
+            Cerca fly
+          </button>
+        )}
+        {sit.stealFrom.includes(1) && (
+          <button
+            className="btn sm"
+            onClick={() => act((g) => attemptSteal(g, 1))}
+            title="La rubata non consuma il turno: puoi tentarla e poi battere"
+          >
+            Ruba 2ª
+          </button>
+        )}
+        {sit.stealFrom.includes(2) && (
+          <button
+            className="btn sm"
+            onClick={() => act((g) => attemptSteal(g, 2))}
+            title="La rubata non consuma il turno: puoi tentarla e poi battere"
+          >
+            Ruba 3ª
+          </button>
+        )}
+        {sit.canHitAndRun && (
+          <button
+            className="btn sm"
+            onClick={() => act((g) => hitAndRun(g))}
+            title="Hit-and-run: il corridore parte, il battitore protegge"
+          >
+            Hit &amp; Run
+          </button>
+        )}
         <button
           className="btn sm"
           disabled={noBench}
-          onClick={() => setSub('pinchrun')}
-          title="Pinch-runner: sostituisci un corridore in base"
+          onClick={() => setSub('pinchhit')}
+          title="Pinch-hit: sostituisci il battitore"
         >
-          Pinch-run
+          Pinch-hit
         </button>
-      )}
+        {hasRunner && (
+          <button
+            className="btn sm"
+            disabled={noBench}
+            onClick={() => setSub('pinchrun')}
+            title="Pinch-runner: sostituisci un corridore in base"
+          >
+            Pinch-run
+          </button>
+        )}
+      </div>
     </div>
   ) : (
     <div className="card actionbar compact">
-      <span className="turn-tag def">DIFESA · {sit.fieldingTeam.abbrev}</span>
-      <button
-        className="btn primary sm"
-        onClick={() => act((g) => cpuOffenseTurn(g))}
-        title="La CPU decide la battuta (può anche rubare/buntare): premi «Lancia» per risolvere"
-      >
-        Lancia ▸
-      </button>
-      <button
-        className="btn sm"
-        onClick={() => act((g) => intentionalWalk(g))}
-        title="Base intenzionale"
-      >
-        Base int.
-      </button>
-      {sit.bases[2] && sit.outs < 2 && (
+      <div className="ab-side left">
+        <span className="turn-tag def">DIFESA · {sit.fieldingTeam.abbrev}</span>
+      </div>
+      <div className="ab-main">
         <button
-          className={sit.infieldIn ? 'btn sm active' : 'btn sm'}
-          onClick={() => act((g) => setInfieldIn(g, !g.infieldIn))}
-          title="Interni dentro: taglia il punto da terra, ma concede più valide"
+          className="btn primary sm"
+          onClick={() => act((g) => cpuOffenseTurn(g))}
+          title="La CPU decide la battuta (può anche rubare/buntare): premi «Lancia» per risolvere"
         >
-          Interni dentro
+          Lancia ▸
         </button>
-      )}
-      {sit.canDpDepth && (
+      </div>
+      <div className="ab-side right">
         <button
-          className={sit.dpDepth ? 'btn sm active' : 'btn sm'}
-          onClick={() => act((g) => setDpDepth(g, !g.dpDepth))}
-          title="Interni a doppio gioco: più doppi giochi, ma qualche rimbalzo passa nei buchi"
+          className="btn sm"
+          onClick={() => act((g) => intentionalWalk(g))}
+          title="Base intenzionale"
         >
-          Interni a DP
+          Base int.
         </button>
-      )}
-      <button
-        className={sit.noDoubles ? 'btn sm active' : 'btn sm'}
-        onClick={() => act((g) => setNoDoubles(g, !g.noDoubles))}
-        title="Difendi le righe: meno doppi/tripli concessi, al costo di qualche singolo (per proteggere un vantaggio)"
-      >
-        Difendi le righe
-      </button>
-      <button
-        className="btn sm"
-        disabled={noRelievers}
-        onClick={() => setSub('pitcher')}
-        title="Cambio lanciatore: scegli un rilievo dal bullpen"
-      >
-        Cambio lanc.
-      </button>
-      <button
-        className="btn sm"
-        disabled={noBench}
-        onClick={() => setSub('fielders')}
-        title="Sostituzione difensiva: cambia un difensore"
-      >
-        Cambio dif.
-      </button>
+        {sit.bases[2] && sit.outs < 2 && (
+          <button
+            className={sit.infieldIn ? 'btn sm active' : 'btn sm'}
+            onClick={() => act((g) => setInfieldIn(g, !g.infieldIn))}
+            title="Interni dentro: taglia il punto da terra, ma concede più valide"
+          >
+            Interni dentro
+          </button>
+        )}
+        {sit.canDpDepth && (
+          <button
+            className={sit.dpDepth ? 'btn sm active' : 'btn sm'}
+            onClick={() => act((g) => setDpDepth(g, !g.dpDepth))}
+            title="Interni a doppio gioco: più doppi giochi, ma qualche rimbalzo passa nei buchi"
+          >
+            Interni a DP
+          </button>
+        )}
+        <button
+          className={sit.noDoubles ? 'btn sm active' : 'btn sm'}
+          onClick={() => act((g) => setNoDoubles(g, !g.noDoubles))}
+          title="Difendi le righe: meno doppi/tripli concessi, al costo di qualche singolo (per proteggere un vantaggio)"
+        >
+          Difendi le righe
+        </button>
+        <button
+          className="btn sm"
+          disabled={noRelievers}
+          onClick={() => setSub('pitcher')}
+          title="Cambio lanciatore: scegli un rilievo dal bullpen"
+        >
+          Cambio lanc.
+        </button>
+        <button
+          className="btn sm"
+          disabled={noBench}
+          onClick={() => setSub('fielders')}
+          title="Sostituzione difensiva: cambia un difensore"
+        >
+          Cambio dif.
+        </button>
+      </div>
     </div>
   );
 

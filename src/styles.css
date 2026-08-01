@@ -2318,13 +2318,32 @@ table {
   border-color: var(--accent);
   color: var(--accent);
 }
+/* 3 ZONE: [turn-tag] [PRIMARIO] [tattici]. Il primario è nella colonna centrale
+   (`auto`) fra due colonne uguali `minmax(0,1fr)`: resta quindi ANCORATO al
+   centro dell'overlay (sotto casa base) e NON si sposta quando i tattici a destra
+   compaiono/scompaiono. I tattici, se tanti, traboccano a destra senza spingere
+   il primario (le colonne 1fr non crescono oltre la loro quota). Una sola riga. */
 .actionbar.compact {
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
   gap: 8px;
   padding: 7px 12px;
+}
+.actionbar.compact .ab-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.actionbar.compact .ab-side.left {
+  justify-self: end;
+}
+.actionbar.compact .ab-side.right {
+  justify-self: start;
+}
+.actionbar.compact .ab-main {
+  justify-self: center;
 }
 .actionbar.compact .turn-tag {
   align-self: center;
