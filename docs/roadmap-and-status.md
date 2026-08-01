@@ -203,7 +203,9 @@
     (ricomposizione lineup/rotazione dai set piatti) + aggancio aging/draft;
     4) draft inverso (`draft.ts`: classe prospetti giovani/grezzi deterministica,
     ordine inverso alla classifica, BPA per `playerValue`, immessi nella **depth**)
-    — **FATTO**; 5) valutazione scambi umano→1 AI (con **premio di consolidamento**);
+    — **FATTO**; 5) valutazione scambi umano→1 AI (`trades.ts`: `evaluateTrade` — equità di
+    `playerValue` + cap-legalità bilaterale sul tetto **effettivo** + **premio di
+    consolidamento** per gli slot roster finiti) — **FATTO**;
     6) `runOffseason` (perf=0) + **finalize/reslot** (ricomposizione lineup/rotazione
     + riconciliazione taglia dopo draft e mercato).
   - **Cadenza mercato** (decisa): in stagione **solo scambi** umano→1 AI fino alla
