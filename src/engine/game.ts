@@ -5,6 +5,7 @@ import { resolveAtBat } from './atbat';
 import { TUNING } from './constants';
 import { RATING_AVG, pitcherOverall } from './ratings';
 import { teamSynthesis, groupDefenseSynthesis, INFIELD_POS, OUTFIELD_POS } from './teamRatings';
+import { realignDefense, type DefMove } from './positions';
 import {
   BattingLine,
   PitchingLine,
@@ -1090,6 +1091,16 @@ export function benchFor(l: LiveGame): Batter[] {
   return offense(l).team.bench;
 }
 
+/** Cronaca del riassetto difensivo dopo una sostituzione (se qualcuno si è
+ *  spostato). Elenca solo gli spostamenti reali; il subentrante è già annunciato
+ *  dal suo evento di ingresso. */
+function pushRealign(l: LiveGame, moves: DefMove[]): void {
+  const shifts = moves.filter((m) => m.to !== m.from);
+  if (shifts.length === 0) return;
+  const list = shifts.map((m) => `${shortName(m.b.name)} → ${m.to}`).join(', ');
+  pushPlay(l, `Riassetto difensivo: ${list}`, 0, 'sub', shortName(shifts[0].b.name));
+}
+
 /**
  * Pinch-hit: sostituisce il battitore corrente con un giocatore di panchina.
  * Non consuma il turno: dopo, il pinch-hitter batte normalmente.
@@ -1102,14 +1113,18 @@ export function pinchHit(l: LiveGame, benchId: string): boolean {
   const bi = off.team.bench.findIndex((b) => b.id === benchId);
   if (bi < 0) return false;
   const sub = off.team.bench[bi];
-  sub.position = current.position; // eredita il ruolo difensivo dello slot
-  off.team.lineup[idx] = sub;
+  // Set difensivo VALIDO pre-sostituzione (le stesse caselle da coprire dopo).
+  const slots = off.team.lineup.map((b) => b.position);
+  off.team.lineup[idx] = sub; // il subentrante conserva il PROPRIO ruolo naturale
   off.team.bench.splice(bi, 1);
   if (!off.battingLines.has(sub.id)) {
     off.battingLines.set(sub.id, newBattingLine(sub));
     off.battingOrder.push(sub.id);
   }
   pushPlay(l, `${shortName(sub.name)} entra come pinch-hitter per ${shortName(current.name)}`, 0, 'sub', shortName(sub.name));
+  // Riallinea la difesa: il subentrante va al suo ruolo, gli altri si spostano
+  // per coprire (niente casella ereditata a caso).
+  pushRealign(l, realignDefense(off.team.lineup, slots));
   return true;
 }
 
@@ -1131,13 +1146,15 @@ export function substituteFielder(
   if (idx < 0 || bi < 0) return false;
   const outP = s.team.lineup[idx];
   const sub = s.team.bench[bi];
-  sub.position = outP.position; // eredita il ruolo difensivo dello slot
-  s.team.lineup[idx] = sub;
+  const slots = s.team.lineup.map((b) => b.position); // set difensivo pre-sostituzione
+  s.team.lineup[idx] = sub; // conserva il ruolo naturale del subentrante
   s.team.bench.splice(bi, 1);
   if (!s.battingLines.has(sub.id)) {
     s.battingLines.set(sub.id, newBattingLine(sub));
     s.battingOrder.push(sub.id);
   }
+  // Riallinea PRIMA di annunciare: così il ruolo mostrato è quello reale.
+  const moves = realignDefense(s.team.lineup, slots);
   pushPlay(
     l,
     `${shortName(sub.name)} entra in difesa (${sub.position}) per ${shortName(outP.name)}`,
@@ -1145,6 +1162,7 @@ export function substituteFielder(
     'sub',
     shortName(sub.name),
   );
+  pushRealign(l, moves.filter((m) => m.b.id !== sub.id));
   return true;
 }
 
@@ -1162,9 +1180,11 @@ export function pinchRun(l: LiveGame, s: SideState, base: number, inId: string):
   if (bi < 0) return false;
   const sub = s.team.bench[bi];
   const idx = s.team.lineup.findIndex((b) => b.id === outP.id);
+  let moves: DefMove[] = [];
   if (idx >= 0) {
-    sub.position = outP.position;
-    s.team.lineup[idx] = sub;
+    const slots = s.team.lineup.map((b) => b.position); // set difensivo pre-sostituzione
+    s.team.lineup[idx] = sub; // conserva il ruolo naturale del subentrante
+    moves = realignDefense(s.team.lineup, slots);
   }
   s.team.bench.splice(bi, 1);
   if (!s.battingLines.has(sub.id)) {
@@ -1179,6 +1199,7 @@ export function pinchRun(l: LiveGame, s: SideState, base: number, inId: string):
     'sub',
     shortName(sub.name),
   );
+  pushRealign(l, moves);
   return true;
 }
 

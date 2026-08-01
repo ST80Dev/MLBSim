@@ -121,10 +121,20 @@ Regioni, dall'alto in basso:
     - **Pinch-run** (`pinchRun`): scegli il corridore in base → panchina.
     - **Cambio lanc.** (`changePitcher`): bullpen (rilievi disponibili).
     - **Cambio dif.** (`substituteFielder`): scegli il difensore che esce →
-      panchina; il sostituto ne eredita ruolo e slot in battuta.
+      panchina. Il sostituto eredita lo **slot in battuta**, ma **non** la casella
+      difensiva.
     Cambio lanciatore e difensore sono disponibili **per tutta la fase difensiva**
     (non solo appena prima del lancio). Le sostituzioni non consumano il turno.
-    Motore in `engine/game.ts`; test in `engine/__tests__/live.test.ts`.
+    - **Riallineamento difensivo automatico** (`realignDefense` in
+      `engine/positions.ts`): dopo **ogni** sostituzione (pinch-hit / pinch-run /
+      cambio difensivo) la difesa è **riorganizzata** perché ognuno giochi un ruolo
+      che **sa coprire** (naturale o secondario), col minimo di spostamenti — niente
+      più "ricevitore all'interbase" perché il subentrante ha ereditato la casella
+      di chi esce. Il subentrante va al suo ruolo, i compagni si spostano per
+      coprire; gli spostamenti compaiono in cronaca ("Riassetto difensivo: …").
+      **Deterministico** (niente RNG), solo gioco interattivo → calibrazione intatta.
+    Motore in `engine/game.ts`; test in `engine/__tests__/live.test.ts` e
+    `engine/__tests__/positions.test.ts`.
   - A partita finita, **overlay del risultato** con Recap/Nuova partita.
 
 Il campo generato disegna **solo il terreno di gioco** (niente tribune/cielo

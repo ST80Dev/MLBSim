@@ -8,6 +8,7 @@ import {
   activePos,
   computeSwap,
   applyAlignment,
+  realignDefense,
 } from '../positions';
 import { generateMatchup } from '../../data/generator';
 
@@ -163,6 +164,56 @@ describe('seconda posizione', () => {
     expect(next).not.toBeNull();
     expect(activePos(dh, next!)).toBe('1B');
     expect(activePos(fb, next!)).toBe('DH');
+  });
+
+  it('realign: nessuno spostamento se il subentrante copre già il ruolo lasciato', () => {
+    // Il 1B esce, entra un 1B naturale: nessun altro deve muoversi.
+    const lineup = FIELD_POSITIONS.concat('DH').map((p, i) => fakeBatter(p as Position, undefined, `p${i}`));
+    const slots = lineup.map((b) => b.position);
+    lineup[1] = fakeBatter('1B', undefined, 'sub'); // rimpiazza il 1B con un 1B
+    const moves = realignDefense(lineup, slots);
+    expect(moves.length).toBe(0);
+    expect(lineup[1].position).toBe('1B');
+  });
+
+  it('realign: il subentrante va al SUO ruolo e i compagni si spostano per coprire', () => {
+    // Parte tutta naturale; l'RF esce, entra un esterno naturale LF (2ª: RF).
+    // L'RF resta scoperto: uno dei due LF-capaci lo copre, l'altro fa LF.
+    const lineup = FIELD_POSITIONS.concat('DH').map((p, i) => fakeBatter(p as Position, undefined, `p${i}`));
+    const slots = lineup.map((b) => b.position);
+    const sub = fakeBatter('LF', 'RF', 'sub'); // esterno che sa fare anche RF
+    lineup[7] = sub; // rimpiazza l'RF (indice 7)
+    const moves = realignDefense(lineup, slots);
+
+    // Schieramento ancora valido: ogni casella di campo coperta una volta.
+    for (const pos of FIELD_POSITIONS) {
+      expect(lineup.filter((b) => b.position === pos).length).toBe(1);
+    }
+    // Il subentrante gioca un ruolo che PUÒ coprire (LF o RF), non è rimasto a caso.
+    expect(canPlay(sub, sub.position)).toBe(true);
+    // I due esterni LF-capaci coprono insieme {LF, RF}.
+    const lfCapable = lineup.filter((b) => b.id === 'sub' || b.id === 'p5'); // p5 = LF originale
+    expect(new Set(lfCapable.map((b) => b.position))).toEqual(new Set(['LF', 'RF']));
+    // Almeno uno spostamento è avvenuto (l'RF originale non esiste più).
+    expect(moves.length).toBeGreaterThan(0);
+  });
+
+  it('realign: non lascia mai un giocatore fuori ruolo se una copertura valida esiste', () => {
+    // SS esce, entra un 2B (2ª: SS). Il subentrante può fare SS; verifichiamo che
+    // tutti restino in un ruolo coprbile e lo schieramento sia valido.
+    const lineup = FIELD_POSITIONS.concat('DH').map((p, i) => fakeBatter(p as Position, undefined, `p${i}`));
+    // Diamo al 2B originale la 2ª SS così la copertura incrociata è possibile.
+    lineup[2] = fakeBatter('2B', 'SS', 'p2');
+    const slots = lineup.map((b) => b.position);
+    lineup[4] = fakeBatter('2B', 'SS', 'sub'); // rimpiazza l'SS con un 2B/SS
+    realignDefense(lineup, slots);
+    for (const pos of FIELD_POSITIONS) {
+      expect(lineup.filter((b) => b.position === pos).length).toBe(1);
+    }
+    for (const b of lineup) {
+      if (b.position === 'DH') continue;
+      expect(canPlay(b, b.position), `${b.id} @ ${b.position}`).toBe(true);
+    }
   });
 
   it('solo una parte dei giocatori ha una seconda posizione', () => {

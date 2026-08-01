@@ -27,6 +27,8 @@ import {
 import type { LiveGame } from '../game';
 import { estimatedPitches } from '../boxscore';
 import { generateMatchup } from '../../data/generator';
+import { validateFieldSet } from '../lineup';
+import { canPlay } from '../positions';
 import type { Batter, Pitcher } from '../types';
 
 /** Mette un corridore su una base (0=1a,1=2a,2=3a) per allestire situazioni. */
@@ -538,7 +540,11 @@ describe('logica di campo sugli out (avanzamenti reali oltre il motore lineare)'
     const benchBefore = def.team.bench.length;
     expect(substituteFielder(live, def, out.id, inc.id)).toBe(true);
     expect(def.team.lineup[4].id).toBe(inc.id);
-    expect(inc.position).toBe(out.position); // eredita il ruolo
+    // Riallineamento: la difesa resta uno schieramento VALIDO (9 caselle coperte
+    // una volta ciascuna) e il subentrante gioca un ruolo che PUÒ coprire — non
+    // più la casella ereditata a caso.
+    expect(validateFieldSet(def.team.lineup.map((b) => b.position)).ok).toBe(true);
+    expect(canPlay(inc, inc.position)).toBe(true);
     expect(def.team.bench.length).toBe(benchBefore - 1);
     expect(live.play[live.play.length - 1].kind).toBe('sub');
   });
