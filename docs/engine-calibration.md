@@ -161,7 +161,10 @@ spostano gli aggregati di lega.
 - **AI tattica della CPU** (`cpuOffenseTurn`, `cpuTryTactic`) — nel **solo gioco
   interattivo** (quando l'umano difende, bottone "Lancia ▸") la CPU può fare
   *small-ball*: **rubata** (corridore veloce, buone chance, più probabile a fine
-  gara equilibrata, rara in blowout), **cerca fly** (corridore in 3ª, <2 out, gara
+  gara equilibrata, rara in blowout — **calmierata**: soglie alte e prob. bassa,
+  ~0.8 SB/squadra/partita contro le ~2.2 di prima, in linea con l'epoca; la CPU
+  iper-aggressiva si faceva eliminare in rubata e *toglieva* offense), **cerca fly**
+  (corridore in 3ª, <2 out, gara
   in bilico, battitore non-slugger → incassa il punto con la volata), **bunt di
   sacrificio** (0 out, corridore in 1ª/2ª, battitore debole, gara in bilico),
   **hit-and-run** (corridore in 1ª, 2ª libera, battitore con buon contatto).
