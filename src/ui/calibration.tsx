@@ -14,7 +14,6 @@ import {
 import type { FieldCalibration, NumericCalKey } from '../data/stadiumCalibration';
 import { stadiumImage, stadiumImageCandidates } from '../data/stadiumImages';
 import type { StadiumImageCandidate } from '../data/stadiumImages';
-import type { StatsMode } from './statlines';
 import { GameScreen } from './game-screen';
 import { ActionBar } from './game-actionbar';
 
@@ -128,7 +127,6 @@ export function CalibrationScreen({
   );
   const result = useMemo(() => toGameResult(live), [live]);
   const sit = useMemo(() => situation(live), [live]);
-  const [statsMode, setStatsMode] = useState<StatsMode>('season');
 
   // Foto selezionata (principale o doppione) e sua calibrazione. Parte GIÀ in
   // piazzamento manuale (marker seminati dalla proiezione se assenti).
@@ -184,8 +182,6 @@ export function CalibrationScreen({
       <GameScreen
         result={result}
         sit={sit}
-        statsMode={statsMode}
-        setStatsMode={setStatsMode}
         editing={editing}
         cal={cal}
         onMarkerMove={moveMarker}

@@ -48,7 +48,6 @@ import { getCalibrationFor, calibratedVariants } from '../data/stadiumCalibratio
 import type { FieldCalibration } from '../data/stadiumCalibration';
 import { gameSeed, newRandomSeed } from './format';
 
-import type { StatsMode } from './statlines';
 import { PlayerModal, PlayerModalContext } from './player-modal';
 import type { PlayerModalRequest } from './player-modal';
 import { TeamBadge } from './widgets';
@@ -144,7 +143,6 @@ export function App() {
   const [managedId, setManagedId] = useState<string>('');
   const [activeGame, setActiveGame] = useState<ScheduleGame | null>(null);
   const [view, setView] = useState<View>('home');
-  const [statsMode, setStatsMode] = useState<StatsMode>('game');
   const [recapOpen, setRecapOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
   // Stadio selezionato nella schermata dedicata "🎯 Stadi".
@@ -717,8 +715,6 @@ export function App() {
           sit={sit}
           displayResult={shownScore.result}
           displaySit={shownScore.sit}
-          statsMode={statsMode}
-          setStatsMode={setStatsMode}
           editing={editing}
           cal={cal}
           onMarkerMove={moveMarker}
@@ -819,8 +815,6 @@ export function App() {
       {recapOpen && (
         <RecapModal
           result={result}
-          statsMode={statsMode}
-          setStatsMode={setStatsMode}
           onClose={() => setRecapOpen(false)}
         />
       )}
