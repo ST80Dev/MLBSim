@@ -120,14 +120,27 @@ describe('Hook precoce: partente in emorragia prima del 5°', () => {
     expect(homePitcher(l).role).toBe('SP'); // resta il partente
   });
 
-  it('sotto di 5 ma già al 5°: l’hook precoce non scatta (solo prima del 5°)', () => {
+  it('sotto di 5 ma già al 5° e partente non bombardato: l’hook precoce non scatta', () => {
     const l = createLiveGame(histTeam(['SEA']), histTeam(['LAA', 'ANA']), 7);
     l.inning = 5;
     l.half = 'top';
     l.homeSide.runs = 1;
-    l.awaySide.runs = 6; // sotto di 5, ma inning 5
+    l.awaySide.runs = 6; // svantaggio nel punteggio, ma il PARTENTE non ha subìto tutto
     l.homeSide.battersFacedByCurrent = 4; // e non affaticato
     autoManageDefense(l);
-    expect(homePitcher(l).role).toBe('SP'); // niente hook: resta
+    expect(homePitcher(l).role).toBe('SP'); // niente emorragia precoce al 5°: resta
+  });
+
+  it('partente BOMBARDATO (troppi punti subiti): tolto a QUALSIASI inning', () => {
+    const l = createLiveGame(histTeam(['SEA']), histTeam(['LAA', 'ANA']), 8);
+    l.inning = 6; // ben oltre il 5°: l'emorragia precoce non c'entra
+    l.half = 'top';
+    l.homeSide.battersFacedByCurrent = 4; // NON affaticato
+    // Il partente in pedana ha subìto 8 punti: va tolto comunque.
+    const sp = homePitcher(l);
+    l.homeSide.pitchingLines.get(sp.id)!.r = 8;
+    expect(sp.role).toBe('SP');
+    autoManageDefense(l);
+    expect(homePitcher(l).role).not.toBe('SP'); // tolto: entra un rilievo
   });
 });

@@ -78,15 +78,19 @@ export const TUNING = {
   fatiguePerBatter: 0.03,
 
   /**
-   * "Hook" precoce dell'auto-manager: un PARTENTE che manda la squadra sotto di
-   * troppi punti PRIMA del 5° inning viene tolto anche se non è ancora affaticato,
-   * per limitare i danni (entra un rilievo lungo che si prende 2-3 inning). Solo
-   * auto-gestione (CPU / quick-sim), non la difesa manuale dell'umano.
-   *   scatta se: role === 'SP' && inning < beforeInning && (puntiAvversari − punti) ≥ deficit
+   * "Hook" dell'auto-manager sul PARTENTE (SP): due inneschi oltre l'affaticamento,
+   * entrambi per togliere un partente che sta andando male (entra un rilievo lungo,
+   * `pickReliever`). Solo auto-gestione (CPU / quick-sim), non la difesa manuale.
+   *  - EMORRAGIA PRECOCE: `inning < beforeInning` e la squadra è sotto di `deficit`+
+   *    punti (limita i danni presto, prima ancora dell'affaticamento);
+   *  - BOMBARDATO: il partente ha subìto `shelledRuns`+ punti, a QUALSIASI inning
+   *    (un manager non lascia in campo chi prende una valanga anche se non è ancora
+   *    al limite di resistenza — era il buco: dal 5° in poi restava solo la fatica).
    */
   earlyHook: {
-    beforeInning: 5, // solo nei primi 4 inning ("prima del 5°")
+    beforeInning: 5, // emorragia precoce: solo nei primi 4 inning ("prima del 5°")
     deficit: 4, // sotto di 4+ punti col partente in pedana
+    shelledRuns: 6, // punti subiti dal partente oltre cui va tolto, a ogni inning
   },
 
   /**
