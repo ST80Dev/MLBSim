@@ -8,6 +8,7 @@
 // possano essere migrati invece di rompersi.
 
 import type { MatchArrangement } from '../../engine/arrangement';
+import type { Team } from '../../engine/types';
 import type { SeasonState } from '../season';
 import type { PlayoffState } from '../playoff';
 import type { LeagueSource } from '../leagueMode';
@@ -23,8 +24,13 @@ export type { MatchArrangement } from '../../engine/arrangement';
  *   - v2: aggiunge `seed` e `source` (la lega generata da seed diventa
  *     riproducibile; prima il seed era casuale ad ogni avvio → ricaricare un
  *     salvataggio rigenerava una lega DIVERSA da quella salvata).
+ *   - v3: aggiunge `teams` (rose persistite). Dal rollover di stagione (Fase 5A) e
+ *     dagli scambi umani la lega DIVERGE dal seed: non è più ri-derivabile. Quando
+ *     `teams` è presente è la fonte di verità; quando assente (save v2, lega non
+ *     ancora divergente) si ricade sulla derivazione da seed/sorgente. ε resta
+ *     seedato (nessuna finanza da salvare).
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Stato di gioco persistente (fetta della Fase 2). Cresce nelle fasi
@@ -53,6 +59,13 @@ export interface GameSave {
   managedTeamId?: string;
   /** Foglio partita (lineup, difesa, rotazione, bullpen) per teamId — editor Fase 2. */
   lineups?: Record<string, MatchArrangement>;
+  /**
+   * Rose persistite (schema v3): le 30 squadre com'erano al momento del salvataggio.
+   * Presente solo quando la lega è DIVERGuta dal seed (dopo un rollover di stagione
+   * o uno scambio umano); assente finché la lega coincide ancora con la derivazione
+   * da seed/sorgente. Quando presente sostituisce la lega generata/storica.
+   */
+  teams?: Team[];
   /** Stato di stagione: giorno corrente, record di lega, statistiche reali accumulate. */
   season?: SeasonState;
   /**

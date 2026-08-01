@@ -25,7 +25,7 @@ import {
   buildHistoricalLeague,
   DEFAULT_HISTORICAL_YEAR,
 } from '../data/historical/league';
-import { generateSchedule, REGULAR_GAMES } from '../data/schedule';
+import { generateSchedule, REGULAR_GAMES, TRADE_DEADLINE_GAME } from '../data/schedule';
 import type { ScheduleGame } from '../data/schedule';
 import {
   createSeason,
@@ -60,6 +60,10 @@ import { HomePage } from './pages-home';
 import { StartScreen, LeagueOverview, GameInfoBadge, FranchisePage } from './pages-start';
 import { LeaderboardPage } from './pages-leaderboard';
 import { StandingsPage, PlayoffPage } from './pages-standings';
+import { RolloverRecap } from './rollover-recap';
+import type { RolloverRecapData } from './rollover-recap';
+import { rolloverSeason } from '../data/rollover';
+import { TradeScreen } from './trade-screen';
 import { CalibrationScreen, CalibrationPanel } from './calibration';
 import type { Side, SavedGame } from './types';
 
@@ -71,6 +75,7 @@ type View =
   | 'standings'
   | 'playoff'
   | 'franchise'
+  | 'trades'
   | 'calibrate'
   | 'game';
 
@@ -177,6 +182,12 @@ export function App() {
   // Mini-popup giocatore: aperto da qualsiasi nome cliccabile via Context.
   const [playerModal, setPlayerModal] = useState<PlayerModalRequest | null>(null);
   const openPlayer = useCallback((req: PlayerModalRequest) => setPlayerModal(req), []);
+  // Rose PERSISTITE (schema v3): quando la lega DIVERGE dal seed (dopo un rollover
+  // di stagione o uno scambio umano) diventa la fonte di verità e va salvata. `null`
+  // = lega ancora coincidente con la derivazione da seed/sorgente (nessuna divergenza).
+  const [leagueTeams, setLeagueTeams] = useState<Team[] | null>(null);
+  // Riepilogo dell'off-season appena eseguita (modale post-rollover). `null` = chiuso.
+  const [rolloverRecap, setRolloverRecap] = useState<RolloverRecapData | null>(null);
 
   // Politica di cap derivata dalla sorgente (vedi leagueMode.ts).
   const leagueMode: LeagueMode = source === 'historical' ? HISTORICAL_MODE : GENERATED_MODE;
@@ -186,12 +197,13 @@ export function App() {
   // franchigia; l'avversario esce dal calendario della gara scelta. In modalita'
   // STORICA le 30 rose reali dell'annata sostituiscono quelle procedurali
   // (snapshot fisso, indipendente dal seed).
+  // Rose PERSISTITE (schema v3) se presenti — la lega diverge dal seed dopo
+  // rollover/scambi; altrimenti si deriva (generata da seed o storica dall'annata).
   const league = useMemo(
     () =>
-      source === 'historical'
-        ? buildHistoricalLeague(season.year)
-        : generateLeague(leagueSeed),
-    [leagueSeed, source, season.year],
+      leagueTeams ??
+      (source === 'historical' ? buildHistoricalLeague(season.year) : generateLeague(leagueSeed)),
+    [leagueTeams, leagueSeed, source, season.year],
   );
   const myId = managedId || league[0].id;
   const managedTeam = teamById(league, myId) ?? league[0];
@@ -248,11 +260,12 @@ export function App() {
           const pl = rec.payload;
           const seas = ensureSeason(pl.season);
           const leagueForPreview =
-            pl.source === 'historical'
+            pl.teams ??
+            (pl.source === 'historical'
               ? buildHistoricalLeague(seas.year)
               : typeof pl.seed === 'number'
                 ? generateLeague(pl.seed)
-                : undefined;
+                : undefined);
           const team = leagueForPreview
             ? teamById(leagueForPreview, managedTeamId)
             : undefined;
@@ -398,6 +411,7 @@ export function App() {
     arrs: Record<string, MatchArrangement>,
     seas: SeasonState,
     pl: PlayoffState | null = playoff,
+    tms: Team[] | null = leagueTeams,
   ) => {
     if (!currentSlot) return; // nessuno slot attivo: niente da salvare
     saveStore
@@ -408,6 +422,9 @@ export function App() {
         lineups: arrs,
         season: seas,
         playoff: pl ?? undefined,
+        // Rose persistite solo quando la lega è divergente (schema v3); altrimenti
+        // il save resta ri-derivabile da seed/sorgente (compatibile v2).
+        teams: tms ?? undefined,
       })
       .catch(() => {
         /* offline: si continua, si risalvera' piu' tardi. */
@@ -427,6 +444,7 @@ export function App() {
     setSeason(createSeason(src === 'historical' ? histYear : 1));
     setPlayoff(null);
     setPlayoffCtx(null);
+    setLeagueTeams(null); // nuova lega: si deriva dal seed finché non diverge
     setCurrentSlot(''); // lo slot nasce alla conferma della squadra
     setStage('league');
   };
@@ -460,6 +478,7 @@ export function App() {
       setSeason(ensureSeason(pl.season));
       setPlayoff(pl.playoff ?? null);
       setPlayoffCtx(null);
+      setLeagueTeams(pl.teams ?? null); // v3: rose persistite se presenti
       setManagedId(pl.managedTeamId ?? '');
       setCurrentSlot(game.slot);
       setActiveGame(null);
@@ -558,6 +577,57 @@ export function App() {
     persist(arrangements, season, np);
   };
 
+  // --- Rollover di stagione (Fase 5B) --------------------------------------
+  // A postseason conclusa (campione deciso): esegue l'off-season automatica
+  // (`rolloverSeason`: aging+ritiri → draft inverso → mercato → finalize), sostituisce
+  // la lega con quella dell'anno successivo (rose PERSISTITE, ora divergenti dal seed),
+  // apre la stagione nuova e mostra il riepilogo. Gli assetti vecchi si azzerano (le
+  // rose sono cambiate: la squadra riparte dal lineup di default ricomposto).
+  const startNextSeason = () => {
+    const before = managedTeam;
+    const beforeIds = [
+      ...before.lineup, ...before.bench, ...before.reserveBatters,
+      ...before.rotation, ...before.bullpen, ...before.reservePitchers,
+    ].map((p) => p.id);
+    const championId = playoff?.championId;
+    const result = rolloverSeason({
+      teams: league,
+      season,
+      seed: leagueSeed,
+      options: { managedId: myId, mode: leagueMode },
+    });
+    setLeagueTeams(result.teams);
+    setSeason(result.season);
+    setPlayoff(null);
+    setPlayoffCtx(null);
+    setActiveGame(null);
+    setArrangements({});
+    setView('home');
+    persist({}, result.season, null, result.teams);
+    setRolloverRecap({
+      summary: result.summary,
+      nextLeague: result.teams,
+      managedId: myId,
+      managedBeforeIds: beforeIds,
+      championId,
+    });
+  };
+
+  // Scambio umano→1 CPU applicato (Fase 5B): la lega diventa PERSISTITA (divergente
+  // dal seed). Le rose sono ricomposte, quindi l'assetto salvato della gestita non
+  // vale più: si azzera (riparte dal lineup di default; l'utente può rifinirlo).
+  const commitTrade = (nextLeague: Team[]) => {
+    const nextArr = { ...arrangements };
+    delete nextArr[myId];
+    setLeagueTeams(nextLeague);
+    setArrangements(nextArr);
+    persist(nextArr, season, playoff, nextLeague);
+  };
+
+  // Finestra scambi: in stagione (o prestagione) fino alla trade deadline; chiusa
+  // in postseason e a stagione conclusa.
+  const tradesOpen = stage === 'play' && !regularOver && season.day < TRADE_DEADLINE_GAME;
+
   // Etichetta/azione del pulsante di fine gara secondo la fase.
   const finishLabel = isSeasonGame
     ? 'Conferma e avanza ▸'
@@ -589,6 +659,7 @@ export function App() {
       managedTeamId: myId,
       lineups: next,
       season,
+      teams: leagueTeams ?? undefined,
     });
   };
 
@@ -658,6 +729,7 @@ export function App() {
               ['standings', 'Classifiche'],
               ...(playoff ? ([['playoff', '🏆 Playoff']] as Array<[View, string]>) : []),
               ['franchise', 'Franchigia'],
+              ...(tradesOpen ? ([['trades', 'Scambi']] as Array<[View, string]>) : []),
               ['calibrate', '🎯 Stadi'],
             ] as Array<[View, string]>
           ).map(([v, label]) => (
@@ -806,9 +878,23 @@ export function App() {
           nextGame={nextPlayoffGame}
           onPlay={playPlayoffGame}
           onSimRest={simPlayoffRest}
+          onNextSeason={playoff.championId ? startNextSeason : undefined}
         />
       )}
       {view === 'franchise' && <FranchisePage team={managedTeam} mode={leagueMode} />}
+      {view === 'trades' && (
+        <TradeScreen
+          league={league}
+          managedId={myId}
+          mode={leagueMode}
+          seed={leagueSeed}
+          year={season.year}
+          open={tradesOpen}
+          deadlineGame={TRADE_DEADLINE_GAME}
+          currentGame={season.day}
+          onCommit={commitTrade}
+        />
+      )}
       {view === 'calibrate' && (
         <CalibrationScreen
           league={league}
@@ -842,6 +928,10 @@ export function App() {
           seed={leagueSeed}
           onClose={() => setPlayerModal(null)}
         />
+      )}
+
+      {rolloverRecap && (
+        <RolloverRecap data={rolloverRecap} onClose={() => setRolloverRecap(null)} />
       )}
     </div>
     </PlayerModalContext.Provider>

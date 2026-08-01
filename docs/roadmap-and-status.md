@@ -217,8 +217,19 @@
   - **Cadenza mercato** (decisa): in stagione **solo scambi** umano→1 AI fino alla
     **trade deadline ~gara 103** (`TRADE_DEADLINE_GAME` in `schedule.ts`), poi rose
     congelate; pool FA e riallineamento AI↔AI sono **eventi di off-season**.
-  - **5B — UI + accoppiamento stagione (dopo Fase 4):** finestra di gestione fra le
-    partite, UI scambi/draft/off-season, `perf` reale, normalizzazione PA battitori.
+  - **5B — UI + accoppiamento stagione — IN CORSO:**
+    - **Schema v3 + league persistita** — **FATTO**: `GameSave.teams?` e in `App`
+      la lega preferisce le rose persistite (`leagueTeams ?? deriva-da-seed`);
+      salvata/reidratata su rollover e scambi (retro-compatibile v2).
+    - **Rollover automatico + riepilogo** — **FATTO**: a campione deciso, `PlayoffPage`
+      offre "vai all'anno N+1" → `rolloverSeason` → nuova lega + stagione + modale
+      `RolloverRecap` (ritiri/draft/mercato, focus franchigia).
+    - **UI scambi** — **FATTO**: `TradeScreen` (tab "Scambi", aperta in stagione fino
+      a `TRADE_DEADLINE_GAME`) — proponi a una CPU, `evaluateTrade` decide live,
+      `applyTrade` sposta i giocatori e ricompone entrambe le rose (via `assembleTeam`).
+    - **Manca:** off-season **interattiva a blocchi** (oggi il rollover è automatico:
+      il motore `advanceBlock`/`humanRelease`/`humanSign` c'è, l'UI dei blocchi no),
+      `perf` reale dall'impiego (aging oggi neutro), normalizzazione PA battitori.
   - **Persistenza:** `GameSave` schema **v3** con **rose persistite** (il multi-anno
     diverge dal seed dopo aging + scambi umani). ε seedato, pool transitorio.
 

@@ -1,6 +1,7 @@
 import type { Batter, Pitcher, Team } from '../engine/types';
-import { clamp } from '../engine/rng';
+import { clamp, makeRng } from '../engine/rng';
 import { playerValue, overallOf } from '../engine/value';
+import { assembleTeam } from './generator';
 import { effectiveCap, teamPayroll } from './leagueMode';
 import type { LeagueMode } from './leagueMode';
 import { TARGET_BATTERS, TARGET_PITCHERS } from './offseason';
@@ -209,4 +210,65 @@ export function evaluateTrade(proposal: TradeProposal, ctx: TradeContext): Trade
         ? `${aiTeam.abbrev} accetta: si tiene la stella e assorbe qualche pezzo in piu'.`
         : `${aiTeam.abbrev} accetta: lo scambio e' equo.`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// APPLICAZIONE DELLO SCAMBIO — puro, deterministico. Sposta i giocatori tra le due
+// squadre e RICOMPONE entrambe (via `assembleTeam`) così restano schierabili anche
+// se lo scambio tocca un titolare (niente buchi in lineup/rotazione). Non muta
+// l'input: ritorna una nuova lega con le due squadre sostituite. La ricomposizione
+// può riordinare lineup/rotazione (l'utente può poi rifinire dall'editor rosa).
+// ---------------------------------------------------------------------------
+
+const flatBat = (t: Team): Batter[] => [...t.lineup, ...t.bench, ...t.reserveBatters];
+const flatPit = (t: Team): Pitcher[] => [...t.rotation, ...t.bullpen, ...t.reservePitchers];
+
+function tradeRng(seed: number, teamId: string, year: number) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < teamId.length; i++) {
+    h ^= teamId.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return makeRng((seed ^ h ^ Math.imul(year + 1, 2654435761)) >>> 0);
+}
+
+export function applyTrade(
+  league: Team[],
+  humanId: string,
+  aiId: string,
+  giveIds: string[],
+  getIds: string[],
+  seed: number,
+  year: number,
+): Team[] {
+  const human = league.find((t) => t.id === humanId);
+  const ai = league.find((t) => t.id === aiId);
+  if (!human || !ai) return league;
+  const give = new Set(giveIds);
+  const get = new Set(getIds);
+
+  const hb = flatBat(human);
+  const hp = flatPit(human);
+  const ab = flatBat(ai);
+  const ap = flatPit(ai);
+
+  const giveBat = hb.filter((p) => give.has(p.id));
+  const givePit = hp.filter((p) => give.has(p.id));
+  const getBat = ab.filter((p) => get.has(p.id));
+  const getPit = ap.filter((p) => get.has(p.id));
+
+  const newHuman = assembleTeam(
+    human,
+    [...hb.filter((p) => !give.has(p.id)), ...getBat],
+    [...hp.filter((p) => !give.has(p.id)), ...getPit],
+    tradeRng(seed, humanId, year),
+  );
+  const newAi = assembleTeam(
+    ai,
+    [...ab.filter((p) => !get.has(p.id)), ...giveBat],
+    [...ap.filter((p) => !get.has(p.id)), ...givePit],
+    tradeRng(seed, aiId, year),
+  );
+
+  return league.map((t) => (t.id === humanId ? newHuman : t.id === aiId ? newAi : t));
 }

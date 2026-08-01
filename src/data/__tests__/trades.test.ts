@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateTrade, SLOT_PREMIUM_MAX } from '../trades';
+import { evaluateTrade, applyTrade, SLOT_PREMIUM_MAX } from '../trades';
 import type { TradeContext } from '../trades';
+import { generateLeague } from '../league';
 import { GENERATED_MODE, effectiveCap } from '../leagueMode';
 import { deriveBatterStats, salaryFor } from '../../engine/ratings';
 import { playerValue } from '../../engine/value';
@@ -175,5 +176,58 @@ describe('evaluateTrade — coerenza del premio', () => {
     const ev = evaluateTrade({ fromHuman: [give], fromAI: [get] }, ctx(h, a));
     const expected = Math.round((playerValue(give) - playerValue(get)) * 10) / 10;
     expect(ev.rawDelta).toBeCloseTo(expected, 5);
+  });
+});
+
+const LINEUP_SLOTS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+function expectPlayable(t: Team) {
+  expect(t.lineup).toHaveLength(9);
+  expect(new Set(t.lineup.map((b) => b.position))).toEqual(new Set(LINEUP_SLOTS));
+  expect(t.rotation).toHaveLength(5);
+  expect(t.bullpen.some((p) => p.role === 'CL')).toBe(true);
+}
+
+describe('applyTrade', () => {
+  it('scambia i giocatori tra le due squadre e le lascia schierabili', () => {
+    const league = generateLeague(101);
+    const [me, partner] = league;
+    const give = me.lineup[0]; // un mio titolare
+    const get = partner.bench[0] ?? partner.lineup[1]; // un suo giocatore
+    const next = applyTrade(league, me.id, partner.id, [give.id], [get.id], 101, 1);
+    const newMe = next.find((t) => t.id === me.id)!;
+    const newPartner = next.find((t) => t.id === partner.id)!;
+    const myIds = new Set(
+      [...newMe.lineup, ...newMe.bench, ...newMe.reserveBatters, ...newMe.rotation, ...newMe.bullpen, ...newMe.reservePitchers].map((p) => p.id),
+    );
+    const partnerIds = new Set(
+      [...newPartner.lineup, ...newPartner.bench, ...newPartner.reserveBatters, ...newPartner.rotation, ...newPartner.bullpen, ...newPartner.reservePitchers].map((p) => p.id),
+    );
+    // Il ceduto è passato all'altra, il ricevuto è arrivato da me.
+    expect(myIds.has(give.id)).toBe(false);
+    expect(myIds.has(get.id)).toBe(true);
+    expect(partnerIds.has(get.id)).toBe(false);
+    expect(partnerIds.has(give.id)).toBe(true);
+    // Entrambe restano schierabili (nessun buco anche se ho ceduto un titolare).
+    expectPlayable(newMe);
+    expectPlayable(newPartner);
+  });
+
+  it('è puro (non muta la lega in ingresso) e deterministico', () => {
+    const league = generateLeague(102);
+    const [me, partner] = league;
+    const beforeLen = me.lineup.length;
+    const g = me.rotation[4].id;
+    const r = partner.rotation[4].id;
+    const a = applyTrade(league, me.id, partner.id, [g], [r], 102, 1);
+    const b = applyTrade(league, me.id, partner.id, [g], [r], 102, 1);
+    expect(me.lineup.length).toBe(beforeLen); // input intatto
+    expect(a.find((t) => t.id === me.id)!.rotation.map((p) => p.id)).toEqual(
+      b.find((t) => t.id === me.id)!.rotation.map((p) => p.id),
+    );
+  });
+
+  it('lega invariata se le squadre non esistono', () => {
+    const league = generateLeague(103);
+    expect(applyTrade(league, 'nope', league[1].id, [], [], 103, 1)).toBe(league);
   });
 });

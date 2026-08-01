@@ -128,6 +128,7 @@ export function PlayoffPage({
   nextGame,
   onPlay,
   onSimRest,
+  onNextSeason,
 }: {
   league: Team[];
   playoff: PlayoffState;
@@ -135,6 +136,8 @@ export function PlayoffPage({
   nextGame: NextGame | null;
   onPlay: () => void;
   onSimRest: () => void;
+  /** Avvia il rollover verso la stagione successiva (disponibile a stagione conclusa). */
+  onNextSeason?: () => void;
 }) {
   const rounds = seriesByRound(playoff);
   const champ = playoff.championId ? teamById(league, playoff.championId) : undefined;
@@ -157,6 +160,11 @@ export function PlayoffPage({
             <div className="po-champ-title">🏆 {iAmChamp ? 'Campioni del mondo!' : 'Campione'}</div>
             <div className="po-champ-name">{champ.name}</div>
           </div>
+          {onNextSeason && (
+            <button className="btn primary po-next-season" onClick={onNextSeason}>
+              Off-season · vai all'anno {playoff.year + 1} ▸
+            </button>
+          )}
         </div>
       )}
 
