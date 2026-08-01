@@ -93,7 +93,7 @@ describe('Squeeze — il corridore in terza parte al lancio', () => {
     expect(s.outs).toBe(1);
     expect(live.bases[2]).toBeNull(); // corridore bruciato
     expect(live.bases[0]).not.toBeNull(); // battitore salvo in prima (FC)
-    expect(toGameResult(live).play.at(-1)?.kind).toBe('buntout');
+    expect(toGameResult(live).play.at(-1)?.kind).toBe('buntfc');
   });
 
   it('pop disastroso: doppio gioco al piatto, niente punto', () => {
@@ -346,7 +346,7 @@ describe('AI tattica della CPU (small-ball)', () => {
   });
 
   it('CALIBRAZIONE: il quick-sim non usa mai tattiche (nessuna rubata/bunt)', () => {
-    const forbidden = new Set(['steal', 'caughtstealing', 'sacbunt', 'bunthit', 'buntout', 'ibb']);
+    const forbidden = new Set(['steal', 'caughtstealing', 'sacbunt', 'bunthit', 'buntout', 'buntfc', 'ibb']);
     for (let s = 1; s <= 20; s++) {
       const { away, home } = generateMatchup(s * 3 + 1);
       const live = createLiveGame(away, home, s * 3 + 1);

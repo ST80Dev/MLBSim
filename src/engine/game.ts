@@ -42,6 +42,7 @@ export type PlayKind =
   | 'sacbunt'
   | 'bunthit'
   | 'buntout'
+  | 'buntfc'
   | 'steal'
   | 'caughtstealing'
   | 'wildpitch'
@@ -535,8 +536,8 @@ function buntAtBat(l: LiveGame): void {
     }
     bases[0] = { batter, pitcherId: pitcher.id };
     l.outs += 1;
-    text = `${name} bunt, eliminato il corridore di testa`;
-    kind = 'buntout';
+    text = `${name} bunt, eliminato il corridore di testa (salvo in prima)`;
+    kind = 'buntfc'; // scelta difensiva: battitore SALVO, out sul corridore
   } else if (roll < probs.hit + probs.fail + probs.pop) {
     // Pop-out sul bunt: battitore eliminato, corridori fermi.
     bLine.ab += 1;
@@ -671,8 +672,8 @@ function squeezeAtBat(l: LiveGame): void {
     l.outs += 1;
     advanceTrailers();
     bases[0] = { batter, pitcherId: pitcher.id };
-    text = `${name} squeeze sbagliato, il corridore eliminato a casa`;
-    kind = 'buntout';
+    text = `${name} squeeze sbagliato, il corridore eliminato a casa (battitore salvo in prima)`;
+    kind = 'buntfc'; // scelta difensiva: battitore SALVO, out sul corridore a casa
   } else if (roll < probs.hit + probs.fail + probs.pop) {
     // Pop sul bunt: preso al volo, il corridore in terza e' doppiato -> DP.
     bLine.ab += 1;
