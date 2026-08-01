@@ -275,13 +275,14 @@ export const TUNING = {
    * caso, solo quando ha senso da manuale.
    */
   cpuTactics: {
-    // Rubata
-    stealMinSpeed: 62, // sotto questa VEL il corridore non tenta
-    stealMinProb: 0.6, // sotto questa prob. di riuscita non tenta
-    stealBase: 0.12,
-    stealPerSpeed: 0.14, // per sigma di VEL sopra la media
-    stealLateBonus: 0.1, // dal 7° con partita in bilico
-    stealMax: 0.6,
+    // Rubata — CALMIERATA: la CPU rubava ~2.2/squadra/partita (troppe, ~3× il
+    // realistico ~0.6-0.7). Solo corridori davvero veloci, alte chance, di rado.
+    stealMinSpeed: 68, // sotto questa VEL il corridore non tenta
+    stealMinProb: 0.7, // sotto questa prob. di riuscita non tenta
+    stealBase: 0.04,
+    stealPerSpeed: 0.08, // per sigma di VEL sopra la media
+    stealLateBonus: 0.05, // dal 7° con partita in bilico
+    stealMax: 0.25,
     // Bunt di sacrificio (0 out, corridore in 1ª/2ª, battitore debole)
     buntMaxHitter: 58, // media potenza+contatto sotto cui e' "debole"
     buntProb: 0.35,
@@ -291,6 +292,37 @@ export const TUNING = {
     // Cerca fly ball (corridore in 3ª, <2 out): incassa il punto con la volata
     flyProb: 0.3,
     flySkipPower: 78, // gli slugger tentano il colpo, non il fly di servizio
+  },
+
+  /**
+   * Gestione PANCHINA della CPU (SOLO gioco interattivo): pinch-hit, pinch-runner
+   * e sostituzioni difensive. Conservativa (tardo-gara, situazioni chiave) per non
+   * bruciare la panchina. Mai nel quick-sim → calibrazione di stagione invariata.
+   *  - Pinch-hit: dal `phMinInning`, gara in bilico (|diff| ≤ `phMaxDeficit`), con
+   *    corridori in posizione punto (o dall'`phLateInning`), per un titolare debole
+   *    (OVR < `phMaxStarterOvr`) se un panchinaro è meglio di `phMinGain`+ (incluso
+   *    il bonus platoon `phPlatoonBonus` contro la mano del lanciatore).
+   *  - Pinch-runner: dal `prMinInning`, gara tirata, per un corridore LENTO
+   *    (VEL < `prMaxRunnerSpeed`) se un panchinaro è più veloce di `prMinSpeedGain`+.
+   *  - Sostituzione difensiva: dal `defSubMinInning` proteggendo un vantaggio 1-
+   *    `defSubLeadMax`, sostituisce un titolare con difesa scarsa alla casella
+   *    (< `defSubMaxStarterField`) con un panchinaro migliore di `defSubMinGain`+.
+   */
+  cpuBench: {
+    phMinInning: 7,
+    phLateInning: 8, // senza corridori in posizione punto serve almeno l'8°
+    phMaxStarterOvr: 66, // non si pinch-hitta un titolare valido
+    phMaxDeficit: 3,
+    phMinGain: 6,
+    phPlatoonBonus: 5,
+    prMinInning: 8,
+    prMaxDeficit: 2,
+    prMaxRunnerSpeed: 55,
+    prMinSpeedGain: 18,
+    defSubMinInning: 8,
+    defSubLeadMax: 4,
+    defSubMaxStarterField: 66,
+    defSubMinGain: 8,
   },
 
   /**

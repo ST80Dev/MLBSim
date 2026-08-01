@@ -1,9 +1,10 @@
 import type { Batter, Team, RawEvent, Pitcher } from './types';
 import type { Rng } from './rng';
 import { makeRng, clamp } from './rng';
-import { resolveAtBat } from './atbat';
+import { resolveAtBat, platoonAdvantage } from './atbat';
 import { TUNING } from './constants';
-import { RATING_AVG, pitcherOverall } from './ratings';
+import { RATING_AVG, pitcherOverall, batterOverall } from './ratings';
+import { fieldingAtPosition } from './positions';
 import { teamSynthesis, groupDefenseSynthesis, INFIELD_POS, OUTFIELD_POS } from './teamRatings';
 import {
   BattingLine,
@@ -1328,8 +1329,83 @@ export function playOffense(l: LiveGame, tactic: OffenseTactic): void {
 export function cpuOffenseTurn(l: LiveGame): void {
   if (l.status !== 'live') return;
   if (prePitchEvent(l)) return; // micro-eventi pre-lancio come in playOffense
+  cpuMaybePinchRun(l); // rimpiazza un corridore lento (non consuma il turno)
+  cpuMaybePinchHit(l); // rimpiazza un battitore debole (poi il PH batte)
   if (cpuTryTactic(l)) return; // ha eseguito una tattica (rubata/bunt/h&r)
   swingAtBat(l);
+}
+
+/**
+ * Pinch-hit della CPU: tardo-gara e gara in bilico, sostituisce un titolare debole
+ * col miglior battitore di panchina (incluso il vantaggio di platoon contro la mano
+ * del lanciatore), se il guadagno è netto. Non consuma il turno: poi il PH batte.
+ */
+function cpuMaybePinchHit(l: LiveGame): boolean {
+  const B = TUNING.cpuBench;
+  if (l.inning < B.phMinInning) return false;
+  const off = offense(l);
+  if (off.team.bench.length === 0) return false;
+  const cur = off.team.lineup[off.battingIndex];
+  if (batterOverall(cur.ratings) >= B.phMaxStarterOvr) return false; // titolare valido: resta
+  if (Math.abs(off.runs - defense(l).runs) > B.phMaxDeficit) return false; // solo gara in bilico
+  const risp = !!l.bases[1] || !!l.bases[2];
+  if (!risp && l.inning < B.phLateInning) return false; // serve RISP o gara molto avanti
+  const pitcher = currentPitcher(defense(l));
+  const score = (b: Batter) =>
+    batterOverall(b.ratings) + (platoonAdvantage(b, pitcher) ? B.phPlatoonBonus : 0);
+  const best = off.team.bench.reduce((a, b) => (score(b) > score(a) ? b : a));
+  if (score(best) - score(cur) < B.phMinGain) return false;
+  return pinchHit(l, best.id);
+}
+
+/**
+ * Pinch-runner della CPU: tardo-gara e gara tirata, rimpiazza un corridore LENTO in
+ * base col velocista di panchina, se il guadagno di velocità è netto. Non consuma
+ * il turno. Parte dal corridore di testa (più avanti = più prezioso).
+ */
+function cpuMaybePinchRun(l: LiveGame): boolean {
+  const B = TUNING.cpuBench;
+  if (l.inning < B.prMinInning) return false;
+  const off = offense(l);
+  if (off.team.bench.length === 0) return false;
+  if (Math.abs(off.runs - defense(l).runs) > B.prMaxDeficit) return false;
+  const fast = off.team.bench.reduce((a, b) => (b.ratings.speed > a.ratings.speed ? b : a));
+  for (let base = 2; base >= 0; base--) {
+    const r = l.bases[base];
+    if (!r) continue;
+    if (r.batter.ratings.speed >= B.prMaxRunnerSpeed) continue; // già veloce
+    if (fast.ratings.speed - r.batter.ratings.speed >= B.prMinSpeedGain) {
+      return pinchRun(l, off, base, fast.id);
+    }
+  }
+  return false;
+}
+
+/**
+ * Sostituzione difensiva della CPU: tardo-gara proteggendo un vantaggio risicato,
+ * toglie un titolare con difesa scarsa alla sua casella per un panchinaro nettamente
+ * migliore col guanto (accetta il downgrade in battuta pur di blindare la difesa).
+ */
+function cpuMaybeDefensiveSub(l: LiveGame): boolean {
+  const B = TUNING.cpuBench;
+  if (l.inning < B.defSubMinInning) return false;
+  const def = defense(l);
+  const lead = def.runs - offense(l).runs;
+  if (lead < 1 || lead > B.defSubLeadMax) return false; // solo un vantaggio piccolo
+  if (def.team.bench.length === 0) return false;
+  let best: { outId: string; inId: string; gain: number } | null = null;
+  for (const starter of def.team.lineup) {
+    if (starter.position === 'P' || starter.position === 'DH') continue;
+    const curField = fieldingAtPosition(starter, starter.position);
+    if (curField >= B.defSubMaxStarterField) continue; // difesa già buona: resta
+    for (const sub of def.team.bench) {
+      const gain = fieldingAtPosition(sub, starter.position) - curField;
+      if (gain >= B.defSubMinGain && (!best || gain > best.gain)) {
+        best = { outId: starter.id, inId: sub.id, gain };
+      }
+    }
+  }
+  return best ? substituteFielder(l, def, best.outId, best.inId) : false;
 }
 
 /** Bunt di sacrificio sensato per la CPU: nessun out, corridore in 1ª o 2ª. */
@@ -1403,9 +1479,15 @@ export function autoStep(l: LiveGame): void {
   swingAtBat(l);
 }
 
-/** Gestione automatica del solo lanciatore in difesa (CPU avversaria). */
+/**
+ * Gestione automatica della difesa CPU (avversaria): cambio lanciatore per
+ * affaticamento/partente KO e, tardo-gara proteggendo un vantaggio, sostituzioni
+ * difensive dalla panchina. Solo gioco interattivo (mai nel quick-sim).
+ */
 export function autoManageDefense(l: LiveGame): void {
-  if (l.status === 'live') autoManagePitcher(l, defense(l));
+  if (l.status !== 'live') return;
+  autoManagePitcher(l, defense(l));
+  cpuMaybeDefensiveSub(l);
 }
 
 /** Fa girare la partita fino alla fine con la CPU (quick-sim). */

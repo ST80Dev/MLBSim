@@ -161,13 +161,26 @@ spostano gli aggregati di lega.
 - **AI tattica della CPU** (`cpuOffenseTurn`, `cpuTryTactic`) — nel **solo gioco
   interattivo** (quando l'umano difende, bottone "Lancia ▸") la CPU può fare
   *small-ball*: **rubata** (corridore veloce, buone chance, più probabile a fine
-  gara equilibrata, rara in blowout), **cerca fly** (corridore in 3ª, <2 out, gara
+  gara equilibrata, rara in blowout — **calmierata**: soglie alte e prob. bassa,
+  ~0.8 SB/squadra/partita contro le ~2.2 di prima, in linea con l'epoca; la CPU
+  iper-aggressiva si faceva eliminare in rubata e *toglieva* offense), **cerca fly**
+  (corridore in 3ª, <2 out, gara
   in bilico, battitore non-slugger → incassa il punto con la volata), **bunt di
   sacrificio** (0 out, corridore in 1ª/2ª, battitore debole, gara in bilico),
   **hit-and-run** (corridore in 1ª, 2ª libera, battitore con buon contatto).
   Soglie in `TUNING.cpuTactics`. **Non è mai
   chiamata da `autoStep`/`quickSim`**: la Fase 0 e le sim di lega/stagione/playoff
   restano *swing puro* e byte-identiche (guardia nel test `tactics.test.ts`).
+- **Gestione panchina della CPU** (`cpuMaybePinchHit` / `cpuMaybePinchRun` in
+  `cpuOffenseTurn`; `cpuMaybeDefensiveSub` in `autoManageDefense`) — tardo-gara e
+  in situazioni chiave la CPU usa la panchina: **pinch-hit** per un titolare debole
+  in bilico con corridori in posizione punto (miglior bat di panca, incluso il
+  vantaggio di platoon), **pinch-runner** per un corridore lento come punto
+  pesante, **sostituzione difensiva** proteggendo un vantaggio risicato (guanto
+  migliore alla casella). Il sostituto **eredita la casella difensiva** di chi esce
+  (nessun buco). Soglie in `TUNING.cpuBench`; solo gioco interattivo. *(Follow-up:
+  riallineamento difensivo — mettere il sostituto al suo ruolo migliore invece di
+  ereditare quello di chi esce.)*
 - **Micro-eventi pre-lancio** (`prePitchEvent`) — coi **corridori in base**, prima
   che il turno si risolva, può scattare un **lancio pazzo / palla passata / balk**;
   il turno **non è consumato** (il battitore resta al piatto). La *probabilità che
