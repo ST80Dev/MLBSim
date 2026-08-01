@@ -3,7 +3,7 @@ import type { Rng } from './rng';
 import { makeRng, clamp } from './rng';
 import { resolveAtBat } from './atbat';
 import { TUNING } from './constants';
-import { RATING_AVG } from './ratings';
+import { RATING_AVG, pitcherOverall } from './ratings';
 import { teamSynthesis, groupDefenseSynthesis, INFIELD_POS, OUTFIELD_POS } from './teamRatings';
 import {
   BattingLine,
@@ -340,14 +340,50 @@ function outInfoFrom(res: EventResult): OutInfo | undefined {
   };
 }
 
-/** Cambio automatico del lanciatore per affaticamento (CPU / quick-sim). */
+/**
+ * Sceglie il rilievo da inserire in base alla SITUAZIONE di partita: ritorna
+ * l'indice in `s.pitchers`, o null se non ci sono rilievi disponibili. Uso
+ * coerente col ruolo (niente più closer bruciato al 6°):
+ *  - situazione da SALVEZZA (dall'8°, vantaggio 1-3 di chi difende): il CLOSER;
+ *  - inning presto (≤6): rilievo LUNGO (massima resistenza), copre più strada;
+ *  - altrimenti: miglior rilievo corto disponibile (overall).
+ * Il closer resta l'ULTIMA risorsa fuori dalle situazioni da salvezza.
+ */
+function pickReliever(l: LiveGame, s: SideState): number | null {
+  const rest: Array<{ p: Pitcher; i: number }> = [];
+  for (let i = s.pitcherIdx + 1; i < s.pitchers.length; i++) rest.push({ p: s.pitchers[i], i });
+  if (rest.length === 0) return null;
+
+  const oppRuns = (s === l.awaySide ? l.homeSide : l.awaySide).runs;
+  const lead = s.runs - oppRuns; // >0 = la squadra in difesa è avanti
+  const closers = rest.filter((r) => r.p.role === 'CL');
+  const others = rest.filter((r) => r.p.role !== 'CL');
+  const saveSituation = l.inning >= 8 && lead >= 1 && lead <= 3;
+
+  if (saveSituation && closers.length) return closers[0].i; // il closer chiude
+  if (others.length === 0) return closers[0].i; // solo il closer rimasto
+
+  const best = (key: (p: Pitcher) => number): number =>
+    others.reduce((a, b) => (key(b.p) > key(a.p) ? b : a)).i;
+  if (l.inning <= 6) return best((p) => p.stamina); // rilievo lungo, presto
+  return best((p) => pitcherOverall(p.ratings)); // miglior corto, dopo
+}
+
+/**
+ * Cambio automatico del lanciatore (CPU / quick-sim) all'affaticamento: se il
+ * lanciatore corrente ha superato la sua soglia di battitori, entra il rilievo
+ * scelto da `pickReliever` (portato in pedana come nel cambio manuale).
+ */
 function autoManagePitcher(l: LiveGame, s: SideState): void {
   const p = currentPitcher(s);
   const threshold = p.stamina + (p.role === 'SP' ? 4 : 2);
-  if (s.battersFacedByCurrent >= threshold && s.pitcherIdx < s.pitchers.length - 1) {
-    s.pitcherIdx += 1;
-    enterPitcher(l, s);
-  }
+  if (s.battersFacedByCurrent < threshold) return;
+  const j = pickReliever(l, s);
+  if (j == null) return;
+  const [pk] = s.pitchers.splice(j, 1);
+  s.pitchers.splice(s.pitcherIdx + 1, 0, pk); // porta il rilievo scelto in pedana
+  s.pitcherIdx += 1;
+  enterPitcher(l, s);
 }
 
 /** Registra l'ingresso del lanciatore corrente (linea + vantaggio d'ingresso). */

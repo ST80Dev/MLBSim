@@ -175,6 +175,26 @@ spostano gli aggregati di lega.
 - **Cambio lanciatore** (`changePitcher` manuale / `autoManagePitcher` per la CPU)
   — porta in pedana un rilievo e ne registra `enteredDiff` (per i save).
 
+### Auto-gestione del bullpen (CPU / quick-sim)
+
+`autoManagePitcher` gira per la squadra in difesa nel quick-sim (`autoStep`) e per
+la **CPU avversaria** quando l'umano batte (`autoManageDefense`); la difesa della
+squadra **gestita dall'umano** resta manuale.
+
+- **Ordine del bullpen** (fonte di verità per la scelta): rilievi **lunghi** (alta
+  resistenza) prima, **closer per ultimo**. Le squadre generate lo garantiscono già;
+  l'**import storico** ora **riordina** il bullpen (prima era in ordine di dataset,
+  spesso col closer per primo → l'auto-manager lo infilava come primo rilievo, "closer
+  al 6°": bug corretto in `data/historical/import.ts`).
+- **Trigger**: solo affaticamento — si cambia quando il lanciatore corrente ha
+  affrontato `≥ stamina + 4` battitori (SP) o `+ 2` (rilievo).
+- **Chi entra** (`pickReliever`, per priorità): (1) **situazione da salvezza**
+  — `inning ≥ 8` e vantaggio di chi difende in `[+1, +3]` → il **CLOSER**; (2) se
+  restano solo closer → il closer; (3) altrimenti un **non-closer**: presto
+  (`inning ≤ 6`) il più **resistente** (rilievo lungo), dal 7° il migliore per
+  **overall** (setup/corto). Il closer non entra mai fuori dalle salvezze, salvo
+  esaurimento del bullpen. Coperto da `engine/__tests__/bullpen.test.ts`.
+
 ## Decisioni W/L/SV (Fase 1)
 
 Coerenti col principio "**ERA e W sono risultati**": la **W** va al lanciatore in

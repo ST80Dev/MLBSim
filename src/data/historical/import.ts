@@ -276,7 +276,16 @@ export function importHistoricalTeam(h: HistTeam, seed?: number): ImportedTeam {
   // Lo staff attivo si divide per ruolo: SP -> rotazione, RP/CL -> bullpen. I
   // lanciatori di profondità restano fuori dai 25 attivi (role preservato).
   const rotation = mkPitchers(h.pitchers.filter((p) => p.role === 'SP'), 'SP');
-  const bullpen = mkPitchers(h.pitchers.filter((p) => p.role !== 'SP'), 'RP');
+  // Bullpen ORDINATO: rilievi "lunghi" (alta resistenza) prima, closer per ULTIMO
+  // (chiude, non apre). Il dataset storico spesso elenca il closer per primo:
+  // senza riordino l'auto-manager (che pesca il "prossimo in lista") lo infilava
+  // come primo rilievo -> closer al 6° inning. Vedi `autoManagePitcher`.
+  const bullpen = mkPitchers(h.pitchers.filter((p) => p.role !== 'SP'), 'RP').sort((a, b) => {
+    const ca = a.role === 'CL' ? 1 : 0;
+    const cb = b.role === 'CL' ? 1 : 0;
+    if (ca !== cb) return ca - cb; // closer in fondo
+    return b.stamina - a.stamina; // più resistente prima (rilievo lungo)
+  });
   const reservePitchers = mkPitchers(h.reservePitchers ?? [], 'PR');
 
   // Contesto REALE: prevenzione-punti del team dall'ERA vera (difesa + park + staff,
