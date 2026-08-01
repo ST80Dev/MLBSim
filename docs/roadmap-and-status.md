@@ -182,10 +182,11 @@
     playoff**: riposo del partente ridotto a **2 gare** (`PLAYOFF_REST_STARTER`,
     sul modello riposo-per-uso di `rotation.ts`), così l'asso può lanciare Gara 1 e
     Gara 4. Test in `data/__tests__/playoff.test.ts`.
-  - **Manca:** **rollover di stagione** (stagione → scorsa → carriera dai dati
-    reali degli anni gestiti, con aging): dopo il campione il save contiene l'anno
-    concluso, il rollover consumerà quello stato. Il **fattore stadio** è **fuori
-    scope** per scelta (non serve a questo livello).
+  - **Rollover di stagione** (stagione → anno successivo, con aging): **motore
+    FATTO** in Fase 5A step 6 (`rollover.ts`/`offseasonRun.ts`). L'**aggancio UI**
+    (trigger a fine postseason + persistenza schema v3) è il passo 5B. Il **fattore
+    stadio** è **fuori scope** per scelta (non serve a questo livello). Il seam
+    `perf=0` dell'aging resta neutro finché l'impiego reale non lo alimenta.
 - **Fase 5 — Franchigia (gestione leggera)** *(pianificata; 5A avviabile ora)*
   - Vedi `docs/franchise.md`: stipendi annuali, salary cap, scambi a valore, draft
     semplice. Fondazione modalità/cap già presente (vedi Fase 2).
@@ -199,13 +200,18 @@
     `overEffectiveCap`) — **FATTO**; 3) mercato off-season a **blocchi**
     (`offseason.ts`): rilasci/firme intrecciati AI+utente + pool reattivo + gate cap
     + **riallineamento AI↔AI** (scambi 1-per-1 stesso valore, fit posizionale,
-    cap-legali, bounded) — **FATTO (market core)**; manca il **finalize/reslot**
-    (ricomposizione lineup/rotazione dai set piatti) + aggancio aging/draft;
+    cap-legali, bounded) — **FATTO**. Rilascio da cap: si cede il più **caro tra gli
+    espendibili** (metà inferiore per valore), non lo scrub economico → sollievo di
+    cap reale, riconciliazione a senso unico verso il basso;
     4) draft inverso (`draft.ts`: classe prospetti giovani/grezzi deterministica,
     ordine inverso alla classifica, BPA per `playerValue`, immessi nella **depth**)
     — **FATTO**; 5) valutazione scambi umano→1 AI (con **premio di consolidamento**);
-    6) `runOffseason` (perf=0) + **finalize/reslot** (ricomposizione lineup/rotazione
-    + riconciliazione taglia dopo draft e mercato).
+    6) `runOffseason` (perf=0) + **finalize/reslot** — **FATTO**: `assembleTeam`
+    (reslot delle rose piatte in lineup/rotazione/depth, riempimento a taglia coi
+    replacement), `offseasonRun.ts` (aging+ritiri → draft inverso → mercato a blocchi
+    → finalize) e `rollover.ts` (`rolloverSeason`: lega conclusa → anno successivo +
+    stagione fresca). Test in `data/__tests__/rollover.test.ts` (validità pluriennale,
+    determinismo, muro rispettato).
   - **Cadenza mercato** (decisa): in stagione **solo scambi** umano→1 AI fino alla
     **trade deadline ~gara 103** (`TRADE_DEADLINE_GAME` in `schedule.ts`), poi rose
     congelate; pool FA e riallineamento AI↔AI sono **eventi di off-season**.

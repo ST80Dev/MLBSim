@@ -317,10 +317,17 @@ da un **mercato a più blocchi**:
 - Il **pool è reattivo**: se firmi tu un free agent che un'AI puntava, al blocco
   successivo l'AI **si adatta** (ricalcola sul pool aggiornato). È l'interazione
   emergente voluta.
-- **Rilascio a peggior valore**: si scarica dal `playerValue` più **basso** (i
-  maturi cari senza prospettiva), **mai** i giovani-affare. **Firma per bisogno**:
-  si prende dal pool il `playerValue` più alto del **tipo mancante** (battitore o
-  lanciatore, verso le taglie 20/15) che **sta sotto il proprio tetto effettivo**.
+- **Rilascio per pressione da CAP**: si cede il **più caro tra gli espendibili** —
+  la metà inferiore per `playerValue` (l'**elite è protetto**), e di quella il
+  **salary più alto**. *(Correzione emersa col rollover pluriennale: scaricare il
+  `playerValue` in assoluto più basso libera uno **scrub economico** che NON
+  alleggerisce il monte-ingaggi → la corazzata non rientra mai e il payroll deriva
+  verso l'alto. Cedere il caro-espendibile è il "maturo caro senza prospettiva" che
+  il design vuole: sollievo di cap reale, riconciliazione a **senso unico verso il
+  basso**.)* **Rilascio sopra-taglia** (depth in eccesso, es. prospetti dal draft):
+  il `playerValue` più basso del tipo in eccesso. **Firma per bisogno**: dal pool il
+  `playerValue` più alto del **tipo mancante** (verso 20/15) che **sta sotto il
+  proprio tetto effettivo**.
 - **Taglie rosa**: 20 battitori + 15 lanciatori per squadra (9+5+6 / 5+6+4). I
   rilasci non scendono sotto la taglia; le firme non la superano.
 - **L'utente agisce con le STESSE primitive** in qualunque blocco (rilascia/firma
