@@ -171,6 +171,16 @@ spostano gli aggregati di lega.
   Soglie in `TUNING.cpuTactics`. **Non è mai
   chiamata da `autoStep`/`quickSim`**: la Fase 0 e le sim di lega/stagione/playoff
   restano *swing puro* e byte-identiche (guardia nel test `tactics.test.ts`).
+- **Gestione panchina della CPU** (`cpuMaybePinchHit` / `cpuMaybePinchRun` in
+  `cpuOffenseTurn`; `cpuMaybeDefensiveSub` in `autoManageDefense`) — tardo-gara e
+  in situazioni chiave la CPU usa la panchina: **pinch-hit** per un titolare debole
+  in bilico con corridori in posizione punto (miglior bat di panca, incluso il
+  vantaggio di platoon), **pinch-runner** per un corridore lento come punto
+  pesante, **sostituzione difensiva** proteggendo un vantaggio risicato (guanto
+  migliore alla casella). Il sostituto **eredita la casella difensiva** di chi esce
+  (nessun buco). Soglie in `TUNING.cpuBench`; solo gioco interattivo. *(Follow-up:
+  riallineamento difensivo — mettere il sostituto al suo ruolo migliore invece di
+  ereditare quello di chi esce.)*
 - **Micro-eventi pre-lancio** (`prePitchEvent`) — coi **corridori in base**, prima
   che il turno si risolva, può scattare un **lancio pazzo / palla passata / balk**;
   il turno **non è consumato** (il battitore resta al piatto). La *probabilità che

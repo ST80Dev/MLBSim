@@ -279,6 +279,37 @@ export const TUNING = {
   },
 
   /**
+   * Gestione PANCHINA della CPU (SOLO gioco interattivo): pinch-hit, pinch-runner
+   * e sostituzioni difensive. Conservativa (tardo-gara, situazioni chiave) per non
+   * bruciare la panchina. Mai nel quick-sim → calibrazione di stagione invariata.
+   *  - Pinch-hit: dal `phMinInning`, gara in bilico (|diff| ≤ `phMaxDeficit`), con
+   *    corridori in posizione punto (o dall'`phLateInning`), per un titolare debole
+   *    (OVR < `phMaxStarterOvr`) se un panchinaro è meglio di `phMinGain`+ (incluso
+   *    il bonus platoon `phPlatoonBonus` contro la mano del lanciatore).
+   *  - Pinch-runner: dal `prMinInning`, gara tirata, per un corridore LENTO
+   *    (VEL < `prMaxRunnerSpeed`) se un panchinaro è più veloce di `prMinSpeedGain`+.
+   *  - Sostituzione difensiva: dal `defSubMinInning` proteggendo un vantaggio 1-
+   *    `defSubLeadMax`, sostituisce un titolare con difesa scarsa alla casella
+   *    (< `defSubMaxStarterField`) con un panchinaro migliore di `defSubMinGain`+.
+   */
+  cpuBench: {
+    phMinInning: 7,
+    phLateInning: 8, // senza corridori in posizione punto serve almeno l'8°
+    phMaxStarterOvr: 66, // non si pinch-hitta un titolare valido
+    phMaxDeficit: 3,
+    phMinGain: 6,
+    phPlatoonBonus: 5,
+    prMinInning: 8,
+    prMaxDeficit: 2,
+    prMaxRunnerSpeed: 55,
+    prMinSpeedGain: 18,
+    defSubMinInning: 8,
+    defSubLeadMax: 4,
+    defSubMaxStarterField: 66,
+    defSubMinGain: 8,
+  },
+
+  /**
    * Micro-eventi pre-lancio coi corridori in base (SOLO turni interattivi, mai
    * nel quick-sim: la Fase 0 resta invariata). Fanno avanzare i corridori senza
    * consumare il turno. Probabilita' di *accadere* per lancio, guidate dalle doti
