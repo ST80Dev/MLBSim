@@ -67,16 +67,17 @@
     modalità storica ora costruisce la lega da quelle rose
     (`data/historical/league.ts`, `buildHistoricalLeague`) invece che
     procedurale. Dettaglio sotto.
-  - **Annate multiple giocabili — FATTO:** importate **1997, 1998, 1999, 2000,
-    2001, 2003** (`HISTORICAL_SEASONS` / `HISTORICAL_YEARS`) — le annate-gemma
-    2001 (Bonds 73 HR, RJ 372 K) e 2003 (Pujols breakout, Gagné 55/55) confermano
-    che le doti-firma si saturano (pow/eye 100) mentre l'OVR resta una media
-    piatta (Bonds OVR ~82-86) — selezionabili dalla schermata
-    iniziale (picker d'annata sulla card storica). Il 1997 è a **28 squadre**
-    (Arizona e Tampa Bay debuttano nel 1998): la lega tollera l'organico ridotto
-    (calendario con pad/trim a 162, division 4×). Ogni annata ha la sua finestra
-    Marcel (es. il 2000 usa 2000/99/98) e il suo pool free agent. La lega storica
-    è costruita da `season.year` (fissato all'avvio, persistito nel salvataggio).
+  - **Annate multiple giocabili — FATTO:** importate **tutte le 14 annate
+    1997-2010** in continuità (`HISTORICAL_SEASONS` / `HISTORICAL_YEARS`) — le
+    annate-gemma 2001 (Bonds 73 HR, RJ 372 K) e 2003 (Pujols breakout, Gagné
+    55/55) confermano che le doti-firma si saturano (pow/eye 100) mentre l'OVR
+    resta una media piatta (Bonds OVR ~82-86) — tutte selezionabili dalla
+    schermata iniziale (picker d'annata sulla card storica, default 1999). Il 1997
+    è a **28 squadre** (Arizona e Tampa Bay debuttano nel 1998): la lega tollera
+    l'organico ridotto (calendario con pad/trim a 162, division 4×). Ogni annata
+    ha la sua finestra Marcel (es. il 2000 usa 2000/99/98) e il **proprio pool
+    free agent** (`freeAgents<ANNO>.ts` per tutte e 14). La lega storica è
+    costruita da `season.year` (fissato all'avvio, persistito nel salvataggio).
     L'alias `ML4→MIL` copre Milwaukee pre-1998 (teamID Lahman storico).
   - **Dedup + identità stabile — FATTO:** ogni giocatore reale compare UNA volta
     (niente doppioni in classifica né tra le rose), con `id` = playerID Lahman
@@ -84,8 +85,9 @@
     assegnati alla squadra di **max minutaggio** con le stat di **tutta la
     stagione** (rating dal campione più ampio); gli scambiati-cardine sono ~5 in
     tutta la lega. Gli esclusi dalle rose confluiscono nel **pool free agent**
-    (`data/historical/freeAgents1999.ts`) — dati pronti per il mercato/draft di
-    Fase 5 (aggancio UI ancora da fare). Gli omonimi reali (playerID diversi)
+    (`data/historical/freeAgents<ANNO>.ts`, presente per tutte le 14 annate) —
+    consumato dal **mercato di off-season** della Fase 5A (motore fatto; l'UI dei
+    blocchi FA è ancora da agganciare). Gli omonimi reali (playerID diversi)
     restano correttamente distinti.
   - **Stima rating multi-annata — FATTO:** l'abilità NON si stima da una singola
     stagione (che ingabbierebbe un giocatore in un'annata storta o pre-sbocciatura)
@@ -101,8 +103,24 @@
     passato: **nessuna preveggenza** (il potenziale resta una stima cieca; non sai
     in anticipo chi diventerà campione — vedi `players-and-ratings.md`).
 
+- **Fase 3 — UI stile SBS/OOTP: AVVIATA.** Struttura a pagine, cronaca a fasi +
+  micro-eventi + cronaca compatta, mini-popup giocatore, plancia partita a 100%
+  altezza, schermata calibrazione stadi. Restano card più ricche e pannelli.
+
+- **Fase 4 — Stagione: COMPLETA.** Calendario a serie (10 prestagione + 162
+  regular), stagione a stati con classifiche e leaderboard reali, difesa dietro il
+  lanciatore (scollegatore ERA), **playoff giocabili a 12 squadre** fino al
+  campione. Dettaglio sotto.
+
+- **Fase 5 — Franchigia: IN CORSO.** **5A (motore puro) COMPLETO** — `playerValue`,
+  cap enforce + ε, mercato off-season a blocchi (+ riallineamento AI↔AI), draft
+  inverso, valutazione scambi, `runOffseason`/`rolloverSeason`. **5B (UI) IN
+  CORSO** — schema v3 con rose persistite, rollover automatico + `RolloverRecap`,
+  UI scambi (`TradeScreen`); manca l'off-season interattiva a blocchi e il `perf`
+  reale dall'impiego. Dettaglio sotto e in `docs/franchise.md`.
+
 ## Roadmap
-- **Fase 2 — Costruzione squadra & import storico** *(quasi completa)*
+- **Fase 2 — Costruzione squadra & import storico** *(completa)*
   - **Import storico — decisione di design**: le stagioni reali sono *snapshot
     congelati*, quindi le **statistiche** dell'annata sono la verità di quel
     giocatore storico e i rating 40-100 si **stimano** dalle stat solo per
@@ -124,9 +142,10 @@
     sviluppo futuro dal seed NON replica la realtà). Verifica: round-trip fedele,
     i **campioni** escono campioni e gli **scarsi** affondano, aggregati
     closed-loop nell'epoca. **UI di selezione dell'annata — FATTO:** picker
-    1997/1998/1999/2000 sulla card storica (default 1999).
-  - **Editor squadra — FATTO (motore/dati + UI):** roster **25 attivi + ~10
-    depth**, split **14/11**, **sempre DH**, posizioni **libere con malus**
+    di tutte le annate **1997-2010** sulla card storica (default 1999).
+  - **Editor squadra — FATTO (motore/dati + UI):** roster **26 attivi + ~9
+    depth** (rosa totale ~35: 20 battitori + 15 lanciatori), split attivi
+    **14/12** (bullpen a 7), **sempre DH**, posizioni **libere con malus**
     (`engine/lineup.ts`: `autoLineup` + `validateFieldSet`). La **UI** è la
     pagina **Roster** (linguette Fielders/Pitchers, **drag&drop** ordine/ruoli/
     panca, tabelle stat con toggle Stagione/Scorsa/Storico/Caratteristiche). Il
@@ -147,9 +166,11 @@
 - **Fase 3 — UI stile SBS/OOTP** *(avviata)*
   - Campo con etichette, card giocatore ricche, pannelli colorati, pulsanti.
   - **FATTO (primi passi):** struttura a **pagine** con header di navigazione
-    (Home/Roster/Leaderboard/Classifiche/Franchigia); **banner di cronaca a fasi**
-    sopra la foto stadio + **micro-eventi** partita (lancio pazzo / palla passata
-    / balk) — vedi `src/ui/commentary.ts` e `docs/engine-calibration.md`.
+    (Home/Roster/Lega/Leaderboard/Classifiche/[Playoff]/Franchigia/[Scambi]/Stadi);
+    **banner di cronaca a fasi** sopra la foto stadio + **micro-eventi** partita
+    (lancio pazzo / palla passata / balk) + **mini-popup giocatore** cliccabile e
+    **cronaca compatta** (ultimi 3 mezzi-inning) — vedi `src/ui/commentary.ts`,
+    `src/ui/game-cronaca.tsx` e `docs/engine-calibration.md`.
 - **Fase 4 — Stagione** *(gran parte anticipata in Fase 2)*
   - **FATTO:** **calendario a SERIE** (10 prestagione + 162 regular + slot playoff,
     `data/schedule.ts`): la regular season è organizzata in **serie di 2-4 gare
@@ -187,7 +208,7 @@
     (trigger a fine postseason + persistenza schema v3) è il passo 5B. Il **fattore
     stadio** è **fuori scope** per scelta (non serve a questo livello). Il seam
     `perf=0` dell'aging resta neutro finché l'impiego reale non lo alimenta.
-- **Fase 5 — Franchigia (gestione leggera)** *(pianificata; 5A avviabile ora)*
+- **Fase 5 — Franchigia (gestione leggera)** *(5A motore completo; 5B UI in corso)*
   - Vedi `docs/franchise.md`: stipendi annuali, salary cap, scambi a valore, draft
     semplice. Fondazione modalità/cap già presente (vedi Fase 2).
   - **Split 5A/5B** (vedi `docs/franchise.md § Piano di esecuzione`): il layer

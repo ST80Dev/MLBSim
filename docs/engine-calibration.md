@@ -146,6 +146,12 @@ spostano gli aggregati di lega.
   → nessun impatto sulla calibrazione.
 - **Base intenzionale** (`intentionalWalk`) — avanzamento forzato deterministico
   (nessun RNG); conta come BB.
+- **Interni dentro** (`setInfieldIn`, flag `LiveGame.infieldIn`) — difensiva col
+  **corridore in terza** e `<2 out`: gli interni si stringono per **tagliare il
+  punto a casa** sul rimbalzo, ma la difesa apre buchi → più palle passano per un
+  singolo (`TUNING.infieldIn.hitThrough` .18, applicata in `resolveInPlayOut`).
+  Speculare a "interni a doppio gioco" (mutuamente escluse). Gated sul flag: spenta
+  **non consuma RNG**, calibrazione intatta.
 - **Interni a doppio gioco** (`setDpDepth`, flag `LiveGame.dpDepth`) — difensiva,
   speculare a "interni dentro" (mutuamente escluse). Col **corridore in prima** e
   `<2 out`, sul **rimbalzo** alza la conversione del doppio gioco
@@ -513,7 +519,7 @@ tutte uguali. **Disaccoppiamento**: una leva per obiettivo.
 - **Varianza-squadra → convessità AGGREGATA** (`teamStrength`, solo storico via
   `team.context`). Le rose reali hanno talento-medio simile (25-man convergente),
   ma le corazzate **concentrano** i fenomeni: una convessità (`TEAM_CONVEX` 1.6)
-  sui sotto-punteggi allarga le distanze (Δ~5 → ~9-13) **senza toccare un solo
+  sui sotto-punteggi allarga le distanze (Δ~5 → ~8-9) **senza toccare un solo
   rating individuale**. `teamStrength` è **solo display** (non entra nel sim) →
   epoca-safe.
 - **HR-gemma → coda-gemma** (`HR_TOP_KNEE`/`HR_TOP_GAIN`): un power-96 fedele
