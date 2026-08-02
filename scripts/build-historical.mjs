@@ -429,23 +429,33 @@ function main() {
     if (!d) return { fld: null, arm: null };
     const b = base[d.pos];
     const IF = ['2B', '3B', 'SS'].includes(d.pos);
+    // SPREAD DIFESA ALLARGATO: i coefficienti-z sono più alti DOVE IL SEGNALE È FORTE
+    // (range factor per SS/2B/3B/OF; braccio da assist/CS%), più prudenti dove è
+    // debole (ricezione dei catcher = solo PB/errori; 1B = throw ricevuti). Così i
+    // difensori con RF/braccio davvero alti "poppano" (elite verso 90-97) e gli
+    // scarsi affondano, mentre i fenomeni-da-posizionamento/framing (Vizquel, Yadi,
+    // Andruw) restano vicini al loro RF reale — quel valore non è nei dati Lahman
+    // (Zone Rating vuoto, niente UZR/DRS). È una scelta consapevole: allarghiamo il
+    // segnale che abbiamo, non ne inventiamo uno.
     let fld;
     if (d.pos === 'C') {
       // Ricevitore: le PO sono strikeout (non range) → pesa ricezione (PB) + errori.
-      fld = 70 - 4 * z(d.pb9, b.pb9) - 3 * z(d.err, b.err);
+      // Segnale debole (no framing nei dati) → coeff prudente.
+      fld = 70 - 5 * z(d.pb9, b.pb9) - 4 * z(d.err, b.err);
     } else if (d.pos === '1B') {
       // Prima base: le PO sono throw RICEVUTI (contesto di squadra, non skill) → NON
       // usare il range factor. Vale l'AGGRESSIVITÀ/copertura (assist) + l'affidabilità
       // (pochi errori, lo scoop). Così un guanto d'oro come Grace non è sotto-valutato.
-      fld = 70 + 5 * z(d.arm9, b.arm9) - 4 * z(d.err, b.err);
+      fld = 70 + 7 * z(d.arm9, b.arm9) - 5 * z(d.err, b.err);
     } else {
-      // Posizioni di RANGE (SS/2B/3B/OF): range factor (coeff più alto → più picchi) + errori.
-      fld = 70 + 8 * z(d.rf, b.rf) - 3 * z(d.err, b.err);
-      if (IF) fld += 1 * z(d.dp9, b.dp9); // turning dei doppi giochi (peso lieve: context-dipendente)
+      // Posizioni di RANGE (SS/2B/3B/OF): range factor (segnale forte → coeff ampio
+      // per picchi netti) + errori.
+      fld = 70 + 11 * z(d.rf, b.rf) - 4 * z(d.err, b.err);
+      if (IF) fld += 1.5 * z(d.dp9, b.dp9); // turning dei doppi giochi (peso lieve: context-dipendente)
     }
     let arm = null;
-    if (d.pos === 'C' && d.csRate != null) arm = 70 + 7 * z(d.csRate, b.cs);
-    else if (['LF', 'CF', 'RF'].includes(d.pos)) arm = 70 + 7 * z(d.arm9, b.arm9);
+    if (d.pos === 'C' && d.csRate != null) arm = 70 + 9 * z(d.csRate, b.cs);
+    else if (['LF', 'CF', 'RF'].includes(d.pos)) arm = 70 + 9 * z(d.arm9, b.arm9);
     return { fld: roundR(fld), arm: arm == null ? null : roundR(arm) };
   };
 
@@ -466,7 +476,7 @@ function main() {
   const derivePitField = (pid) => {
     const d = pitFieldRaw.get(pid);
     if (!d) return null;
-    return roundR(70 + 6 * z(d.rf, pfRf) - 2.5 * z(d.err, pfErr));
+    return roundR(70 + 8 * z(d.rf, pfRf) - 3 * z(d.err, pfErr));
   };
 
   // Assegnazione unica alla squadra primaria.

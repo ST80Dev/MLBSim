@@ -528,3 +528,27 @@ l'R/G storico (5,98 → 6,3). Il fattore `RT` (0.78, proporzionale alla distanza
 elite preservati (Ichiro C95). NB: `HR/squadra ~200` **non** è gonfio — è ≈ il reale
 AL 2001, on-design "alta offesa". La lega *generata* (senza `context`) non è toccata
 da nulla di tutto questo: gira sul suo path (R/G ~4,7, i suoi rating già spaziano).
+
+## Difesa storica: spread allargato dove il segnale è forte
+
+I rating difensivi dell'import derivano da `Fielding.csv` (no UZR/DRS: la colonna
+Zone Rating del dataset è vuota). I coefficienti-z sono calibrati **per forza del
+segnale**: ampi dove il dato è informativo, prudenti dove è debole.
+
+- **Range (SS/2B/3B/OF)** ← Range Factor `(PO+A)/inn`: coeff **11** (segnale forte)
+  − 4·z(errori) + 1.5·z(doppi giochi, solo interni). Gli elite di range poppano
+  (Tulowitzki '10 DIF 96, Gutierrez '09 84, Beltre '10 82); gli scarsi affondano
+  (Jeter '02 47 — range reale tra i peggiori).
+- **Braccio** (OF/C) ← assist9 / CS%: coeff **9** → le braccia-cannone spiccano
+  (Yadi Molina '10 BRA 89).
+- **Ricevitori (DIF)** ← solo PB + errori (coeff 5/4, prudente): il **framing** — la
+  vera arte di Yadi — NON è nei dati, quindi il DIF-catcher resta modesto anche per
+  i grandi. Limite noto e consapevole.
+- **1B** ← assist9 + errori (coeff 7/5): le PO sono throw ricevuti (contesto), non
+  range → si pesa copertura + affidabilità (Grace non sotto-valutato).
+
+Lo spread è **simmetrico attorno a 70** → allarga la varianza difensiva (titolari
+2009: p10 57 · mediana 70 · p90 85, min 44 / max 100) **senza spostare l'R/G**
+(misurato ~5.98, epoca intatta). I fenomeni-da-posizionamento/framing (Vizquel,
+Andruw, Yadi-DIF) restano vicini al loro RF reale: allarghiamo il segnale che
+c'è, non ne inventiamo uno assente dai dati.
