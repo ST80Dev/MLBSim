@@ -10,6 +10,11 @@ import { SEASON_2002 } from './season2002';
 import { SEASON_2003 } from './season2003';
 import { SEASON_2004 } from './season2004';
 import { SEASON_2005 } from './season2005';
+import { SEASON_2006 } from './season2006';
+import { SEASON_2007 } from './season2007';
+import { SEASON_2008 } from './season2008';
+import { SEASON_2009 } from './season2009';
+import { SEASON_2010 } from './season2010';
 import { FREE_AGENT_BATTERS_1997, FREE_AGENT_PITCHERS_1997 } from './freeAgents1997';
 import { FREE_AGENT_BATTERS_1998, FREE_AGENT_PITCHERS_1998 } from './freeAgents1998';
 import { FREE_AGENT_BATTERS_1999, FREE_AGENT_PITCHERS_1999 } from './freeAgents1999';
@@ -19,6 +24,11 @@ import { FREE_AGENT_BATTERS_2002, FREE_AGENT_PITCHERS_2002 } from './freeAgents2
 import { FREE_AGENT_BATTERS_2003, FREE_AGENT_PITCHERS_2003 } from './freeAgents2003';
 import { FREE_AGENT_BATTERS_2004, FREE_AGENT_PITCHERS_2004 } from './freeAgents2004';
 import { FREE_AGENT_BATTERS_2005, FREE_AGENT_PITCHERS_2005 } from './freeAgents2005';
+import { FREE_AGENT_BATTERS_2006, FREE_AGENT_PITCHERS_2006 } from './freeAgents2006';
+import { FREE_AGENT_BATTERS_2007, FREE_AGENT_PITCHERS_2007 } from './freeAgents2007';
+import { FREE_AGENT_BATTERS_2008, FREE_AGENT_PITCHERS_2008 } from './freeAgents2008';
+import { FREE_AGENT_BATTERS_2009, FREE_AGENT_PITCHERS_2009 } from './freeAgents2009';
+import { FREE_AGENT_BATTERS_2010, FREE_AGENT_PITCHERS_2010 } from './freeAgents2010';
 
 // ---------------------------------------------------------------------------
 // Lega STORICA: le 30 rose reali di un'annata importate come squadre del motore,
@@ -39,6 +49,11 @@ export const HISTORICAL_SEASONS: Record<number, HistTeam[]> = {
   2003: SEASON_2003,
   2004: SEASON_2004,
   2005: SEASON_2005,
+  2006: SEASON_2006,
+  2007: SEASON_2007,
+  2008: SEASON_2008,
+  2009: SEASON_2009,
+  2010: SEASON_2010,
 };
 
 /** Anni giocabili in ordine crescente (per la scelta a inizio partita). Nota:
@@ -82,6 +97,11 @@ const HISTORICAL_FREE_AGENTS: Record<
   2003: { bat: FREE_AGENT_BATTERS_2003, pit: FREE_AGENT_PITCHERS_2003 },
   2004: { bat: FREE_AGENT_BATTERS_2004, pit: FREE_AGENT_PITCHERS_2004 },
   2005: { bat: FREE_AGENT_BATTERS_2005, pit: FREE_AGENT_PITCHERS_2005 },
+  2006: { bat: FREE_AGENT_BATTERS_2006, pit: FREE_AGENT_PITCHERS_2006 },
+  2007: { bat: FREE_AGENT_BATTERS_2007, pit: FREE_AGENT_PITCHERS_2007 },
+  2008: { bat: FREE_AGENT_BATTERS_2008, pit: FREE_AGENT_PITCHERS_2008 },
+  2009: { bat: FREE_AGENT_BATTERS_2009, pit: FREE_AGENT_PITCHERS_2009 },
+  2010: { bat: FREE_AGENT_BATTERS_2010, pit: FREE_AGENT_PITCHERS_2010 },
 };
 
 /**

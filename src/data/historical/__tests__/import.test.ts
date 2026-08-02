@@ -174,10 +174,10 @@ describe('SEASON_1999 (dataset Lahman, 30 squadre)', () => {
   });
 });
 
-describe('Annate storiche multiple (1997→2005)', () => {
+describe('Annate storiche multiple (1997→2010)', () => {
   it('espone gli anni giocabili in ordine crescente', () => {
     expect(HISTORICAL_YEARS).toEqual([
-      1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+      1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
     ]);
   });
 
