@@ -10,8 +10,8 @@ import type { HistBatLine, HistPitLine } from './season2010';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_2010: HistBatLine[] = [
-  { id: 'redmomi01', name: 'Mike Redmond', pos: 'C', bats: 'R', age: 39, pa: 68, h: 15, double: 3, triple: 0, hr: 0, bb: 4, so: 8, hbp: 1, sb: 0, cs: 0, fld: 69, arm: 56 },
-  { id: 'gimench01', name: 'Chris Gimenez', pos: 'C', bats: 'R', age: 27, pa: 67, h: 9, double: 3, triple: 0, hr: 1, bb: 8, so: 20, hbp: 0, sb: 0, cs: 0, sec: '1B', fld: 71, arm: 73 },
+  { id: 'redmomi01', name: 'Mike Redmond', pos: 'C', bats: 'R', age: 39, pa: 68, h: 15, double: 3, triple: 0, hr: 0, bb: 4, so: 8, hbp: 1, sb: 0, cs: 0, fld: 69, arm: 52 },
+  { id: 'gimench01', name: 'Chris Gimenez', pos: 'C', bats: 'R', age: 27, pa: 67, h: 9, double: 3, triple: 0, hr: 1, bb: 8, so: 20, hbp: 0, sb: 0, cs: 0, sec: '1B', fld: 71, arm: 74 },
   { id: 'bucktr01', name: 'Travis Buck', pos: 'LF', bats: 'L', age: 26, pa: 48, h: 9, double: 2, triple: 0, hr: 1, bb: 4, so: 11, hbp: 1, sb: 1, cs: 0, sec: 'RF' },
   { id: 'murphdo01', name: 'Donnie Murphy', pos: '3B', bats: 'R', age: 27, pa: 47, h: 11, double: 4, triple: 1, hr: 2, bb: 3, so: 17, hbp: 0, sb: 0, cs: 0, sec: 'SS' },
   { id: 'hernalu01', name: 'Luis Hernandez', pos: '2B', bats: 'S', age: 26, pa: 47, h: 10, double: 1, triple: 0, hr: 1, bb: 3, so: 8, hbp: 1, sb: 1, cs: 0, sec: 'SS' },

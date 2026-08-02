@@ -10,7 +10,7 @@ import type { HistBatLine, HistPitLine } from './season2009';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_2009: HistBatLine[] = [
-  { id: 'toregwy01', name: 'Wyatt Toregas', pos: 'C', bats: 'R', age: 26, pa: 60, h: 9, double: 1, triple: 0, hr: 0, bb: 6, so: 12, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 75, arm: 61, rk: true },
+  { id: 'toregwy01', name: 'Wyatt Toregas', pos: 'C', bats: 'R', age: 26, pa: 60, h: 9, double: 1, triple: 0, hr: 0, bb: 6, so: 12, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 76, arm: 58, rk: true },
   { id: 'tholejo01', name: 'Josh Thole', pos: 'C', bats: 'L', age: 22, pa: 59, h: 17, double: 2, triple: 1, hr: 0, bb: 4, so: 5, hbp: 0, sb: 1, cs: 0, sec: '1B', rk: true },
   { id: 'berroan01', name: 'Angel Berroa', pos: '3B', bats: 'R', age: 31, pa: 55, h: 10, double: 3, triple: 0, hr: 0, bb: 4, so: 10, hbp: 1, sb: 0, cs: 0, sec: 'SS' },
   { id: 'martira03', name: 'Ramon Martinez', pos: 'SS', bats: 'R', age: 36, pa: 44, h: 8, double: 2, triple: 0, hr: 0, bb: 3, so: 7, hbp: 0, sb: 1, cs: 0, sec: '2B' },

@@ -10,10 +10,10 @@ import type { HistBatLine, HistPitLine } from './season2008';
 
 /** Battitori disponibili sul mercato (ordinati per minutaggio). */
 export const FREE_AGENT_BATTERS_2008: HistBatLine[] = [
-  { id: 'bernaro01', name: 'Roger Bernadina', pos: 'CF', bats: 'L', age: 24, pa: 86, h: 16, double: 1, triple: 1, hr: 0, bb: 9, so: 21, hbp: 0, sb: 4, cs: 3, sec: 'LF', fld: 68, arm: 84, rk: true },
+  { id: 'bernaro01', name: 'Roger Bernadina', pos: 'CF', bats: 'L', age: 24, pa: 86, h: 16, double: 1, triple: 1, hr: 0, bb: 9, so: 21, hbp: 0, sb: 4, cs: 3, sec: 'LF', fld: 68, arm: 88, rk: true },
   { id: 'orrpe01', name: 'Pete Orr', pos: '3B', bats: 'L', age: 29, pa: 79, h: 18, double: 2, triple: 1, hr: 0, bb: 2, so: 16, hbp: 0, sb: 1, cs: 1, sec: '2B' },
-  { id: 'cruzlu01', name: 'Luis Cruz', pos: 'SS', bats: 'R', age: 24, pa: 74, h: 15, double: 3, triple: 0, hr: 0, bb: 3, so: 2, hbp: 2, sb: 1, cs: 1, sec: '2B', fld: 88, rk: true },
-  { id: 'denorch01', name: 'Chris Denorfia', pos: 'LF', bats: 'R', age: 27, pa: 71, h: 18, double: 3, triple: 0, hr: 1, bb: 6, so: 15, hbp: 1, sb: 1, cs: 0, sec: 'CF', fld: 78, arm: 70 },
+  { id: 'cruzlu01', name: 'Luis Cruz', pos: 'SS', bats: 'R', age: 24, pa: 74, h: 15, double: 3, triple: 0, hr: 0, bb: 3, so: 2, hbp: 2, sb: 1, cs: 1, sec: '2B', fld: 94, rk: true },
+  { id: 'denorch01', name: 'Chris Denorfia', pos: 'LF', bats: 'R', age: 27, pa: 71, h: 18, double: 3, triple: 0, hr: 1, bb: 6, so: 15, hbp: 1, sb: 1, cs: 0, sec: 'CF', fld: 81, arm: 70 },
   { id: 'bankswe01', name: 'Wes Bankston', pos: '1B', bats: 'R', age: 24, pa: 63, h: 12, double: 3, triple: 0, hr: 1, bb: 2, so: 15, hbp: 1, sb: 0, cs: 0, sec: '3B', rk: true },
   { id: 'mackoro01', name: 'Rob Mackowiak', pos: 'LF', bats: 'L', age: 32, pa: 63, h: 14, double: 2, triple: 0, hr: 1, bb: 6, so: 14, hbp: 1, sb: 1, cs: 0, sec: 'RF' },
   { id: 'hoppeno01', name: 'Norris Hopper', pos: 'LF', bats: 'R', age: 29, pa: 58, h: 16, double: 2, triple: 0, hr: 0, bb: 4, so: 6, hbp: 0, sb: 2, cs: 1, sec: 'CF' },
