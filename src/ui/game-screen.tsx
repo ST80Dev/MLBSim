@@ -17,6 +17,7 @@ import { LineScore } from './game-boxscore';
 import { PlayBanner, CronacaTeam } from './game-cronaca';
 import { StatsToggle, LineupSide } from './game-lineup';
 import { subRatingChips } from './game-submodal';
+import type { GameStatCtx } from './stat-context';
 
 // ---------------------------------------------------------------------------
 // Plancia di partita: barra stat (squadre + duello del turno + line score) e il
@@ -39,6 +40,8 @@ export function GameScreen({
   shownPlays,
   onReveal,
   controls,
+  ctxAway,
+  ctxHome,
 }: {
   result: GameResult;
   sit: LiveSituation;
@@ -63,13 +66,17 @@ export function GameScreen({
   shownPlays?: number;
   onReveal?: () => void;
   controls: ReactNode;
+  // Contesti stat (stagione in corso / precedente) per ospite e casa. Assenti in
+  // calibrazione: lì restano solo le stat di Partita.
+  ctxAway?: GameStatCtx;
+  ctxHome?: GameStatCtx;
 }) {
   const dResult = displayResult ?? result;
   const dSit = displaySit ?? sit;
   const fieldBases = basesShown ?? dSit.bases;
   return (
     <div className="game-screen">
-      <StatBar result={dResult} sit={dSit} basesShown={fieldBases} />
+      <StatBar result={dResult} sit={dSit} basesShown={fieldBases} ctxAway={ctxAway} ctxHome={ctxHome} />
 
       <div className={editing ? 'gamefield editing' : 'gamefield'}>
         <Diamond
@@ -97,10 +104,10 @@ export function GameScreen({
         </div>
 
         <div className="lineup-corner left">
-          <LineupSide side="away" team={dResult.away} stats={dResult.awayStats} sit={dSit} />
+          <LineupSide side="away" team={dResult.away} stats={dResult.awayStats} sit={dSit} ctx={ctxAway} />
         </div>
         <div className="lineup-corner right">
-          <LineupSide side="home" team={dResult.home} stats={dResult.homeStats} sit={dSit} />
+          <LineupSide side="home" team={dResult.home} stats={dResult.homeStats} sit={dSit} ctx={ctxHome} />
         </div>
 
         <div className="controls-overlay">{controls}</div>
@@ -136,10 +143,14 @@ function StatBar({
   result,
   sit,
   basesShown,
+  ctxAway,
+  ctxHome,
 }: {
   result: GameResult;
   sit: LiveSituation;
   basesShown?: [boolean, boolean, boolean];
+  ctxAway?: GameStatCtx;
+  ctxHome?: GameStatCtx;
 }) {
   const arrow = sit.half === 'top' ? '▲' : '▼';
   const halfLabel = sit.half === 'top' ? 'attacco' : 'chiusura';
@@ -152,6 +163,7 @@ function StatBar({
         score={result.final.away}
         involved={involvedFor(result, sit, 'away')}
         win={decided && sit.winner === 'away'}
+        ctx={ctxAway}
       />
 
       <div className="statbar-center">
@@ -171,6 +183,7 @@ function StatBar({
         score={result.final.home}
         involved={involvedFor(result, sit, 'home')}
         win={decided && sit.winner === 'home'}
+        ctx={ctxHome}
       />
     </div>
   );
@@ -182,12 +195,14 @@ function TeamStatSide({
   score,
   involved,
   win,
+  ctx,
 }: {
   side: Side;
   team: Team;
   score: number;
   involved: Involved;
   win: boolean;
+  ctx?: GameStatCtx;
 }) {
   // Selettore stat LOCALE a questo lato dello scoreboard (indipendente dagli altri
   // blocchi della schermata).
@@ -197,8 +212,8 @@ function TeamStatSide({
   const synth = teamSynthesis(team.lineup.map((b) => ({ b, pos: b.position })));
   const items: StatItem[] =
     involved.kind === 'batter'
-      ? batterStatLine(mode, involved.batLine, involved.batter!)
-      : pitcherStatLine(mode, involved.pitLine, involved.pitcher!);
+      ? batterStatLine(mode, involved.batLine, involved.batter && ctx?.batLine(mode, involved.batter))
+      : pitcherStatLine(mode, involved.pitLine, involved.pitcher && ctx?.pitLine(mode, involved.pitcher));
   const player = involved.kind === 'batter' ? involved.batter! : involved.pitcher!;
   const lan =
     involved.kind === 'pitcher'
