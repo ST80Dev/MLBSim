@@ -71,10 +71,16 @@ export const GENERATED_MODE: LeagueMode = {
   cap: { mode: 'soft', amount: DEFAULT_CAP_AMOUNT },
 };
 
-/** Import storico: squilibrio reale, cap MORBIDO (sforabile). */
+/** Import storico: cap PIÙ BASSO del generato (172 vs 250, muro 215 vs 312 — stesso
+ *  rapporto ×1.25). Le rose reali sono "dense di scarti" e partono a ~110-195M (contro
+ *  i ~200M dei generati, pieni di stelle garantite): un cap 250 non vincolava nulla e
+ *  lasciava impilare campioni via scambi. 172/215 morde davvero — le corazzate reali
+ *  (max ~195M) restano GIOCABILI (`capOk`: chi è sopra può alleggerirsi, mai
+ *  appesantirsi) e si sgonfiano gradualmente ai rollover, ma non si può più ammassare
+ *  talento. Muro derivato dal rapporto standard: nessun override, invariante salva. */
 export const HISTORICAL_MODE: LeagueMode = {
   source: 'historical',
-  cap: { mode: 'soft', amount: DEFAULT_CAP_AMOUNT },
+  cap: { mode: 'soft', amount: 172 },
 };
 
 /** Monte-ingaggi di una squadra (milioni): somma degli stipendi dei 25 attivi + depth. */

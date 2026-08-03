@@ -187,6 +187,24 @@ La riconciliazione fa rientrare ogni squadra **sotto il *suo* tetto**, non sotto
 il cap base → **ogni anno alcune squadre stanno sopra il cap base** ("hanno
 pagato la tassa"), altre sotto: il tessuto non collassa mai in omogeneità.
 
+### Cap PER MODALITÀ (generato 250/312 vs storico 172/215)
+
+Il cap base **non è lo stesso** nelle due modalità, perché le due leghe hanno una
+densità-talento diversa:
+
+- **Generata** — cap **250** / muro **312**. Il generatore dà a ogni squadra stelle
+  garantite + pavimenti di rosa (niente scarti): payroll mediano ~200M, alcune
+  corazzate fino a ~350M. Il cap 250 è calibrato su questa densità.
+- **Storica** — cap **172** / muro **215** (stesso rapporto ×1.25). Le rose reali
+  sono "dense di scarti" (i loro scrub costano il minimo), quindi partono più
+  leggere (~110-205M, mediana ~155M): col cap 250 il tetto **non vincolava nulla**
+  e si potevano ammassare campioni via scambi restando sotto il muro (una dream-team
+  dei 25 più forti costa ~420M, ma bastava riempire l'ampio margine). A 172/215 il
+  cap **morde**: le corazzate reali (max ~205M) restano **giocabili** (`capOk`: chi è
+  sopra può alleggerirsi, mai appesantirsi) e si sgonfiano ai rollover, la mediana
+  ha ~3 stelle di headroom (non ~8), nessuna squadra parte oltre il muro. Muro
+  derivato dal rapporto standard (`outerWall`): nessun override, invariante ε salva.
+
 **Espressione minimale, zero finanza:** ε è **seedato** da `(seed, teamId, anno)`
 → deterministico, **niente soldi/multe/registri/stato da salvare**. Solo un tetto
 che oscilla.
