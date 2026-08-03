@@ -2379,13 +2379,22 @@ table {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  row-gap: 5px;
 }
 .actionbar.compact .ab-side.left {
   justify-self: end;
+  justify-content: flex-end;
 }
 .actionbar.compact .ab-side.right {
   justify-self: start;
+  justify-content: flex-start;
+}
+/* Pulsanti un filo più compatti nella barra comandi: più azioni per riga, meno
+   probabilità di andare a capo (e mai di sforare sui boxscore). */
+.actionbar.compact .btn.sm {
+  padding: 5px 9px;
+  font-size: 12.5px;
 }
 .actionbar.compact .ab-main {
   justify-self: center;
@@ -2404,9 +2413,11 @@ table {
   font-weight: 800;
   letter-spacing: 0.02em;
 }
-/* Piu' larghezza (una riga di comandi) e piu' spazio a casa base */
+/* Larghezza VINCOLATA al varco centrale tra i due boxscore laterali (~31% each):
+   la barra non deve mai sforarvi sopra. Le zone tattiche/sostituzioni vanno a
+   capo dentro questo limite; il primario resta centrato e fisso. */
 .controls-overlay {
-  width: max-content;
+  width: min(500px, 34%);
   max-width: 92%;
 }
 .controls-overlay .actionbar.compact {

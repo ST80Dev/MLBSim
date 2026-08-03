@@ -48,10 +48,12 @@ export function ActionBar({
   const noRelievers = availableRelievers(defenseSide(live)).length === 0;
   const hasRunner = sit.bases.some(Boolean);
 
-  // Layout a 3 ZONE: [turn-tag] [AZIONE PRIMARIA centrata FISSA] [tattici].
+  // Layout a 3 ZONE: [tag + TATTICHE] · [AZIONE PRIMARIA centrata FISSA] · [SOSTITUZIONI].
   // Il primario (Battuta/Lancia) è ancorato al centro (sotto casa base) e NON si
-  // sposta al variare dei tattici (che compaiono a destra): così il mouse resta
-  // dov'è e si clicca senza riguardare. Una sola riga (altezza invariata).
+  // sposta. Le altre azioni sono DIVISE PER TIPO ai due lati: le tattiche di gioco
+  // a sinistra (col tag di turno), le sostituzioni a destra. Così la barra resta
+  // bilanciata attorno al primario e, entro la sua larghezza massima, non sfora
+  // sui boxscore laterali (le zone vanno a capo se serve).
   const bar = waiting ? (
     // Turno in corso: si aspetta il verdetto della telecronaca prima di mostrare
     // i comandi del turno successivo.
@@ -62,13 +64,6 @@ export function ActionBar({
     <div className="card actionbar compact">
       <div className="ab-side left">
         <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
-      </div>
-      <div className="ab-main">
-        <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
-          Battuta
-        </button>
-      </div>
-      <div className="ab-side right">
         <button
           className="btn sm"
           disabled={!sit.canBunt}
@@ -122,6 +117,13 @@ export function ActionBar({
             Hit &amp; Run
           </button>
         )}
+      </div>
+      <div className="ab-main">
+        <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
+          Battuta
+        </button>
+      </div>
+      <div className="ab-side right">
         <button
           className="btn sm"
           disabled={noBench}
@@ -146,17 +148,6 @@ export function ActionBar({
     <div className="card actionbar compact">
       <div className="ab-side left">
         <span className="turn-tag def">DIFESA · {sit.fieldingTeam.abbrev}</span>
-      </div>
-      <div className="ab-main">
-        <button
-          className="btn primary sm"
-          onClick={() => act((g) => cpuOffenseTurn(g))}
-          title="La CPU decide la battuta (può anche rubare/buntare): premi «Lancia» per risolvere"
-        >
-          Lancia ▸
-        </button>
-      </div>
-      <div className="ab-side right">
         <button
           className="btn sm"
           onClick={() => act((g) => intentionalWalk(g))}
@@ -189,6 +180,17 @@ export function ActionBar({
         >
           Difendi le righe
         </button>
+      </div>
+      <div className="ab-main">
+        <button
+          className="btn primary sm"
+          onClick={() => act((g) => cpuOffenseTurn(g))}
+          title="La CPU decide la battuta (può anche rubare/buntare): premi «Lancia» per risolvere"
+        >
+          Lancia ▸
+        </button>
+      </div>
+      <div className="ab-side right">
         <button
           className="btn sm"
           disabled={noRelievers}
