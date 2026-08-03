@@ -5,6 +5,7 @@ import { recordOf, sortByRecord, gamesBehind } from '../data/season';
 import type { ScheduleGame, Schedule } from '../data/schedule';
 import { teamById, divisionRivals, LEAGUE_LABEL, DIVISION_LABEL } from '../data/league';
 import { rosterBatters, rosterPitchers } from '../engine/arrangement';
+import { withRotationStarter, rotationPhase } from '../data/generator';
 import { pitcherOverall } from '../engine/ratings';
 import { ratingColor } from './format';
 import { TeamBadge } from './widgets';
@@ -374,7 +375,11 @@ function MatchCard({
   onPlay: (g: ScheduleGame) => void;
 }) {
   const mySP = managedTeam.rotation[i % managedTeam.rotation.length];
-  const oppSP = opp.rotation[i % opp.rotation.length];
+  // Partente avversario: STESSA formula della gara reale (App.tsx `teams`), cioè
+  // rotazione posizionale per giorno + lo sfasamento proprio della squadra
+  // (`rotationPhase`). Senza la fase il card mostrava un partente e ne giocava un
+  // altro (`i` == giorno di stagione per il card corrente).
+  const oppSP = withRotationStarter(opp, i + rotationPhase(opp)).rotation[0];
   const won = result ? result.us > result.them : false;
   // OVR + record di stagione (W-L) del partente probabile, accanto al nome.
   const spMeta = (sp?: Pitcher) => {
