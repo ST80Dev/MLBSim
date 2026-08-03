@@ -38,11 +38,11 @@ describe('playoff — rotazione accorciata (asso Gara 1 → Gara 4)', () => {
     expect(isAvailable(rot, 'ace', 2)).toBe(false); // Gara 3: ancora a riposo
     expect(isAvailable(rot, 'ace', 3)).toBe(true); // Gara 4: di nuovo disponibile
   });
-  it('in regular season lo stesso partente riposa di più (4 gare)', () => {
+  it('in regular season lo stesso partente riposa di più (3 gare)', () => {
     const rot = recordUsage(createRotation(), [{ id: 'ace', outs: 18, started: true }], 0);
-    expect(REST_STARTER).toBe(4);
-    expect(isAvailable(rot, 'ace', 4)).toBe(false);
-    expect(isAvailable(rot, 'ace', 5)).toBe(true);
+    expect(REST_STARTER).toBe(3);
+    expect(isAvailable(rot, 'ace', 3)).toBe(false); // Gara 4: ancora a riposo
+    expect(isAvailable(rot, 'ace', 4)).toBe(true); // Gara 5: di nuovo disponibile
   });
 });
 

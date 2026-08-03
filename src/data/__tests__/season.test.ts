@@ -54,8 +54,8 @@ describe('advanceWithResult', () => {
     const s1 = advanceWithResult(createSeason(), res, home.id, teams, 2024);
     const managed = res.home.id === home.id ? res.homeStats : res.awayStats;
     const starterId = managed.pitching[0].id;
-    // Il partente apre al giorno 0 → riposo 4 gare → torna disponibile al giorno 5.
-    expect(s1.rotation.availableFrom[starterId]).toBe(5);
+    // Il partente apre al giorno 0 → riposo 3 gare → torna disponibile al giorno 4.
+    expect(s1.rotation.availableFrom[starterId]).toBe(4);
     // Ogni lanciatore sceso in campo ha una disponibilità registrata (>= giorno 1).
     for (const pl of managed.pitching) {
       expect(s1.rotation.availableFrom[pl.id]).toBeGreaterThanOrEqual(1);

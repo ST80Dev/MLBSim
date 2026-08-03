@@ -83,7 +83,9 @@ lista dei partenti nel Roster. Ogni lanciatore matura un **riposo in gare** in
 base all'**uso reale** dell'ultima partita (out lanciati), tracciato in
 `SeasonState.rotation.availableFrom`:
 
-- **partente / spot start** → 4 gare (un ciclo naturale a 5 uomini);
+- **partente / spot start** → 3 gare (riposo **minimo**: l'asso di gara 1 rientra
+  alla gara 5, così è possibile anche una **rotazione a 4 uomini**; con 5 partenti
+  sani si gira comunque a 5, vedi sotto);
 - **rilievo da 2+ IP** (6+ out) → 1 gara; **sotto le 2 IP** → 0 (pronto la gara dopo).
 
 I rilievi restano quasi sempre disponibili (i bullpen sono corti): solo chi si
@@ -94,9 +96,12 @@ difficile. *(Nota: non c'è un tetto al numero di lanciatori attivi/bullpen in
 Nel Roster (tab lanciatori, pre-gara di regular season) due **colonne dedicate**:
 **RIP.** (badge `pronto` / `+N g`) e **PARTE** (pulsante “parte” sulle righe di
 rotazione). I partenti a riposo non sono eleggibili. Il **partente del giorno** è
-di default il **primo in ordine non a riposo** (`suggestedStarter`); si
-sceglie/conferma dalla colonna PARTE (per far partire una riserva la si
-**scambia** prima in rotazione). Portare un lanciatore da *Disponibili* agli
+di default il **più riposato** fra i disponibili (`suggestedStarter`, ordine di
+rotazione a spareggio): così con 5 partenti sani la rotazione a 5 **non collassa**
+a 4 solo perché il riposo minimo (3 gare) renderebbe l'asso già schierabile — parte
+il più fresco e l'asso si prende la gara di riposo in più. Si sceglie/conferma dalla
+colonna PARTE (per far partire una riserva la si **scambia** prima in rotazione);
+per una rotazione a 4 uomini basta schierare l'asso appena smaltite le 3 gare. Portare un lanciatore da *Disponibili* agli
 attivi è sempre uno **swap** (la rosa attiva resta a taglia costante).
 
 ## Stipendi
