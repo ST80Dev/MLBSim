@@ -55,6 +55,7 @@ import { FinalOverlay } from './game-lineup';
 import { RecapModal } from './game-recap';
 import { GameScreen } from './game-screen';
 import { ActionBar } from './game-actionbar';
+import { DefenseModal } from './game-defense';
 import { RosterPage } from './pages-roster';
 import { HomePage } from './pages-home';
 import { StartScreen, LeagueOverview, GameInfoBadge, FranchisePage } from './pages-start';
@@ -220,6 +221,12 @@ export function App() {
   // Partente scelto per OGGI dalla UI (override); null = usa il consigliato dal
   // ciclo di rotazione (rispetta il riposo). Si azzera al cambio gara/giorno.
   const [todayStarter, setTodayStarter] = useState<string | null>(null);
+  // Pannello "Gestione difesa" (rotazione ruoli + sostituzioni). Si apre da solo a
+  // inizio della metà difensiva dell'umano se nell'attacco precedente ha usato un
+  // pinch-hit/run (così può risistemare lo schieramento prima di lanciare).
+  const [defenseOpen, setDefenseOpen] = useState(false);
+  const pendingDefReview = useRef(false);
+  const prevControlledBatting = useRef(false);
   const isRegularGame = !activeGame || activeGame.phase === 'regular';
   const isPlayoffGame = !!activeGame && activeGame.phase === 'playoff';
   const teams = useMemo(() => {
@@ -303,6 +310,9 @@ export function App() {
   // Il partente scelto vale per un solo giorno/gara: azzera al cambiare.
   useEffect(() => {
     setTodayStarter(null);
+    setDefenseOpen(false);
+    pendingDefReview.current = false;
+    prevControlledBatting.current = false;
   }, [season.day, activeGame]);
 
   // Seme di gara deterministico dalla partita di calendario scelta.
@@ -338,6 +348,18 @@ export function App() {
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
+
+  // Apertura automatica del pannello difesa: quando l'umano PASSA in difesa
+  // (batteva, ora schiera) dopo aver usato un pinch-hit/run, così può riorganizzare
+  // lo schieramento prima del primo lancio. `sit.controlledBatting` = l'umano batte.
+  const controlledBatting = sit.controlledBatting;
+  useEffect(() => {
+    if (prevControlledBatting.current && !controlledBatting && pendingDefReview.current && !final) {
+      pendingDefReview.current = false;
+      setDefenseOpen(true);
+    }
+    prevControlledBatting.current = controlledBatting;
+  }, [controlledBatting, final]);
 
   // --- Rivelazione ritardata dei marker sulle basi -------------------------
   // I marker (basi + corridori sul diamante) NON si spostano appena eseguito il
@@ -811,10 +833,25 @@ export function App() {
                 sit={sit}
                 act={act}
                 onSub={revealField}
+                onOpenDefense={() => setDefenseOpen(true)}
+                onOffenseSub={() => {
+                  pendingDefReview.current = true;
+                }}
                 waiting={result.play.length > shownPlays}
               />
             )
           }
+        />
+      )}
+
+      {view === 'game' && activeGame && defenseOpen && !final && (
+        <DefenseModal
+          live={live}
+          act={(fn) => {
+            act(fn);
+            revealField();
+          }}
+          onClose={() => setDefenseOpen(false)}
         />
       )}
 

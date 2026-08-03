@@ -26,6 +26,8 @@ export function ActionBar({
   sit,
   act,
   onSub,
+  onOpenDefense,
+  onOffenseSub,
   waiting,
 }: {
   live: LiveGame;
@@ -36,6 +38,11 @@ export function ActionBar({
   // deve rivelare immediatamente marker/testata/boxscore invece di aspettare il
   // verdetto della telecronaca del turno successivo.
   onSub?: () => void;
+  // Apre il pannello "Gestione difesa" (rotazione ruoli + sostituzioni).
+  onOpenDefense?: () => void;
+  // Segnala che l'umano ha fatto un pinch-hit/run: a inizio della sua metà
+  // difensiva il pannello difesa si aprirà da solo per risistemare lo schieramento.
+  onOffenseSub?: () => void;
   // true mentre la telecronaca del turno APPENA giocato non è ancora arrivata al
   // verdetto: la barra NON deve proporre i comandi del turno successivo (non sai
   // ancora se sei stato eliminato o è stata una valida). Mostra un'attesa.
@@ -199,11 +206,10 @@ export function ActionBar({
         </button>
         <button
           className="btn sm"
-          disabled={noBench}
-          onClick={() => setSub('fielders')}
-          title="Sostituzione difensiva: cambia un difensore"
+          onClick={() => onOpenDefense?.()}
+          title="Gestione difesa: ruota i ruoli fra i difensori e sostituisci dalla panchina"
         >
-          Cambio dif.
+          Gestione difesa
         </button>
       </div>
     </div>
@@ -219,6 +225,7 @@ export function ActionBar({
           act={(fn) => {
             act(fn);
             onSub?.(); // sostituzione = aggiornamento UI immediato (no attesa verdetto)
+            if (sub === 'pinchhit' || sub === 'pinchrun') onOffenseSub?.();
           }}
           onClose={() => setSub(null)}
         />
