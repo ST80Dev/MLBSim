@@ -45,6 +45,15 @@ Caratteristiche (40-100) ──derive──►  Statistiche di conteggio  ──
     (euristica epoca alta offesa: leadoff OBP/velocità, cleanup potenza) e
     `validateFieldSet` (vincolo duro: le 9 caselle coperte esattamente una
     volta). Puro e deterministico.
+  - `arrangement.ts` — **foglio partita** (`MatchArrangement`): reslot di una rosa
+    piatta in lineup/rotazione/bullpen/depth con ruoli ed endurance per-slot
+    (`asRole`/`deriveStamina`). Entra nella simulazione via `buildManagedTeam`.
+  - `statsToRatings.ts` — **inversione statistiche → caratteristiche** per l'import
+    storico (inverse di `deriveBatter/PitcherStats`; regressione per campione).
+  - `teamRatings.ts` — sintesi difensiva per reparto (`groupDefenseSynthesis`,
+    `DEF_WEIGHT`), consumata sia dalla UI sia dalla difesa dietro il lanciatore.
+  - `value.ts` — **`playerValue`** (atomo overall-equivalente per scambi e cap).
+  - `names.ts` — split nome/cognome per i giocatori storici (import Lahman).
   - `index.ts` — barrel dell'API pubblica.
   - `__tests__/` — test Vitest (determinismo, realismo, cime di eccellenza).
 - `src/data/` — generazione procedurale e dati.
@@ -61,8 +70,21 @@ Caratteristiche (40-100) ──derive──►  Statistiche di conteggio  ──
   - `franchises.ts` — le 30 franchigie MLB reali (dati fattuali).
   - `names.ts` — pool di nomi per **origine** (`NAME_ORIGINS`: nordamericana,
     latina, giapponese, coreana, varie) con pesi.
-  - `stadiumImages.ts` — override opzionale foto-stadio *in locale* (mappa vuota
-    di default; nessun asset ufficiale nel repo).
+  - `stadiumImages.ts` / `stadiumCalibration.ts` — override foto-stadio *in locale*
+    e geometria dei marker sul campo (puro display, **non** entra nel sim).
+  - **Modalità & lega** — `leagueMode.ts` (generata vs storica, `SalaryCapPolicy`,
+    `effectiveCap`/ε), `league.ts` (lega generata da seed).
+  - **Import storico** — `historical/` (14 annate reali 1997-2010:
+    `season<ANNO>.ts` + `freeAgents<ANNO>.ts`, `import.ts`, `league.ts` con
+    `HISTORICAL_SEASONS`/`buildHistoricalLeague`). Pipeline di build in
+    `scripts/build-historical.mjs`.
+  - **Stagione (Fase 4)** — `schedule.ts` (calendario a serie, `TRADE_DEADLINE_GAME`),
+    `rotation.ts` (riposo/partente del giorno), `season.ts` (stagione a stati),
+    `projection.ts` (proiezione d'annata per le CPU), `playoff.ts` (postseason a
+    12 squadre).
+  - **Franchigia (Fase 5)** — `offseason.ts` (mercato a blocchi + riallineamento
+    AI↔AI), `draft.ts` (draft inverso), `trades.ts` (`evaluateTrade`/`applyTrade`),
+    `offseasonRun.ts` + `rollover.ts` (`rolloverSeason`: lega → anno successivo).
   - `persistence/` — **layer di salvataggio** (Fase 2). `saveStore.ts` definisce
     l'interfaccia `SaveStore` (list/load/save/remove) + il tipo versionato
     `GameSave` e `SCHEMA_VERSION`; `supabaseSaveStore.ts` la implementa su

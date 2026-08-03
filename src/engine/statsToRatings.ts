@@ -13,7 +13,7 @@ import { clampRating, RATING_AVG, AB_SCALE } from './ratings';
 // Inversione statistiche -> caratteristiche.
 //
 // E' l'inverso (approssimato) di `deriveBatterStats`/`derivePitcherStats`: dato
-// un tabellino REALE (media, HR, K, BB...), stima le doti 20-80 che, riderivate,
+// un tabellino REALE (media, HR, K, BB...), stima le doti 40-100 che, riderivate,
 // riproducono quel rendimento. Serve a IMPORTARE una stagione storica: le stat
 // storiche sono la fonte, i rating l'output, cosi' il giocatore entra nel motore
 // come qualunque altro e puo' essere ri-simulato ("caratteristiche = fonte di
