@@ -1666,6 +1666,16 @@ table {
   z-index: 6;
   backdrop-filter: blur(3px);
 }
+/* A fine partita l'overlay è montato NELLA slot dei comandi (`.controls-overlay`,
+   ancorata in basso): lì deve scorrere in flusso e prendere il posto del box
+   azioni, non riposizionarsi col proprio `top:16%` (che, calcolato sul piccolo
+   contenitore in basso, lo spingeva fuori schermo in fondo). */
+.controls-overlay .final-overlay {
+  position: static;
+  top: auto;
+  left: auto;
+  transform: none;
+}
 .final-overlay.won {
   border-color: var(--win);
 }
