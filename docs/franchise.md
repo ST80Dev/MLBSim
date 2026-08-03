@@ -420,12 +420,16 @@ riempiono. Conseguenza sul mercato a blocchi: il trigger di rilascio dell'AI è
 
 ### Draft in modalità STORICA: nomi reali, rating ciechi
 
-> ⚠️ **Non ancora implementato.** `generateDraftClass` (`draft.ts`) usa **sempre**
-> nomi **fittizi** (`makeNameFactory`) con rating ciechi, senza il ramo storico
-> descritto qui: in una lega storica le classi di draft degli anni successivi al
-> primo escono con nomi generati, non con i debuttanti reali dell'annata. Il
-> design sotto resta il bersaglio; i **rating ciechi** (nessuna preveggenza) sono
-> già rispettati — manca solo l'aggancio dei **nomi reali** dall'archivio Lahman.
+> ✅ **Implementato.** In lega storica il draft dell'off-season usa i **nomi reali
+> dei debuttanti** dell'annata d'ingresso: `runOffseason`/`rolloverSeason`
+> ricevono `realDraftNames` (App: `debutantsForYear(season.year + 1)` solo se
+> `source === 'historical'`) e `generateDraftClass(seed, size, realNames?)` pesca
+> nome + mano dal pool, con **rating ciechi** invariati (stessa generazione
+> giovane/grezza; nessuna stat reale, nessuna preveggenza). Esaurito il pool — o
+> fuori dalla copertura reale (annate oltre i dati Lahman, o lega generata) — si
+> ricade sui **nomi fittizi**. Dati in `src/data/historical/debutants.ts`
+> (`DEBUTANTS_BY_YEAR`, 1998-2015), generati da `scripts/build-debutants.mjs`
+> (Lahman `People.csv`, campo `debut`: solo nome/mano, nessuna statistica).
 
 **Decisione di design.** In una lega storica (import di un'annata, es. 1999) le
 classi di draft/ingresso degli anni successivi (2000, 2001, …) usano i **nomi

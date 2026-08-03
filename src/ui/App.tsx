@@ -63,6 +63,7 @@ import { StandingsPage, PlayoffPage } from './pages-standings';
 import { RolloverRecap } from './rollover-recap';
 import type { RolloverRecapData } from './rollover-recap';
 import { rolloverSeason } from '../data/rollover';
+import { debutantsForYear } from '../data/historical/debutants';
 import { TradeScreen } from './trade-screen';
 import { CalibrationScreen, CalibrationPanel } from './calibration';
 import type { Side, SavedGame } from './types';
@@ -594,7 +595,15 @@ export function App() {
       teams: league,
       season,
       seed: leagueSeed,
-      options: { managedId: myId, mode: leagueMode },
+      options: {
+        managedId: myId,
+        mode: leagueMode,
+        // Modalità storica: il draft dell'annata d'ingresso (anno successivo) usa
+        // i NOMI reali dei debuttanti di quell'anno (rating ciechi, nessuna
+        // preveggenza). Lega generata o annata fuori copertura → nomi fittizi.
+        realDraftNames:
+          source === 'historical' ? debutantsForYear(season.year + 1) : undefined,
+      },
     });
     setLeagueTeams(result.teams);
     setSeason(result.season);
@@ -627,6 +636,16 @@ export function App() {
   // Finestra scambi: in stagione (o prestagione) fino alla trade deadline; chiusa
   // in postseason e a stagione conclusa.
   const tradesOpen = stage === 'play' && !regularOver && season.day < TRADE_DEADLINE_GAME;
+
+  // Etichetta di fase della CAMPAGNA nell'header (auto-aggiornata, non un marcatore
+  // di sviluppo statico): stagione regolare con contatore gare, poi playoff.
+  const campaignPhase = playoff
+    ? playoff.championId
+      ? '🏆 Campione'
+      : '🏆 Playoff'
+    : regularOver
+      ? 'Off-season'
+      : `Stagione · G${Math.min(season.day + 1, REGULAR_GAMES)}/${REGULAR_GAMES}`;
 
   // Etichetta/azione del pulsante di fine gara secondo la fase.
   const finishLabel = isSeasonGame
@@ -709,7 +728,7 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="logo">⚾</span> MLBSim
-          <span className="phase">Fase 2</span>
+          <span className="phase">{campaignPhase}</span>
         </div>
 
         <GameInfoBadge source={source} year={season.year} />

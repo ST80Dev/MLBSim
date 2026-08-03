@@ -3,6 +3,7 @@ import { makeRng } from '../engine/rng';
 import { advanceSeasonBatter, advanceSeasonPitcher } from '../engine/aging';
 import type { WLRecord } from './season';
 import { runInverseDraft } from './draft';
+import type { DebutName } from './historical/debutants';
 import { assembleTeam } from './generator';
 import { GENERATED_MODE, type LeagueMode } from './leagueMode';
 import {
@@ -37,6 +38,9 @@ export interface OffseasonOptions {
   mode?: LeagueMode;
   /** Segnale rendimento/utilizzo per l'aging (default 0 = neutro, seam di Fase 4). */
   perf?: number;
+  /** Modalità STORICA: nomi reali dei debuttanti dell'annata d'ingresso per il draft
+   *  (rating comunque ciechi — nessuna preveggenza). Assente → nomi fittizi. */
+  realDraftNames?: DebutName[];
 }
 
 export interface OffseasonSummary {
@@ -120,11 +124,13 @@ export function runOffseason(
   standings: Record<string, WLRecord>,
   opts: OffseasonOptions = {},
 ): OffseasonSummary {
-  const { managedId, mode = GENERATED_MODE, perf = 0 } = opts;
+  const { managedId, mode = GENERATED_MODE, perf = 0, realDraftNames } = opts;
 
   // 1. Fase una-tantum: aging+ritiri, poi draft inverso (prospetti nella depth).
+  //    In modalità storica i prospetti prendono i NOMI reali dei debuttanti
+  //    dell'annata d'ingresso (rating ciechi); altrimenti nomi fittizi.
   const { teams: aged, retired } = ageAndRetire(teams, seed, year, perf);
-  const drafted = runInverseDraft(aged, standings, seed);
+  const drafted = runInverseDraft(aged, standings, seed, undefined, realDraftNames);
 
   // 2. Mercato a blocchi (rilasci/firme intrecciati + riallineamento AI↔AI), automatico.
   const opened = startOffseason(drafted.teams, seed, year, managedId, mode);

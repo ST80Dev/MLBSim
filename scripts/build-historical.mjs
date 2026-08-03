@@ -3,7 +3,7 @@
 // Pipeline import storico — dal dataset Lahman (Baseball Databank) a `HistTeam`.
 //
 // Genera `src/data/historical/season<ANNO>.ts` con le 30 rose reali di
-// un'annata, nel formato che l'importatore (`import.ts`) inverte in rating 20-80
+// un'annata, nel formato che l'importatore (`import.ts`) inverte in rating 40-100
 // e ri-simula. NON committiamo loghi/foto: solo dati statistici fattuali.
 //
 // Uso:

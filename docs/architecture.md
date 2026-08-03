@@ -76,8 +76,9 @@ Caratteristiche (40-100) ──derive──►  Statistiche di conteggio  ──
     `effectiveCap`/ε), `league.ts` (lega generata da seed).
   - **Import storico** — `historical/` (14 annate reali 1997-2010:
     `season<ANNO>.ts` + `freeAgents<ANNO>.ts`, `import.ts`, `league.ts` con
-    `HISTORICAL_SEASONS`/`buildHistoricalLeague`). Pipeline di build in
-    `scripts/build-historical.mjs`.
+    `HISTORICAL_SEASONS`/`buildHistoricalLeague`; `debutants.ts` con
+    `DEBUTANTS_BY_YEAR` per il draft storico a nomi reali). Pipeline di build in
+    `scripts/build-historical.mjs` e `scripts/build-debutants.mjs` (Lahman).
   - **Stagione (Fase 4)** — `schedule.ts` (calendario a serie, `TRADE_DEADLINE_GAME`),
     `rotation.ts` (riposo/partente del giorno), `season.ts` (stagione a stati),
     `projection.ts` (proiezione d'annata per le CPU), `playoff.ts` (postseason a

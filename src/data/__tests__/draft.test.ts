@@ -9,8 +9,23 @@ import { generateLeague } from '../league';
 import { playerValue } from '../../engine/value';
 import { batterOverall, pitcherOverall } from '../../engine/ratings';
 import type { WLRecord } from '../season';
+import { debutantsForYear, type DebutName } from '../historical/debutants';
 
 const SEED = 20260728;
+
+/** Pool sintetico di nomi reali "abbastanza grande" da coprire l'intera classe. */
+function fakePool(n: number): DebutName[] {
+  const out: DebutName[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push({
+      first: `Real${i}`,
+      last: `Debutante${i}`,
+      bats: i % 3 === 0 ? 'S' : i % 2 === 0 ? 'L' : 'R',
+      throws: i % 4 === 0 ? 'L' : 'R',
+    });
+  }
+  return out;
+}
 
 describe('generateDraftClass', () => {
   it('e deterministica dal seed', () => {
@@ -33,6 +48,80 @@ describe('generateDraftClass', () => {
     // Mix di entrambi i tipi (nessuna classe monotipo).
     expect(c.batters.length).toBeGreaterThan(0);
     expect(c.pitchers.length).toBeGreaterThan(0);
+  });
+});
+
+describe('generateDraftClass — nomi reali storici, rating ciechi', () => {
+  const SIZE = 40;
+  const POOL = fakePool(80); // > SIZE → ogni prospetto prende un nome reale
+
+  it('e deterministica col pool (stesso seed+pool → stessa classe)', () => {
+    const a = JSON.stringify(generateDraftClass(SEED, SIZE, POOL));
+    const b = JSON.stringify(generateDraftClass(SEED, SIZE, POOL));
+    expect(a).toBe(b);
+  });
+
+  it('usa NOMI e MANO reali dal pool (nome+mano dell’entry del pool)', () => {
+    const byName = new Map(POOL.map((d) => [`${d.first} ${d.last}`, d]));
+    const c = generateDraftClass(SEED, SIZE, POOL);
+    // Pool più grande della classe → tutti i nomi provengono dal pool.
+    for (const b of c.batters) {
+      const src = byName.get(b.name);
+      expect(src).toBeTruthy();
+      expect(b.bats).toBe(src!.bats); // mano di battuta reale
+    }
+    for (const p of c.pitchers) {
+      const src = byName.get(p.name);
+      expect(src).toBeTruthy();
+      expect(p.throws).toBe(src!.throws); // mano di lancio reale
+    }
+  });
+
+  it('rating CIECHI: nome reale, ma abilità nel range prospetto (niente preveggenza)', () => {
+    const c = generateDraftClass(SEED, 120, POOL);
+    // Le doti restano quelle di un prospetto giovane/grezzo, non gonfiate dal nome.
+    for (const b of c.batters) {
+      expect(b.age).toBeGreaterThanOrEqual(18);
+      expect(b.age).toBeLessThanOrEqual(22);
+      expect(batterOverall(b.ratings, b.position)).toBeLessThanOrEqual(82);
+      expect(b.potential).toBeGreaterThanOrEqual(batterOverall(b.ratings, b.position));
+    }
+    for (const p of c.pitchers) {
+      expect(pitcherOverall(p.ratings)).toBeLessThanOrEqual(82);
+    }
+  });
+
+  it('fallback: pool più piccolo della classe → il resto sono nomi fittizi (classe piena)', () => {
+    const small = fakePool(10);
+    const c = generateDraftClass(SEED, SIZE, small);
+    const total = c.batters.length + c.pitchers.length;
+    expect(total).toBe(SIZE); // classe comunque a taglia piena
+    const realNames = new Set(small.map((d) => `${d.first} ${d.last}`));
+    const usedReal = [...c.batters, ...c.pitchers].filter((p) => realNames.has(p.name)).length;
+    expect(usedReal).toBe(10); // esattamente i 10 reali consumati, il resto fittizi
+  });
+
+  it('senza pool i nomi NON sono quelli reali (lega generata invariata)', () => {
+    const c = generateDraftClass(SEED, SIZE);
+    const realNames = new Set(POOL.map((d) => `${d.first} ${d.last}`));
+    for (const p of [...c.batters, ...c.pitchers]) expect(realNames.has(p.name)).toBe(false);
+  });
+});
+
+describe('debutantsForYear (dati Lahman reali)', () => {
+  it('copre le annate d’ingresso storiche con nomi reali e mani valide', () => {
+    for (const year of [1998, 2000, 2005, 2010]) {
+      const list = debutantsForYear(year);
+      expect(list && list.length).toBeGreaterThan(20);
+      for (const d of list!.slice(0, 5)) {
+        expect(d.first.length).toBeGreaterThan(0);
+        expect(d.last.length).toBeGreaterThan(0);
+        expect(['L', 'R', 'S']).toContain(d.bats);
+        expect(['L', 'R']).toContain(d.throws);
+      }
+    }
+    // Fuori copertura reale → undefined (il draft ricade sui nomi fittizi).
+    expect(debutantsForYear(1990)).toBeUndefined();
   });
 });
 

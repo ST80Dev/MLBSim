@@ -9,6 +9,7 @@ import { makeNameFactory } from './generator';
 import { playerValue } from '../engine/value';
 import { winPct, type WLRecord } from './season';
 import { makeRng, type Rng } from '../engine/rng';
+import type { DebutName } from './historical/debutants';
 
 // ---------------------------------------------------------------------------
 // DRAFT INVERSO (Fase 5A, step 4) — semplificato.
@@ -35,6 +36,16 @@ const DRAFT_AGE_MAX = 22;
 const hand = (rng: Rng): Hand => (rng.next() < 0.28 ? 'L' : 'R');
 const throwHand = (rng: Rng): ThrowHand => (rng.next() < 0.25 ? 'L' : 'R');
 
+/** Nome di un prospetto: fittizio (solo `full/first/last`) o reale (con mano nota,
+ *  dal pool storico dei debuttanti). La mano reale, se presente, sostituisce l'RNG. */
+interface ProspectName {
+  full: string;
+  first: string;
+  last: string;
+  bats?: Hand;
+  throws?: ThrowHand;
+}
+
 /** Sei doti attorno a un livello grezzo (prospetto: abilita' attuale bassa). */
 function batRatingsAround(rng: Rng, level: number): BatterRatings {
   const d = () => clampRating(rng.gauss(level, 4));
@@ -45,7 +56,7 @@ function pitRatingsAround(rng: Rng, level: number): PitcherRatings {
   return { stuff: d(), control: d(), movement: d(), groundball: d(), stamina: d(), fielding: d() };
 }
 
-function makeProspectBatter(rng: Rng, name: { full: string; first: string; last: string }, id: string): Batter {
+function makeProspectBatter(rng: Rng, name: ProspectName, id: string): Batter {
   // Livello grezzo: dal sotto-replacement al prospetto solido. L'upside vero sta
   // nel POTENZIALE (giovane → headroom ampio), non nell'abilita' odierna.
   const level = Math.min(66, Math.max(40, rng.gauss(50, 7)));
@@ -55,12 +66,12 @@ function makeProspectBatter(rng: Rng, name: { full: string; first: string; last:
   const ovr = batterOverall(ratings, position);
   return {
     id, name: name.full, firstName: name.first, lastName: name.last,
-    bats: hand(rng), position, ratings, stats: deriveBatterStats(ratings),
+    bats: name.bats ?? hand(rng), position, ratings, stats: deriveBatterStats(ratings),
     age, potential: projectPotential(rng, ovr, age), salary: salaryFor(ovr, age), retired: false,
   };
 }
 
-function makeProspectPitcher(rng: Rng, name: { full: string; first: string; last: string }, id: string): Pitcher {
+function makeProspectPitcher(rng: Rng, name: ProspectName, id: string): Pitcher {
   const level = Math.min(66, Math.max(40, rng.gauss(50, 7)));
   const ratings = pitRatingsAround(rng, level);
   const role: PitcherRole = rng.next() < 0.7 ? 'SP' : 'RP';
@@ -68,10 +79,23 @@ function makeProspectPitcher(rng: Rng, name: { full: string; first: string; last
   const ovr = pitcherOverall(ratings);
   return {
     id, name: name.full, firstName: name.first, lastName: name.last,
-    throws: throwHand(rng), role, ratings, stats: derivePitcherStats(ratings),
+    throws: name.throws ?? throwHand(rng), role, ratings, stats: derivePitcherStats(ratings),
     stamina: deriveStamina(ratings.stamina, role),
     age, potential: projectPotential(rng, ovr, age), salary: salaryFor(ovr, age), retired: false,
   };
+}
+
+/** Copia mescolata (Fisher-Yates) del pool nomi, con RNG DEDICATO (seed diverso):
+ *  i nomi variano tra leghe senza toccare lo stream che genera doti/ruoli/età →
+ *  a parità di seed i rating dei prospetti restano identici, cambia solo l'etichetta. */
+function shuffledNames(list: DebutName[], seed: number): DebutName[] {
+  const r = makeRng((seed ^ 0x9e3779b1) >>> 0);
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = r.int(0, i);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 export interface DraftClass {
@@ -83,14 +107,28 @@ export interface DraftClass {
  * Genera una classe di draft di `size` prospetti (~60% battitori), giovani e
  * grezzi. Deterministica dal seed. La classe *contiene* il talento; quale prospetto
  * lo realizzera' lo decide l'aging (nessun draft "col senno di poi").
+ *
+ * `realNames` (modalità STORICA): pool di NOMI reali dei debuttanti dell'annata
+ * d'ingresso (docs/franchise.md § Draft in modalità STORICA). Se presente, i
+ * prospetti prendono nome+mano reali (rating comunque CIECHI: nessuna preveggenza);
+ * esaurito il pool si ricade sui nomi fittizi. Assente → tutto fittizio (lega generata).
  */
-export function generateDraftClass(seed: number, size: number): DraftClass {
+export function generateDraftClass(seed: number, size: number, realNames?: DebutName[]): DraftClass {
   const rng = makeRng((seed ^ 0x5f356495) >>> 0);
-  const names = makeNameFactory(rng);
+  const fictional = makeNameFactory(rng);
+  const pool = realNames && realNames.length ? shuffledNames(realNames, seed) : null;
+  let pi = 0;
+  const nextName = (): ProspectName => {
+    if (pool && pi < pool.length) {
+      const d = pool[pi++];
+      return { full: `${d.first} ${d.last}`, first: d.first, last: d.last, bats: d.bats, throws: d.throws };
+    }
+    return fictional.next();
+  };
   const batters: Batter[] = [];
   const pitchers: Pitcher[] = [];
   for (let i = 0; i < size; i++) {
-    const nm = names.next();
+    const nm = nextName();
     if (rng.next() < 0.6) batters.push(makeProspectBatter(rng, nm, `DR${seed % 100000}-B${i}`));
     else pitchers.push(makeProspectPitcher(rng, nm, `DR${seed % 100000}-P${i}`));
   }
@@ -122,9 +160,10 @@ export function runInverseDraft(
   standings: Record<string, WLRecord>,
   seed: number,
   rounds: number = DEFAULT_DRAFT_ROUNDS,
+  realNames?: DebutName[],
 ): { teams: Team[]; picks: Array<{ round: number; teamId: string; playerId: string }> } {
   const order = inverseDraftOrder(teams, standings);
-  const cls = generateDraftClass(seed, teams.length * rounds + teams.length); // margine
+  const cls = generateDraftClass(seed, teams.length * rounds + teams.length, realNames); // margine
   const available: Array<Batter | Pitcher> = [...cls.batters, ...cls.pitchers].sort(
     (a, b) => playerValue(b) - playerValue(a) || a.id.localeCompare(b.id),
   );
