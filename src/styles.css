@@ -2379,8 +2379,10 @@ table {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  row-gap: 5px;
+  /* MAI a capo: la barra resta su UNA riga (altezza invariata → gli stadi non
+     vanno ricalibrati). Su display HD il varco tra i boxscore è ampio e le
+     azioni divise ai due lati ci stanno comodamente. */
+  flex-wrap: nowrap;
 }
 .actionbar.compact .ab-side.left {
   justify-self: end;
@@ -2413,11 +2415,12 @@ table {
   font-weight: 800;
   letter-spacing: 0.02em;
 }
-/* Larghezza VINCOLATA al varco centrale tra i due boxscore laterali (~31% each):
-   la barra non deve mai sforarvi sopra. Le zone tattiche/sostituzioni vanno a
-   capo dentro questo limite; il primario resta centrato e fisso. */
+/* La barra si dimensiona al suo contenuto su UNA riga (max-content) e resta
+   centrata. Su HD (≥1920) i boxscore laterali sono limitati a ~380px, quindi il
+   varco centrale è ampio e la barra — con le azioni divise ai due lati del
+   primario — non li tocca mai. Il cap del 92% è solo una sicurezza estrema. */
 .controls-overlay {
-  width: min(500px, 34%);
+  width: max-content;
   max-width: 92%;
 }
 .controls-overlay .actionbar.compact {
