@@ -36,6 +36,7 @@ import {
 import type { SeasonState } from '../data/season';
 import { suggestedStarter, withStarterId } from '../data/rotation';
 import { withRotationStarter, rotationPhase } from '../data/generator';
+import { withFormLineup } from '../data/formLineup';
 import {
   seedPlayoffs,
   recordManagedGame,
@@ -249,11 +250,14 @@ export function App() {
     // partenti in modo indipendente, così in una serie ne affronti 3 diversi.
     const oppDay = isRegularGame ? season.day : isPlayoffGame ? playoffCtx?.gameNo ?? 0 : activeGame?.day ?? 0;
     const oppPhase = isRegularGame ? rotationPhase(opponent) : 0;
-    const opp = withRotationStarter(opponent, oppDay + oppPhase);
+    // Lineup AVVERSARIO "con forma": ri-ordinato pesando il rendimento in-season
+    // accumulato (no-op sotto 30 partite o senza dati). SOLO l'avversario — la MIA
+    // squadra resta manuale. Poi la rotazione del partente.
+    const opp = withRotationStarter(withFormLineup(opponent, season.bat), oppDay + oppPhase);
     return controlled === 'home'
       ? { away: opp, home: applied }
       : { away: applied, home: opp };
-  }, [managedTeam, opponent, controlled, arrangement, isRegularGame, isPlayoffGame, playoff, playoffCtx, todayStarter, season.rotation, season.day, activeGame]);
+  }, [managedTeam, opponent, controlled, arrangement, isRegularGame, isPlayoffGame, playoff, playoffCtx, todayStarter, season.rotation, season.day, season.bat, activeGame]);
 
   // Ricarica l'elenco delle partite salvate (multi-slot), arricchendo ogni slot
   // con squadra/anno/giornata/record letti dal payload per l'hub di caricamento.

@@ -31,9 +31,24 @@ export const FIELD_SLOTS: readonly Position[] = [
  * NON muta l'input: ritorna un nuovo array.
  */
 export function autoLineup(batters: Batter[]): Batter[] {
+  return autoLineupBy(batters, (b) => b.ratings);
+}
+
+/**
+ * Come `autoLineup`, ma i punteggi si calcolano su `ratingsOf(b)` invece che su
+ * `b.ratings`. Serve al lineup "con forma" (`data/formLineup.ts`), che passa i
+ * rating MISCHIATI col rendimento in-season: la logica di ordinamento resta UNA
+ * sola (qui), il chiamante decide solo *quali rating* pesare. Le posizioni, gli
+ * id e gli oggetti Batter restituiti sono sempre quelli reali.
+ */
+export function autoLineupBy(
+  batters: Batter[],
+  ratingsOf: (b: Batter) => Batter['ratings'],
+): Batter[] {
   const pool = [...batters];
+  const ovr = (b: Batter) => batterOverall(ratingsOf(b), b.position);
   if (pool.length < 5) {
-    return pool.sort((a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position));
+    return pool.sort((a, b) => ovr(b) - ovr(a));
   }
 
   const take = (score: (b: Batter) => number): Batter => {
@@ -43,7 +58,7 @@ export function autoLineup(batters: Batter[]): Batter[] {
     }
     return pool.splice(best, 1)[0];
   };
-  const r = (b: Batter) => b.ratings;
+  const r = (b: Batter) => ratingsOf(b);
 
   const order: Batter[] = [];
   // Run-producer PRIMA: i bastoni pesanti occupano il centro (4-3-5)…
@@ -54,7 +69,7 @@ export function autoLineup(batters: Batter[]): Batter[] {
   order[0] = take((b) => r(b).eye * 1.0 + r(b).speed * 0.6); // leadoff: OBP + velocità
   order[1] = take((b) => r(b).contact * 0.7 + r(b).eye * 0.7); // n.2: contatto + occhio
 
-  pool.sort((a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position));
+  pool.sort((a, b) => ovr(b) - ovr(a));
   let slot = 5;
   for (const b of pool) order[slot++] = b;
   return order;

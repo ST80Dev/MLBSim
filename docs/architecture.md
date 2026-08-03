@@ -81,7 +81,7 @@ Caratteristiche (40-100) ──derive──►  Statistiche di conteggio  ──
   - **Stagione (Fase 4)** — `schedule.ts` (calendario a serie, `TRADE_DEADLINE_GAME`),
     `rotation.ts` (riposo/partente del giorno), `season.ts` (stagione a stati),
     `projection.ts` (proiezione d'annata per le CPU), `playoff.ts` (postseason a
-    12 squadre).
+    12 squadre), `formLineup.ts` (ordine di battuta "con forma", vedi sotto).
   - **Franchigia (Fase 5)** — `offseason.ts` (mercato a blocchi + riallineamento
     AI↔AI), `draft.ts` (draft inverso), `trades.ts` (`evaluateTrade`/`applyTrade`),
     `offseasonRun.ts` + `rollover.ts` (`rolloverSeason`: lega → anno successivo).
@@ -94,6 +94,26 @@ Caratteristiche (40-100) ──derive──►  Statistiche di conteggio  ──
 - `src/ui/` — React: `App.tsx`, `Diamond.tsx` (campo/stadio generato),
   `format.ts` (helper), `styles.css`.
 - `src/main.tsx` — entry React.
+
+## Stat in-season reali (tutta la lega) + lineup "con forma"
+
+`advanceWithResult` (`season.ts`) accumula i box score di **tutte** le partite del
+giorno, non solo delle mie: le partite CPU-vs-CPU sono già simulate a pieno da
+`quickSim`+`toGameResult` (prima si scartava tutto tranne il W/L). Costo quasi
+nullo, due effetti: la **leaderboard diventa reale** per tutte e 30 le squadre (la
+proiezione riempie solo il residuo `giorni − partite_giocate`, che ora è ~0), e
+soprattutto ogni squadra ha un **campione in-season vero**.
+
+Su quel campione lavora `formLineup.ts`: l'ordine di battuta delle CPU si ri-ordina
+a ogni partita pesando il **rendimento in-season** oltre ai rating. La "forma-rating"
+nasce ri-invertendo il tabellino accumulato con la stessa `ratingsFromBatterStats`
+dell'import; si mischia ai rating base a peso **1/10**, gated a 0 sotto 30 partite e
+in rampa fino a 60 (più la regressione-per-campione dell'inversione: doppia
+prudenza). Contatto/potenza/occhio respirano, velocità/difesa restano dote pura.
+Solo le CPU (la squadra dell'utente resta manuale); il talento resta dominante — in
+pratica ~1/3 delle squadre riceve un piccolo aggiustamento (per lo più uno swap
+adiacente) a stagione inoltrata. **Save più grande** (season.bat/pit ora ~750
+giocatori invece di ~50): scelta consapevole, abilita il tutto.
 
 ## Determinismo
 
