@@ -94,8 +94,12 @@ si prepara la squadra, si conferma, si gioca la partita, poi di nuovo gestione.
 
 Non c'è un riquadro "4/5 uomini": la rotazione è semplicemente l'ordine della
 lista dei partenti nel Roster. Ogni lanciatore matura un **riposo in gare** in
-base all'**uso reale** dell'ultima partita (out lanciati), tracciato in
-`SeasonState.rotation.availableFrom`:
+base all'**uso reale** dell'ultima partita (out lanciati). Lo stato
+`SeasonState.rotation.lastUsed` memorizza **solo l'ultimo impiego** (giorno +
+carico), non il riposo "cotto": il riposo residuo si **ricalcola alla query** con
+la regola corrente, così un cambio di regola (es. il passaggio a **+3**) vale
+**anche su una stagione già in corso** (i vecchi save `availableFrom` sono migrati
+al caricamento da `migrateRotation`):
 
 - **partente / spot start** → 3 gare (riposo **minimo**: l'asso di gara 1 rientra
   alla gara 5, così è possibile anche una **rotazione a 4 uomini**; con 5 partenti

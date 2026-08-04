@@ -13,8 +13,8 @@ import { withRotationStarter } from './generator';
 //   - Rilievo sotto le 2 IP (0-5 out) ..... 0       (disponibile la gara dopo)
 // I rilievi restano quasi sempre disponibili (bullpen corti): solo chi si carica
 // di 2+ inning salta una gara, cosi' non si resta a secco dopo una gara difficile.
-// `availableFrom[id]` = prima giornata in cui il lanciatore torna disponibile
-// (per partire O per rilevare). Chi non ha ancora lanciato e' sempre disponibile.
+// `lastUsed[id]` = ultimo impiego (giorno + carico); il riposo residuo si RICALCOLA
+// alla query con la regola corrente. Chi non ha ancora lanciato e' sempre disponibile.
 //
 // Il riposo del partente è un **MINIMO** (3 gare), non un ciclo rigido: con 5
 // partenti sani `suggestedStarter` gira comunque a 5 uomini (sceglie il PIÙ
@@ -25,33 +25,32 @@ import { withRotationStarter } from './generator';
 //
 // NEI PLAYOFF il riposo del PARTENTE si accorcia ancora (`PLAYOFF_REST_STARTER`):
 // piu' off-day reali tra le gare + gare che contano, cosi' l'asso puo' lanciare
-// Gara 1 e Gara 4 (riposo di 2 gare). Vale solo alla REGISTRAZIONE dell'uso
-// (`recordUsage(..., starterRest)`); le query di disponibilita' non cambiano.
+// Gara 1 e Gara 4 (riposo di 2 gare). Ora il riposo si RICALCOLA alla query: le
+// funzioni (`restRemaining`/`isAvailable`/`restInfo`/`suggestedStarter`) accettano
+// `starterRest`, e i chiamanti dei PLAYOFF passano `PLAYOFF_REST_STARTER`.
 
 export const REST_STARTER = 3;
 export const REST_RELIEF = 1;
 /** Riposo del partente nei playoff (piu' corto): l'asso rientra alla 3ª gara dopo. */
 export const PLAYOFF_REST_STARTER = 2;
 
+/** Ultimo impiego di un lanciatore: giorno + carico (out lanciati, se ha aperto). */
+export interface LastUse {
+  day: number;
+  outs: number;
+  started: boolean;
+}
+
 export interface RotationState {
-  /** id lanciatore -> prima giornata in cui torna disponibile. Assente = pronto. */
-  availableFrom: Record<string, number>;
+  /** id lanciatore -> ultimo impiego. Assente = mai lanciato = pronto.
+   *  Il riposo NON è memorizzato "cotto": si RICALCOLA a ogni query con la regola
+   *  CORRENTE (`REST_STARTER`/`PLAYOFF_REST_STARTER`), così un cambio di regola vale
+   *  anche a stagione GIÀ IN CORSO (prima `availableFrom` bloccava il vecchio +4). */
+  lastUsed: Record<string, LastUse>;
 }
 
 export function createRotation(): RotationState {
-  return { availableFrom: {} };
-}
-
-/** Gare di riposo ancora da smaltire al giorno `day` (0 = pronto, >0 = a riposo). */
-export function restRemaining(rot: RotationState, id: string, day: number): number {
-  const from = rot.availableFrom[id];
-  if (from === undefined) return 0;
-  return Math.max(0, from - day);
-}
-
-/** Vero se il lanciatore ha smaltito il riposo ed e' utilizzabile al giorno `day`. */
-export function isAvailable(rot: RotationState, id: string, day: number): boolean {
-  return restRemaining(rot, id, day) <= 0;
+  return { lastUsed: {} };
 }
 
 /** Gare di riposo dovute in base agli out lanciati e se il lanciatore era il
@@ -63,6 +62,29 @@ export function restForUsage(outs: number, started: boolean, starterRest: number
   return 0; // rilievo sotto le 2 IP: pronto la gara dopo
 }
 
+/** Gare di riposo ancora da smaltire al giorno `day` (0 = pronto, >0 = a riposo),
+ *  ricalcolate dalla regola corrente. `starterRest` = riposo partente (playoff più corto). */
+export function restRemaining(
+  rot: RotationState,
+  id: string,
+  day: number,
+  starterRest: number = REST_STARTER,
+): number {
+  const u = rot.lastUsed[id];
+  if (!u) return 0;
+  return Math.max(0, u.day + 1 + restForUsage(u.outs, u.started, starterRest) - day);
+}
+
+/** Vero se il lanciatore ha smaltito il riposo ed e' utilizzabile al giorno `day`. */
+export function isAvailable(
+  rot: RotationState,
+  id: string,
+  day: number,
+  starterRest: number = REST_STARTER,
+): boolean {
+  return restRemaining(rot, id, day, starterRest) <= 0;
+}
+
 export interface PitcherUsage {
   id: string;
   outs: number;
@@ -72,20 +94,15 @@ export interface PitcherUsage {
 
 /**
  * Registra l'uso di TUTTI i lanciatori scesi in campo in una gara al giorno
- * `day`: ognuno matura il proprio riposo (out + se ha aperto). `starterRest`
- * accorcia il riposo del partente nei playoff. Non muta l'input.
+ * `day`: memorizza SOLO il fatto (giorno + carico), non il riposo derivato — così
+ * il riposo resta ricalcolabile con la regola corrente. Non muta l'input.
  */
-export function recordUsage(
-  rot: RotationState,
-  usage: PitcherUsage[],
-  day: number,
-  starterRest: number = REST_STARTER,
-): RotationState {
-  const availableFrom = { ...rot.availableFrom };
+export function recordUsage(rot: RotationState, usage: PitcherUsage[], day: number): RotationState {
+  const lastUsed = { ...rot.lastUsed };
   for (const u of usage) {
-    availableFrom[u.id] = day + 1 + restForUsage(u.outs, u.started, starterRest);
+    lastUsed[u.id] = { day, outs: u.outs, started: u.started };
   }
-  return { availableFrom };
+  return { lastUsed };
 }
 
 export interface RestInfo {
@@ -96,12 +113,39 @@ export interface RestInfo {
 }
 
 /** Stato di riposo per una lista di lanciatori (per i badge del Roster). */
-export function restInfo(rot: RotationState, ids: string[], day: number): RestInfo[] {
+export function restInfo(
+  rot: RotationState,
+  ids: string[],
+  day: number,
+  starterRest: number = REST_STARTER,
+): RestInfo[] {
   return ids.map((id) => ({
     id,
-    restRemaining: restRemaining(rot, id, day),
-    available: isAvailable(rot, id, day),
+    restRemaining: restRemaining(rot, id, day, starterRest),
+    available: isAvailable(rot, id, day, starterRest),
   }));
+}
+
+/**
+ * Migra un vecchio `RotationState` (schema `availableFrom`, riposo "cotto") al
+ * nuovo schema `lastUsed`. Ricostruisce il giorno dell'ultima uscita assumendo un
+ * PARTENTE sotto la regola d'epoca (`+4`): così un valore bloccato a +4 di una
+ * stagione iniziata prima del cambio si riallinea SUBITO al `+3` corrente. I
+ * rilievi (rari nel display rotazione) si riallineano al primo impiego. Idempotente.
+ */
+export function migrateRotation(rot: unknown): RotationState {
+  if (rot && typeof rot === 'object' && 'lastUsed' in rot) {
+    return rot as RotationState;
+  }
+  const lastUsed: Record<string, LastUse> = {};
+  const legacy = (rot as { availableFrom?: Record<string, number> } | undefined)?.availableFrom;
+  if (legacy) {
+    for (const id in legacy) {
+      // availableFrom = pitchDay + 1 + 4 (vecchia regola partente) → pitchDay = from − 5.
+      lastUsed[id] = { day: legacy[id] - 5, outs: 18, started: true };
+    }
+  }
+  return { lastUsed };
 }
 
 /**
@@ -113,14 +157,18 @@ export function restInfo(rot: RotationState, ids: string[], day: number): RestIn
  * invece, l'asso è l'unico disponibile al suo turno e rientra puntuale. Se nessuno
  * è disponibile (rotazione malmessa) parte il primo dell'ordine.
  */
-export function suggestedStarter(rot: RotationState, rotationIds: string[], day: number): string {
-  const available = rotationIds.filter((id) => isAvailable(rot, id, day));
+export function suggestedStarter(
+  rot: RotationState,
+  rotationIds: string[],
+  day: number,
+  starterRest: number = REST_STARTER,
+): string {
+  const available = rotationIds.filter((id) => isAvailable(rot, id, day, starterRest));
   if (available.length === 0) return rotationIds[0];
-  // `availableFrom` più basso = ha lanciato più tempo fa (assente = mai lanciato =
+  // `lastUsed.day` più basso = ha lanciato più tempo fa (assente = mai lanciato =
   // il più riposato). reduce in ordine di rotazione → a parità tiene il primo.
-  return available.reduce((best, id) =>
-    (rot.availableFrom[id] ?? 0) < (rot.availableFrom[best] ?? 0) ? id : best,
-  );
+  const lastDay = (id: string) => rot.lastUsed[id]?.day ?? -Infinity;
+  return available.reduce((best, id) => (lastDay(id) < lastDay(best) ? id : best));
 }
 
 /**

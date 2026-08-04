@@ -34,9 +34,10 @@ function syntheticSeason(seed = 1) {
 
 describe('playoff — rotazione accorciata (asso Gara 1 → Gara 4)', () => {
   it('col riposo playoff il partente rientra 2 gare dopo (non prima)', () => {
-    const rot = recordUsage(createRotation(), [{ id: 'ace', outs: 18, started: true }], 0, PLAYOFF_REST_STARTER);
-    expect(isAvailable(rot, 'ace', 2)).toBe(false); // Gara 3: ancora a riposo
-    expect(isAvailable(rot, 'ace', 3)).toBe(true); // Gara 4: di nuovo disponibile
+    // Il riposo si ricalcola alla query: coi playoff si passa PLAYOFF_REST_STARTER.
+    const rot = recordUsage(createRotation(), [{ id: 'ace', outs: 18, started: true }], 0);
+    expect(isAvailable(rot, 'ace', 2, PLAYOFF_REST_STARTER)).toBe(false); // Gara 3: ancora a riposo
+    expect(isAvailable(rot, 'ace', 3, PLAYOFF_REST_STARTER)).toBe(true); // Gara 4: di nuovo disponibile
   });
   it('in regular season lo stesso partente riposa di più (3 gare)', () => {
     const rot = recordUsage(createRotation(), [{ id: 'ace', outs: 18, started: true }], 0);
@@ -163,6 +164,6 @@ describe('playoff — flusso della squadra gestita', () => {
     expect(Object.keys(ps.pit).length).toBeGreaterThan(0);
     expect(ps.managedGames).toBeGreaterThan(0);
     // Rotazione playoff: registrato l'uso dei lanciatori della gestita.
-    expect(Object.keys(ps.rotation.availableFrom).length).toBeGreaterThan(0);
+    expect(Object.keys(ps.rotation.lastUsed).length).toBeGreaterThan(0);
   });
 });

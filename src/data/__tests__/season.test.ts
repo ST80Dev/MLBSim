@@ -6,6 +6,7 @@ import {
   winPct,
   sortByRecord,
 } from '../season';
+import { restRemaining, isAvailable } from '../rotation';
 import { generateLeague } from '../league';
 import { createLiveGame, quickSim, toGameResult } from '../../engine/game';
 
@@ -55,10 +56,12 @@ describe('advanceWithResult', () => {
     const managed = res.home.id === home.id ? res.homeStats : res.awayStats;
     const starterId = managed.pitching[0].id;
     // Il partente apre al giorno 0 → riposo 3 gare → torna disponibile al giorno 4.
-    expect(s1.rotation.availableFrom[starterId]).toBe(4);
-    // Ogni lanciatore sceso in campo ha una disponibilità registrata (>= giorno 1).
+    expect(s1.rotation.lastUsed[starterId].day).toBe(0);
+    expect(restRemaining(s1.rotation, starterId, 1)).toBe(3);
+    expect(isAvailable(s1.rotation, starterId, 4)).toBe(true);
+    // Ogni lanciatore sceso in campo ha l'ultimo impiego registrato (al giorno 0).
     for (const pl of managed.pitching) {
-      expect(s1.rotation.availableFrom[pl.id]).toBeGreaterThanOrEqual(1);
+      expect(s1.rotation.lastUsed[pl.id]?.day).toBe(0);
     }
   });
 

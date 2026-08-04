@@ -5,7 +5,7 @@ import { makeRng } from '../engine/rng';
 import { withRotationStarter } from './generator';
 import { withFormLineup } from './formLineup';
 import type { RotationState, PitcherUsage } from './rotation';
-import { createRotation, recordUsage } from './rotation';
+import { createRotation, recordUsage, migrateRotation } from './rotation';
 
 // Stato di STAGIONE: il cuore del principio "gli anni gestiti dall'utente hanno
 // statistiche REALI, non derivate dai rating". Qui vivono:
@@ -90,10 +90,11 @@ export function createSeason(year = 1): SeasonState {
  */
 export function ensureSeason(s?: SeasonState): SeasonState {
   if (!s) return createSeason();
-  // Save precedenti al modello di riposo per-uso hanno rotation assente o nel
-  // vecchio formato {size,lastStart}: si riparte da uno stato pulito (tutti pronti).
-  const hasNewRotation = s.rotation && typeof (s.rotation as RotationState).availableFrom === 'object';
-  return hasNewRotation ? s : { ...s, rotation: createRotation() };
+  // Migra la rotazione al modello `lastUsed` (ricalcolo del riposo alla query): i
+  // save nel vecchio schema `availableFrom` — che bloccava il riposo "cotto" con la
+  // regola d'epoca — vengono convertiti, così un cambio di regola (es. +4 → +3) vale
+  // anche su una stagione GIÀ IN CORSO. Idempotente.
+  return { ...s, rotation: migrateRotation(s.rotation) };
 }
 
 export const emptyBat = (): SeasonBat => ({

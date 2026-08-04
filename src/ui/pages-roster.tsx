@@ -5,7 +5,7 @@ import { defaultArrangement, rosterBatters, rosterPitchers, validateArrangement,
 import { autoLineup, FIELD_SLOTS } from '../engine/lineup';
 import { ratingsAtPosition, canOccupy } from '../engine/positions';
 import type { RotationState } from '../data/rotation';
-import { suggestedStarter, restInfo } from '../data/rotation';
+import { suggestedStarter, restInfo, REST_STARTER, PLAYOFF_REST_STARTER } from '../data/rotation';
 import type { SeasonState } from '../data/season';
 import { batterOverall, pitcherOverall } from '../engine/ratings';
 import { teamStrength } from '../engine/strength';
@@ -146,18 +146,15 @@ export function RosterPage({
   // regular season quella di stagione. `rotDay` è l'indice-gara di riferimento.
   const rot = playoffRot ? playoffRot.rotation : season.rotation;
   const rotDay = playoffRot ? playoffRot.day : season.day;
-  const rotLabel = playoffRot ? `playoff · gara ${rotDay + 1}` : `giornata ${season.day}`;
+  const rotRest = playoffRot ? PLAYOFF_REST_STARTER : REST_STARTER;
   const restById = new Map(
-    restInfo(rot, pitchers.map((p) => p.id), rotDay).map((r) => [r.id, r]),
+    restInfo(rot, pitchers.map((p) => p.id), rotDay, rotRest).map((r) => [r.id, r]),
   );
-  const suggestedSp = suggestedStarter(rot, arr.rotation, rotDay);
+  const suggestedSp = suggestedStarter(rot, arr.rotation, rotDay, rotRest);
   const effectiveStarter =
     todayStarter && arr.rotation.includes(todayStarter) && restById.get(todayStarter)?.available
       ? todayStarter
       : suggestedSp;
-  // "scelto" = l'utente ha confermato/scelto esplicitamente (todayStarter valido);
-  // altrimenti si mostra il consigliato. Confermare = fissare todayStarter.
-  const starterChosen = todayStarter != null && todayStarter === effectiveStarter;
   const lineup = arr.order.map((id) => bById.get(id)).filter(Boolean) as Batter[];
   const starterIds = new Set(arr.order);
   // Riserve = non-titolari, ORDINATE secondo la preferenza salvata (benchOrder):
@@ -632,13 +629,6 @@ export function RosterPage({
         <span className="ts-hint">sintesi dello schieramento attuale · si aggiorna a ogni mossa</span>
       </div>
 
-      {statMode === 'season' && (
-        <div className="page-note">
-          Statistiche <b>reali</b> della stagione in corso (battuta e lancio), accumulate dalle
-          partite giocate (giornata {season.day}). Le stat di <b>difesa</b> (E/A/PO/FLD%) sono
-          ancora una stima: gli eventi difensivi non sono simulati dal motore.
-        </div>
-      )}
       {(statMode === 'last' || statMode === 'hist') && (
         <div className="page-note">
           Valori <b>attesi</b> derivati dai rating (backstory): finche' non completi stagioni
@@ -960,38 +950,6 @@ export function RosterPage({
         )
       ) : (
         <>
-          {canPickStarter && (
-            <div className="card starter-bar">
-              <span className="sb-label">
-                Oggi parte:{' '}
-                <b>{pById.get(effectiveStarter)?.lastName ?? '—'}</b>{' '}
-                <span className="card-sub">
-                  {starterChosen ? '(scelto)' : '(consigliato)'} · {rotLabel} · scegli
-                  dall’elenco con “parte oggi”
-                </span>
-              </span>
-              <span className="sb-actions">
-                {!starterChosen && pById.get(effectiveStarter) && (
-                  <button
-                    className="btn small"
-                    onClick={() => onPickStarter(effectiveStarter)}
-                    title="Conferma il partente consigliato"
-                  >
-                    ✓ Conferma
-                  </button>
-                )}
-                {todayStarter && (
-                  <button
-                    className="btn small ghost"
-                    onClick={() => onPickStarter(null)}
-                    title="Torna al partente consigliato (primo in ordine non a riposo)"
-                  >
-                    ↺ consigliato
-                  </button>
-                )}
-              </span>
-            </div>
-          )}
           {pitTable(
             'Rotazione',
             canPickStarter

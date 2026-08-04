@@ -17,7 +17,6 @@ import {
 import {
   createRotation,
   recordUsage,
-  PLAYOFF_REST_STARTER,
   type PitcherUsage,
   type RotationState,
 } from './rotation';
@@ -393,7 +392,7 @@ export function recordManagedGame(
     outs: pl.outs,
     started: i === 0,
   }));
-  next.rotation = recordUsage(next.rotation, usage, next.managedGames, PLAYOFF_REST_STARTER);
+  next.rotation = recordUsage(next.rotation, usage, next.managedGames);
   next.managedGames += 1;
 
   const teamById = new Map(teams.map((t) => [t.id, t]));
@@ -451,7 +450,7 @@ function clone(ps: PlayoffState): PlayoffState {
     series: Object.fromEntries(
       Object.entries(ps.series).map(([k, s]) => [k, { ...s, games: [...s.games] }]),
     ),
-    rotation: { availableFrom: { ...ps.rotation.availableFrom } },
+    rotation: { lastUsed: { ...ps.rotation.lastUsed } },
     bat: cloneStats(ps.bat, emptyBat),
     pit: cloneStats(ps.pit, emptyPit),
   };

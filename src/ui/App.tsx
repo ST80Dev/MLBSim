@@ -34,7 +34,7 @@ import {
   recordOf,
 } from '../data/season';
 import type { SeasonState } from '../data/season';
-import { suggestedStarter, withStarterId } from '../data/rotation';
+import { suggestedStarter, withStarterId, PLAYOFF_REST_STARTER } from '../data/rotation';
 import { withRotationStarter, rotationPhase } from '../data/generator';
 import { withFormLineup } from '../data/formLineup';
 import {
@@ -235,13 +235,13 @@ export function App() {
     const base = applyArrangement(managedTeam, arrangement);
     // In regular season la rotazione GIRA col riposo (partente = scelta di oggi o
     // il consigliato dal ciclo). Nei PLAYOFF vale la rotazione playoff (riposo del
-    // partente più corto, già scontato in `availableFrom`; indice = gare di playoff
-    // giocate). Prestagione: parte l'asso (rotation[0]).
+    // partente più corto, `PLAYOFF_REST_STARTER` passato alle query; indice = gare
+    // di playoff giocate). Prestagione: parte l'asso (rotation[0]).
     const rotIds = base.rotation.map((p) => p.id);
     const starterId = isRegularGame
       ? todayStarter ?? suggestedStarter(season.rotation, rotIds, season.day)
       : isPlayoffGame && playoff
-        ? todayStarter ?? suggestedStarter(playoff.rotation, rotIds, playoff.managedGames)
+        ? todayStarter ?? suggestedStarter(playoff.rotation, rotIds, playoff.managedGames, PLAYOFF_REST_STARTER)
         : base.rotation[0]?.id;
     const applied = starterId ? withStarterId(base, starterId) : base;
     // L'avversario ruota anch'esso il partente. Nei playoff col n° di gara nella
