@@ -191,6 +191,16 @@ slot: un long-reliever forte messo in rotazione diventa un **vero SP** (regge un
 partenza intera), un partente in bullpen accorcia — l'endurance segue il *rating*,
 non i battitori-soglia della generazione.
 
+**Resistenza del rilievo (`deriveStamina`, ramo RP).** La curva RP è **ripida e con
+tetto alto** (`11 + (RES−70)/10·3`, clamp `[4,15]`) così la Resistenza distingue
+davvero il rilievo **corto** dal **lungo**: LOOGY/finisher (RES 40-50) → 4-5
+battitori; **swingman SP/RP** (RES 60-65) → **8-10** battitori (limite-pull ~10-12,
+con `+2` dell'auto-manager); mangia-inning (RES 75+) → 13-15. Prima la curva era
+piatta (`7 + …·1.2`, clamp `[4,12]`) e un rilievo restava incollato a ~6 battitori
+anche con ottima resistenza: un long-man non poteva fare i suoi 2-3 inning.
+Offense-neutral (misurato: R/G interattivo invariato) — un braccio che regge 10
+battitori vale ~due rilievi da 5, ma con meno cambi.
+
 ### Età alla generazione (`makeAge`)
 
 L'età dei giocatori non è uniforme: `makeAge` usa una *split-normal* centrata a 27
