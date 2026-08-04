@@ -407,6 +407,10 @@ export function App() {
     setShownPlays(r.play.length);
     setShownScore({ result: r, sit: s });
   }, [live]);
+  // Fine partita RIVELATA: il banner d'esito compare solo quando la telecronaca
+  // dell'ultimo turno ha raggiunto il verdetto (stato ritardato), non appena la
+  // partita finisce nel motore. Fino ad allora la barra resta in attesa.
+  const shownFinal = shownScore.sit.status === 'final';
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
   const inLiveGame = view === 'game' && !!activeGame && !final;
@@ -833,7 +837,7 @@ export function App() {
           ctxAway={ctxAway}
           ctxHome={ctxHome}
           controls={
-            final ? (
+            shownFinal ? (
               <FinalOverlay
                 result={result}
                 controlled={controlled}
