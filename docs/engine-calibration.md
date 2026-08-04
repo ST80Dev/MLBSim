@@ -146,6 +146,12 @@ spostano gli aggregati di lega.
   → nessun impatto sulla calibrazione.
 - **Base intenzionale** (`intentionalWalk`) — avanzamento forzato deterministico
   (nessun RNG); conta come BB.
+- **Interni dentro** (`setInfieldIn`, flag `LiveGame.infieldIn`) — difensiva col
+  **corridore in terza** e `<2 out`: gli interni si stringono per **tagliare il
+  punto a casa** sul rimbalzo, ma la difesa apre buchi → più palle passano per un
+  singolo (`TUNING.infieldIn.hitThrough` .18, applicata in `resolveInPlayOut`).
+  Speculare a "interni a doppio gioco" (mutuamente escluse). Gated sul flag: spenta
+  **non consuma RNG**, calibrazione intatta.
 - **Interni a doppio gioco** (`setDpDepth`, flag `LiveGame.dpDepth`) — difensiva,
   speculare a "interni dentro" (mutuamente escluse). Col **corridore in prima** e
   `<2 out`, sul **rimbalzo** alza la conversione del doppio gioco
@@ -161,13 +167,26 @@ spostano gli aggregati di lega.
 - **AI tattica della CPU** (`cpuOffenseTurn`, `cpuTryTactic`) — nel **solo gioco
   interattivo** (quando l'umano difende, bottone "Lancia ▸") la CPU può fare
   *small-ball*: **rubata** (corridore veloce, buone chance, più probabile a fine
-  gara equilibrata, rara in blowout), **cerca fly** (corridore in 3ª, <2 out, gara
+  gara equilibrata, rara in blowout — **calmierata**: soglie alte e prob. bassa,
+  ~0.8 SB/squadra/partita contro le ~2.2 di prima, in linea con l'epoca; la CPU
+  iper-aggressiva si faceva eliminare in rubata e *toglieva* offense), **cerca fly**
+  (corridore in 3ª, <2 out, gara
   in bilico, battitore non-slugger → incassa il punto con la volata), **bunt di
   sacrificio** (0 out, corridore in 1ª/2ª, battitore debole, gara in bilico),
   **hit-and-run** (corridore in 1ª, 2ª libera, battitore con buon contatto).
   Soglie in `TUNING.cpuTactics`. **Non è mai
   chiamata da `autoStep`/`quickSim`**: la Fase 0 e le sim di lega/stagione/playoff
   restano *swing puro* e byte-identiche (guardia nel test `tactics.test.ts`).
+- **Gestione panchina della CPU** (`cpuMaybePinchHit` / `cpuMaybePinchRun` in
+  `cpuOffenseTurn`; `cpuMaybeDefensiveSub` in `autoManageDefense`) — tardo-gara e
+  in situazioni chiave la CPU usa la panchina: **pinch-hit** per un titolare debole
+  in bilico con corridori in posizione punto (miglior bat di panca, incluso il
+  vantaggio di platoon), **pinch-runner** per un corridore lento come punto
+  pesante, **sostituzione difensiva** proteggendo un vantaggio risicato (guanto
+  migliore alla casella). Il sostituto **eredita la casella difensiva** di chi esce
+  (nessun buco). Soglie in `TUNING.cpuBench`; solo gioco interattivo. *(Follow-up:
+  riallineamento difensivo — mettere il sostituto al suo ruolo migliore invece di
+  ereditare quello di chi esce.)*
 - **Micro-eventi pre-lancio** (`prePitchEvent`) — coi **corridori in base**, prima
   che il turno si risolva, può scattare un **lancio pazzo / palla passata / balk**;
   il turno **non è consumato** (il battitore resta al piatto). La *probabilità che
@@ -500,7 +519,7 @@ tutte uguali. **Disaccoppiamento**: una leva per obiettivo.
 - **Varianza-squadra → convessità AGGREGATA** (`teamStrength`, solo storico via
   `team.context`). Le rose reali hanno talento-medio simile (25-man convergente),
   ma le corazzate **concentrano** i fenomeni: una convessità (`TEAM_CONVEX` 1.6)
-  sui sotto-punteggi allarga le distanze (Δ~5 → ~9-13) **senza toccare un solo
+  sui sotto-punteggi allarga le distanze (Δ~5 → ~8-9) **senza toccare un solo
   rating individuale**. `teamStrength` è **solo display** (non entra nel sim) →
   epoca-safe.
 - **HR-gemma → coda-gemma** (`HR_TOP_KNEE`/`HR_TOP_GAIN`): un power-96 fedele
@@ -564,3 +583,27 @@ il minimo), tutti dentro la banda del motore e coerenti con la generata (5,9). I
 gemma di `import.test.ts` restano verdi. Vale per **tutte** le annate senza taratura
 per-anno (stesso baseline `LEAGUE`). Verificare **sempre** dopo modifiche con uno
 script round-robin nello scratchpad (non committato).
+
+## Difesa storica: spread allargato dove il segnale è forte
+
+I rating difensivi dell'import derivano da `Fielding.csv` (no UZR/DRS: la colonna
+Zone Rating del dataset è vuota). I coefficienti-z sono calibrati **per forza del
+segnale**: ampi dove il dato è informativo, prudenti dove è debole.
+
+- **Range (SS/2B/3B/OF)** ← Range Factor `(PO+A)/inn`: coeff **11** (segnale forte)
+  − 4·z(errori) + 1.5·z(doppi giochi, solo interni). Gli elite di range poppano
+  (Tulowitzki '10 DIF 96, Gutierrez '09 84, Beltre '10 82); gli scarsi affondano
+  (Jeter '02 47 — range reale tra i peggiori).
+- **Braccio** (OF/C) ← assist9 / CS%: coeff **9** → le braccia-cannone spiccano
+  (Yadi Molina '10 BRA 89).
+- **Ricevitori (DIF)** ← solo PB + errori (coeff 5/4, prudente): il **framing** — la
+  vera arte di Yadi — NON è nei dati, quindi il DIF-catcher resta modesto anche per
+  i grandi. Limite noto e consapevole.
+- **1B** ← assist9 + errori (coeff 7/5): le PO sono throw ricevuti (contesto), non
+  range → si pesa copertura + affidabilità (Grace non sotto-valutato).
+
+Lo spread è **simmetrico attorno a 70** → allarga la varianza difensiva (titolari
+2009: p10 57 · mediana 70 · p90 85, min 44 / max 100) **senza spostare l'R/G**
+(misurato ~5.98, epoca intatta). I fenomeni-da-posizionamento/framing (Vizquel,
+Andruw, Yadi-DIF) restano vicini al loro RF reale: allarghiamo il segnale che
+c'è, non ne inventiamo uno assente dai dati.

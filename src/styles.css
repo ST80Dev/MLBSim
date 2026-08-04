@@ -1826,6 +1826,16 @@ table {
   z-index: 6;
   backdrop-filter: blur(3px);
 }
+/* A fine partita l'overlay è montato NELLA slot dei comandi (`.controls-overlay`,
+   ancorata in basso): lì deve scorrere in flusso e prendere il posto del box
+   azioni, non riposizionarsi col proprio `top:16%` (che, calcolato sul piccolo
+   contenitore in basso, lo spingeva fuori schermo in fondo). */
+.controls-overlay .final-overlay {
+  position: static;
+  top: auto;
+  left: auto;
+  transform: none;
+}
 .final-overlay.won {
   border-color: var(--win);
 }
@@ -2147,7 +2157,9 @@ table {
   /* --crh = altezza di UNA testata d'inning: serve sia al box della testata sia
      all'offset di impilamento (top = --crh * indice) calcolato inline in JSX. */
   --crh: 22px;
-  max-height: 34vh;
+  /* Solo gli ultimi 3 mezzi-inning (l'ultimo aperto, gli altri collassati):
+     tetto d'altezza basso così la sidebar non invade il boxscore sottostante. */
+  max-height: 22vh;
   overflow-y: auto;
   padding: 4px 8px 6px;
 }
@@ -2173,6 +2185,26 @@ table {
 /* La testata impilata copre gli eventi che le scorrono sotto. */
 .crt-body .cr-inning:hover .cr-inhead {
   color: #fff;
+}
+/* Inning passati collassati: testata cliccabile con freccetta per riaprirli. */
+.crt-body .cr-inhead.collapsed:not(.current) {
+  cursor: pointer;
+  color: var(--muted);
+}
+.crt-body .cr-inhead:not(.current) {
+  cursor: pointer;
+}
+.crt-body .cr-inhead:not(.current):hover {
+  color: #fff;
+}
+.cr-inhead-l {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cr-caret {
+  font-size: 9px;
+  opacity: 0.8;
 }
 .crt-body ul {
   list-style: none;

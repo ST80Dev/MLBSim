@@ -129,8 +129,10 @@ export function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?
   );
 }
 
-/** Cronaca di UNA squadra (ospite = mezzi alti; casa = mezzi bassi). Sempre
- *  visibile, scorre verso l'ultimo evento. */
+/** Cronaca di UNA squadra (ospite = mezzi alti; casa = mezzi bassi). Per non
+ *  invadere il boxscore sotto, mostra SOLO gli ultimi 3 mezzi-inning: l'ultimo
+ *  (in corso) è espanso, i precedenti sono collassati alla sola testata impilata
+ *  e si riaprono al clic. */
 export function CronacaTeam({
   result,
   side,
@@ -145,8 +147,22 @@ export function CronacaTeam({
   // alle giocate già "lette" (shownPlays). Se omesso, si mostra tutto.
   const shownLen = shownPlays ?? result.play.length;
   const shown = shownLen >= result.play.length ? result : { ...result, play: result.play.slice(0, shownLen) };
-  const groups = groupPlays(shown).filter((g) => g.key.endsWith(half));
+  const allGroups = groupPlays(shown).filter((g) => g.key.endsWith(half));
+  // Solo gli ultimi 3 mezzi-inning di questa squadra: la sidebar resta corta e
+  // non si sovrappone al boxscore.
+  const groups = allGroups.slice(-3);
+  const lastKey = groups.length ? groups[groups.length - 1].key : null;
   const team = side === 'away' ? result.away : result.home;
+  // Inning riaperti a mano (oltre a quello corrente, sempre aperto).
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set());
+  const isOpen = (key: string) => key === lastKey || openKeys.has(key);
+  const toggle = (key: string) =>
+    setOpenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
@@ -166,36 +182,47 @@ export function CronacaTeam({
           scorrere via una alla volta. */}
       <div className="crt-body" ref={bodyRef}>
         {groups.length === 0 && <div className="cr-empty">In attesa…</div>}
-        {groups.map((g, gi) => (
-          <Fragment key={g.key}>
-            <div
-              className="cr-inhead"
-              // Impilamento: ogni testata si ferma un gradino più in basso della
-              // precedente, così 1°/2°/3°… restano accumulati e fissi in cima.
-              style={{ top: `calc(var(--crh) * ${gi})`, zIndex: groups.length - gi }}
-            >
-              <span>{g.header}</span>
-              <span className="cr-score">
-                {g.events[g.events.length - 1].away}–{g.events[g.events.length - 1].home}
-              </span>
-            </div>
-            <ul>
-              {g.events.map((ev, i) => {
-                const sc = scoreCode(ev);
-                return (
-                  <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
-                    {sc && (
-                      <span className="cr-code" title={sc.title}>
-                        {sc.code}
-                      </span>
-                    )}
-                    {logLine(ev)}
-                  </li>
-                );
-              })}
-            </ul>
-          </Fragment>
-        ))}
+        {groups.map((g, gi) => {
+          const open = isOpen(g.key);
+          const isCurrent = g.key === lastKey;
+          return (
+            <Fragment key={g.key}>
+              <div
+                className={`cr-inhead${open ? '' : ' collapsed'}${isCurrent ? ' current' : ''}`}
+                // Impilamento: ogni testata si ferma un gradino più in basso della
+                // precedente, così restano accumulate e fisse in cima.
+                style={{ top: `calc(var(--crh) * ${gi})`, zIndex: groups.length - gi }}
+                onClick={isCurrent ? undefined : () => toggle(g.key)}
+                title={isCurrent ? undefined : open ? 'Comprimi inning' : 'Espandi inning'}
+              >
+                <span className="cr-inhead-l">
+                  {!isCurrent && <span className="cr-caret">{open ? '▾' : '▸'}</span>}
+                  {g.header}
+                </span>
+                <span className="cr-score">
+                  {g.events[g.events.length - 1].away}–{g.events[g.events.length - 1].home}
+                </span>
+              </div>
+              {open && (
+                <ul>
+                  {g.events.map((ev, i) => {
+                    const sc = scoreCode(ev);
+                    return (
+                      <li key={i} className={ev.runsScored > 0 ? 'scored' : ''}>
+                        {sc && (
+                          <span className="cr-code" title={sc.title}>
+                            {sc.code}
+                          </span>
+                        )}
+                        {logLine(ev)}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Fragment>
+          );
+        })}
       </div>
     </div>
   );

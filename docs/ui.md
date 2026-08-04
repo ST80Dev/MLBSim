@@ -11,17 +11,33 @@ HD. Il mobile non è più un obiettivo (deve solo "non rompersi").
 
 ## Stack
 
-React + TypeScript + Vite. La UI principale è in `src/ui/App.tsx` (con
-sotto-componenti in-file), più `src/ui/Diamond.tsx` (campo/stadio generato),
-`src/ui/format.ts` (helper: colore rating, stelle, colore accento, seed) e
-`src/styles.css` (tema, variabili CSS, griglie).
+React + TypeScript + Vite. La UI **non** è più un solo `App.tsx`: è divisa in
+~28 file. `App.tsx` regge lo stato globale (view attiva, save, lega, stagione,
+partita) e la navigazione; il resto è modularizzato per settore:
+
+- **Partita** — `game-screen.tsx` (plancia), `game-lineup.tsx` (side lineup +
+  fatica), `game-cronaca.tsx` (cronaca compatta), `game-actionbar.tsx` (tattiche),
+  `game-submodal.tsx` (sostituzioni), `game-boxscore.tsx`, `game-recap.tsx`,
+  `Diamond.tsx` (campo/stadio generato), `commentary.ts` + `scorecode.ts`.
+- **Pagine di stagione/gestione** — `pages-start.tsx` (hub salvataggi + StartScreen
+  + LeagueOverview + modalità storica), `pages-home.tsx` (dashboard + calendario),
+  `pages-roster.tsx` (editor rosa), `pages-standings.tsx` (classifiche + tabellone
+  playoff), `pages-leaderboard.tsx`, `trade-screen.tsx` (scambi),
+  `rollover-recap.tsx` (riepilogo off-season).
+- **Comuni** — `widgets.tsx` + `rating-widgets.tsx`, `player-modal.tsx`,
+  `glossary.tsx` (`GLOSSARY`, prima in `App.tsx`), `calibration.tsx` (stadi),
+  `format.ts`/`statlines.ts` (helper), `styles.css` (tema, variabili CSS, griglie).
 
 ## Schermata partita (plancia stile SBS, 100% altezza)
 
 Regioni, dall'alto in basso:
 
-- **Header** (fuori dallo sfondo stadio): brand, **Gestisci** (ospite/casa),
-  tab Partita/Rose, **Recap partita**, **Nuove squadre**, **Salta a fine**.
+- **Header** (fuori dallo sfondo stadio, condiviso da tutte le view): brand +
+  badge fase, `GameInfoBadge`, badge squadra gestita, e le **tab di navigazione**
+  Home / Roster / Lega / Leaderboard / Classifiche / [🏆 Playoff] / Franchigia /
+  [Scambi] / 🎯 Stadi / [⚾ Partita]. In partita compaiono le azioni **🎯 Calibra
+  campo**, **Recap** e **Salta a fine ⏩** (non c'è più il toggle "Gestisci
+  ospite/casa" né le tab "Partita/Rose": la squadra gestita è persistente).
 - **Barra stat** (a tutta larghezza, sotto l'header): a **sinistra** la squadra
   ospite (badge, nome in MAIUSCOLO separato da una riga, **forza TOT/ATT/DIF/LAN**
   in **celle a riquadro** — sigla sopra, valore colorato sotto — e punteggio) + il
@@ -104,7 +120,7 @@ Regioni, dall'alto in basso:
     automatico (Resistenza +4 SP / +2 rilievo), via `pitcherFatigue`.
   - **Comandi del turno** in **basso-centro**, in **una sola riga compatta**:
     in attacco Battuta / Bunt / **Squeeze** e **Cerca fly** (se corridore in 3ª e
-    <2 out) / Ruba / **Mob & corri** (hit-and-run, se corridore in 1ª e 2ª libera)
+    <2 out) / Ruba / **Hit & Run** (se corridore in 1ª e 2ª libera)
     / **Pinch-hit** /
     **Pinch-run** (se c'è un corridore); in difesa Lancia / Base int. /
     **Interni dentro** (se corridore in 3ª e <2 out) / **Interni a DP** (se
@@ -156,11 +172,12 @@ presentazione `upperLast` (`format.ts`) applicato ai punti di render (in primis
 `PlayerLink` e le etichette del `Diamond`); la cronaca lo eredita da `shortName`
 nel motore. Solo visuale: i nomi nei dati/motore restano invariati.
 
-**Toggle stat** (`StatsToggle`, tre stati): **Partita** (dato reale) ·
-**Stagione** (proiezione dalle doti, `player.stats`, ~650 PA / 1000 BF) ·
-**Scorsa** (disabilitato: nessuno storico finché non arriva la Fase 4). Governa
-le righe del giocatore coinvolto e il **Recap**. Le righe sono calcolate in
-`src/ui/statlines.ts`.
+**Toggle stat** (`StatsToggle`): **Partita** (dato reale) · **Stagione**
+(proiezione dalle doti, `player.stats`, ~650 PA / 1000 BF) · **Scorsa** (storico
+dell'anno precedente, ora popolato dal rollover di Fase 4/5). Ogni blocco ha il
+**proprio** `StatsMode` indipendente: la barra stat per lato, le due liste in
+`LineupSide` e il `RecapModal` non condividono lo stato. Le righe sono calcolate
+in `src/ui/statlines.ts`.
 
 **Recap partita** (`RecapModal`): popup quasi a tutto schermo con line score e
 **box score completo** di entrambe le squadre (battuta + lancio, V/P/SV), col
@@ -266,7 +283,7 @@ larghezza-contenuto (non più `width:100%`).
 A fianco della testata di ogni tabella del roster c'è un'iconcina **`i`**
 (`InfoDot`) che apre un modale-legenda (`StatLegend`) con la spiegazione delle
 sigle **di quella sezione**: attacco (`bat`), difesa (`def`) o lancio (`pit`).
-Fonte unica `GLOSSARY` (in `App.tsx`): per ogni voce distingue **doti** (rating
+Fonte unica `GLOSSARY` (in `src/ui/glossary.tsx`): per ogni voce distingue **doti** (rating
 40-100, descrizione = *su cosa influiscono* nel motore, allineata a
 `docs/players-and-ratings.md`) e **statistiche** (descrizione = cosa
 rappresentano). Copre sia la modalità *Ratings* sia le modalità statistiche,
@@ -413,13 +430,38 @@ modifiche al codice**. Per uno stadio, se esistono più file, vale il primo tra
 `<ID>.json`, `<ID>2.json`, … In alternativa resta l'override inline in
 `STADIUM_CALIBRATION`. La calibrazione è **per foto** (include il campo `image`).
 
-## Prossimi passi UI (Fasi 1+/3)
+## Pagine di stagione e gestione (Fasi 2/4/5)
 
-- **Rifinitura Fase 1**: pulsanti per Hit-and-run, Pinch-hit (menu panchina) e
-  difesa avanzata (interni dentro).
-- **Fase 3**: campo con etichette giocatori posizionate ✓, **mini-popup
-  giocatore** cliccabile ovunque ✓ (vedi «Mini-popup giocatore»). Restano card
-  giocatore più ricche e ulteriori pannelli in stile SBS/OOTP.
+Oltre alla schermata partita, la UI è un'app a **view** commutate dall'header:
+
+- **Avvio & salvataggi** (`pages-start.tsx`): hub multi-slot (lista salvataggi
+  Supabase), `StartScreen` (nuova lega **generata** / **storica** in anteprima /
+  riprendi) con **picker d'annata** sulla card storica (1997-2010), e
+  `LeagueOverview` (30 squadre per division con forza `teamStrength` e indicatore
+  payroll-vs-cap; dettaglio rosa in modale) → scelta della squadra gestita.
+- **Home / dashboard** (`pages-home.tsx`): stato stagione, **calendario a serie**,
+  prossima partita, accesso a gioca/quick-sim del giorno.
+- **Roster** (`pages-roster.tsx`): editor rosa a linguette Fielders/Pitchers,
+  **drag&drop** (ordine/ruoli/panca), tabelle stat con toggle Stagione/Scorsa/
+  Storico/Caratteristiche, colonne riposo/parte per la rotazione.
+- **Classifiche & Playoff** (`pages-standings.tsx`): record di division reali e,
+  in postseason, il **tabellone** a 12 squadre + celebrazione campione.
+- **Leaderboard** (`pages-leaderboard.tsx`): Batting/Pitching, numeri reali per la
+  mia squadra e **proiezione** d'annata per le altre 29.
+- **Franchigia**: monte-ingaggi, indicatore cap a due confini, valore rosa.
+- **Scambi** (`trade-screen.tsx`): tab aperta in stagione fino alla trade deadline;
+  proponi a una CPU, `evaluateTrade` decide live, `applyTrade` ricompone le rose.
+- **Riepilogo off-season** (`rollover-recap.tsx`): a campione deciso, il modale
+  `RolloverRecap` mostra ritiri/draft/mercato del passaggio all'anno successivo.
+
+## Prossimi passi UI
+
+- **Fase 5B**: off-season **interattiva a blocchi** (oggi il rollover è automatico
+  col recap; il motore `advanceBlock`/`humanRelease`/`humanSign` c'è, l'UI dei
+  blocchi no); aggancio UI del **pool free agent** e del **draft**.
+- **Fase 3 (rifinitura)**: card giocatore più ricche e ulteriori pannelli in stile
+  SBS/OOTP. Fatti: etichette giocatori sul campo, **mini-popup giocatore**
+  cliccabile ovunque (vedi «Mini-popup giocatore»), cronaca a fasi + micro-eventi.
 
 ## Regole di stile
 

@@ -1,11 +1,19 @@
 # Layer gestione franchigia (volutamente semplice)
 
 Filosofia: divertirsi a costruire e gestire una squadra **senza** la complessità
-di un GM manager completo. Tutto ciò che segue è **design per fasi successive**
-(non ancora implementato in Fase 0); i campi base esistono già nel modello
-(`CareerProfile`: `age`, `potential`, `salary`, `retired`, `twoWay`).
+di un GM manager completo. I campi base vivono nel modello (`CareerProfile`:
+`age`, `potential`, `salary`, `retired`, `twoWay`).
 
-## Piano di esecuzione Fase 5 — cosa è costruibile ORA (5A) vs dopo (5B)
+> **Stato (agosto 2026):** la **Fase 5A** (motore franchigia puro) è
+> **implementata e testata** — `playerValue`, cap enforce + ε, mercato
+> off-season a blocchi, draft inverso, valutazione scambi, `runOffseason` +
+> rollover. La **Fase 5B** (UI + aggancio stagione) è **in corso**: fatti schema
+> v3 con rose persistite, rollover automatico + recap, UI scambi; manca
+> l'off-season interattiva a blocchi e il `perf` reale dall'impiego. Il testo che
+> segue è **sia design sia documentazione di ciò che è stato costruito** — dove
+> resta un divario col codice è segnalato inline (⚠️).
+
+## Piano di esecuzione Fase 5 — 5A (motore, FATTO) vs 5B (UI, in corso)
 
 **Decisione di design.** Il layer franchigia è **quasi tutto logica pura** e si
 disaccoppia dalla Fase 4 grazie a una cucitura già presente nel motore:
@@ -15,31 +23,37 @@ e si collega il `perf` reale (box score reali per la squadra gestita, `projectio
 per le 29 CPU) **quando** la Fase 4 chiuderà il rollover di stagione — **senza**
 toccarne la struttura.
 
-**Fase 5A — motore franchigia (puro, testabile, ZERO dipendenza da Fase 4):**
+**Fase 5A — motore franchigia (puro, testabile, ZERO dipendenza da Fase 4) — FATTO:**
 
-1. **`playerValue`** — l'atomo comune a scambi e cap (vedi § sotto). *(fatto/in corso)*
+1. **`playerValue`** — l'atomo comune a scambi e cap (vedi § sotto). **FATTO**
+   (`engine/value.ts`).
 2. **Cap enforce + margine ε** — `effectiveCap(seed, teamId, year) = base × (1+ε)`,
    ε **seedato** e deterministico (niente stato da salvare), con piccola componente
-   persistente di franchigia (vedi § Salary cap).
+   persistente di franchigia (vedi § Salary cap). **FATTO** (`leagueMode.ts`:
+   `capOverageMargin`/`effectiveCap`/`overEffectiveCap`).
 3. **Pool di free agent + riconciliazione** — funzione pura: sopra il *proprio*
    tetto si scarica a valore crescente-dal-basso, sotto si ripesca (vedi §
-   Riconciliazione).
+   Riconciliazione). **FATTO** (`offseason.ts`: mercato a blocchi).
 4. **Draft inverso** — generazione classe prospetti (`generator` + `projectPotential`,
    tetto *possibile* non certo) + assegnazione a ordine di classifica inversa
-   (accetta una qualsiasi mappa di record W-L).
+   (accetta una qualsiasi mappa di record W-L). **FATTO** (`draft.ts`).
 5. **Valutazione scambi** — `evaluateTrade(give, get, capCtx) → sì/no` (equità +
-   rispetto cap bilaterale). Motore ora, UI dopo.
+   rispetto cap bilaterale). **FATTO** (`trades.ts`).
 6. **`runOffseason(league, seed, year, perf?)`** — orchestratore che cuce 1–5 con
-   `perf` di default 0. È la **metà franchigia** del "rollover di stagione" (l'altra
-   metà, stagione→scorsa→carriera, resta di Fase 4).
+   `perf` di default 0. **FATTO** (`offseasonRun.ts` + `rollover.ts`:
+   `rolloverSeason` è il "rollover di stagione" completo, aging→ritiri→draft→
+   mercato→finalize).
 
-**Fase 5B — UI + accoppiamento con la stagione (RICHIEDE prima la Fase 4):**
+**Fase 5B — UI + accoppiamento con la stagione — IN CORSO:**
 
-- **Finestra di gestione tra le partite** (dove si toccano roster/scambi): dipende
-  dal loop di calendario.
-- **UI scambi** (proponi → *una* CPU valuta) e **UI draft / riepilogo off-season**.
-- **Collegamento del `perf` reale** e **normalizzazione PA battitori**
-  (`Σ squadra ≈ 6.180`, vedi § Normalizzazione PA).
+- **UI scambi** (proponi → *una* CPU valuta): **FATTO** (`TradeScreen`, aperta in
+  stagione fino a `TRADE_DEADLINE_GAME`).
+- **Rollover automatico + riepilogo** (`RolloverRecap` a campione deciso): **FATTO**.
+- **Schema v3 + rose persistite**: **FATTO** (`GameSave.teams?`).
+- **Manca:** off-season **interattiva a blocchi** (il motore `advanceBlock`/
+  `humanRelease`/`humanSign` c'è, l'UI dei blocchi no); **collegamento del `perf`
+  reale** dall'impiego (aging oggi neutro, `perf=0`) e **normalizzazione PA
+  battitori** (`Σ squadra ≈ 6.180`, vedi § Normalizzazione PA).
 
 **Persistenza (schema v3).** Il multi-anno introduce **stato che diverge dal
 seed**: appena c'è aging + uno scambio umano, la lega non è più ri-derivabile da
@@ -190,11 +204,14 @@ non destino — draft inverso e aging garantiscono comunque il ricambio.
 - **Niente** trade AI↔AI (vedi § Evoluzione pluriennale): la redistribuzione
   passa da un **pool di free agent**, non da un motore di matching.
 
-### Fondazione presente vs da fare
+### Stato dell'implementazione
 
-`data/leagueMode.ts` ha già `CapMode` (`hard`/`soft`/`off`) + `capReport`. Il
-modello a due confini + ε + riconciliazione è **enforce di Fase 4/5**: oggi
-l'indicatore payroll-vs-cap è **solo informativo** (Franchigia/panoramica lega).
+`data/leagueMode.ts` ha `CapMode` (`hard`/`soft`/`off`) + `capReport` e il modello
+a due confini è **attivo**: `capOverageMargin` (ε seedato), `effectiveCap` e
+`overEffectiveCap` **enforçano** davvero i rilasci/firme nel mercato a blocchi
+(`offseason.ts`) e i controlli di cap bilaterali negli scambi (`trades.ts`).
+L'indicatore payroll-vs-cap resta visibile in Franchigia/panoramica lega, ma non è
+più "solo informativo": è la stessa regola che il rollover applica.
 
 ## Modalità di lega e squilibrio (generata vs import storico)
 
@@ -230,13 +247,14 @@ storica implica un **monte-ingaggi alto** che sfonderebbe un cap rigido. Perciò
 Fondazione in `src/data/leagueMode.ts`: `LeagueMode` (`source` + `SalaryCapPolicy`
 con `mode: 'hard' | 'soft' | 'off'`), costanti `GENERATED_MODE`/`HISTORICAL_MODE`,
 e utilità `teamPayroll`/`capReport`. L'**enforce** vero (scambi/rinnovi che
-rispettano il cap) arriva col resto del layer gestionale.
+rispettano il cap) è **attivo** in `offseason.ts`/`trades.ts` (vedi § sopra).
 
-## Evoluzione pluriennale (rollover di stagione) — modello di design
+## Evoluzione pluriennale (rollover di stagione)
 
-Tutto ciò che segue è **design bancato per Fase 4/5** (rollover + franchigia),
-non ancora implementato. Serve a garantire che la lega resti **verosimile e
-giocabile per molti anni** senza deriva da GM-manager. Principio-guida: il
+Ciò che segue è **implementato** (`rollover.ts` + `offseasonRun.ts`; era design
+bancato per la Fase 5, oggi live e coperto da `data/__tests__/rollover.test.ts`).
+Garantisce che la lega resti **verosimile e giocabile per molti anni** senza
+deriva da GM-manager. Principio-guida: il
 riequilibrio nasce da **meccanismi veri** (età, draft, mercato), **mai** da
 bonus/malus artificiali ai rating (tradirebbe "caratteristiche = fonte di
 verità" e si *sentirebbe* finto).
@@ -395,7 +413,7 @@ Il mercato ha **due regimi distinti**, per tenere la gestione leggera:
 ### Draft → depth, non → rosa attiva (niente overfill)
 
 **Decisione di design.** Le scelte del draft inverso entrano nella **profondità**
-(`reserveBatters`/`reservePitchers`), **non** nei 25 attivi: sono giocatori reali
+(`reserveBatters`/`reservePitchers`), **non** nei 26 attivi: sono giocatori reali
 *contati* nella franchigia, ma **acquisire ≠ schierare**. Durante l'off-season la
 rosa piatta **può sforare** la taglia 20/15 (draft + ripescaggi); la taglia si
 **riconcilia solo alla fine**, nel passo **`finalize`** — **è lì che "si decidono
@@ -406,6 +424,13 @@ riempiono. Conseguenza sul mercato a blocchi: il trigger di rilascio dell'AI è
 **defluisce nel pool** durante i blocchi invece di restare bloccata.
 
 ### Draft in modalità STORICA: nomi reali, rating ciechi
+
+> ⚠️ **Non ancora implementato.** `generateDraftClass` (`draft.ts`) usa **sempre**
+> nomi **fittizi** (`makeNameFactory`) con rating ciechi, senza il ramo storico
+> descritto qui: in una lega storica le classi di draft degli anni successivi al
+> primo escono con nomi generati, non con i debuttanti reali dell'annata. Il
+> design sotto resta il bersaglio; i **rating ciechi** (nessuna preveggenza) sono
+> già rispettati — manca solo l'aggancio dei **nomi reali** dall'archivio Lahman.
 
 **Decisione di design.** In una lega storica (import di un'annata, es. 1999) le
 classi di draft/ingresso degli anni successivi (2000, 2001, …) usano i **nomi
@@ -428,8 +453,9 @@ draftabili) — scartata perché toglie l'agency del draft.
 
 ### C'è spazio aggregato? Sì, per costruzione
 
-La curva è calibrata così che il **payroll medio ≈ 193M ≈ 0.77 × cap base
-(250M)**: `Σ stipendi ≈ 23 unità-cap` contro `Σ tetti ≈ 30` → **avanza spazio
+La curva è calibrata così che il **payroll medio ≈ 194M ≈ 0.78 × cap base
+(250M)**, con le stelle fino a ~55M (`salaryFromOverall`, `ratings.ts`):
+`Σ stipendi ≈ 23 unità-cap` contro `Σ tetti ≈ 30` → **avanza spazio
 aggregato**, quindi un giocatore scaricato trova sempre una destinazione a
 stipendio adeguato. L'unico che non si ricolloca è il vero *replacement-level*,
 che nella realtà sarebbe fuori dalla lega comunque (churn fisiologico). **La
@@ -485,7 +511,7 @@ che serve per lo scarico).
 - **Ordine inverso** alla classifica (la peggiore sceglie per prima → prospetti
   migliori ai deboli): è l'"handicap" strutturale del riequilibrio.
 - **I prospetti entrano nella DEPTH** (`reserveBatters`/`reservePitchers`), non nei
-  25 attivi (vedi § Draft → depth): niente overfill, la taglia si riconcilia al
+  26 attivi (vedi § Draft → depth): niente overfill, la taglia si riconcilia al
   `finalize`.
 - Budget squadra basilare.
 

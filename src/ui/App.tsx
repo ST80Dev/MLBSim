@@ -54,6 +54,7 @@ import { TeamBadge } from './widgets';
 import { FinalOverlay } from './game-lineup';
 import { RecapModal } from './game-recap';
 import { GameScreen } from './game-screen';
+import { makeGameStatCtx } from './stat-context';
 import { ActionBar } from './game-actionbar';
 import { DefenseModal } from './game-defense';
 import { RosterPage } from './pages-roster';
@@ -348,6 +349,13 @@ export function App() {
   const result = toGameResult(live);
   const sit = situation(live);
   const final = live.status === 'final';
+  // Contesti stat per il boxscore: la squadra gestita usa i valori REALI
+  // accumulati in stagione; l'avversario una proiezione dalle doti. La riga
+  // "Precedente" è la proiezione dell'annata scorsa. Costruzione leggera: le
+  // proiezioni si calcolano solo quando una modalità stagione/precedente è a
+  // schermo (accessori lazy).
+  const ctxAway = makeGameStatCtx(result.away, season, leagueSeed, controlled === 'away');
+  const ctxHome = makeGameStatCtx(result.home, season, leagueSeed, controlled === 'home');
 
   // Apertura automatica del pannello difesa: quando l'umano PASSA in difesa
   // (batteva, ora schiera) dopo aver usato un pinch-hit/run, così può riorganizzare
@@ -818,6 +826,8 @@ export function App() {
           batterName={shownField.batterName}
           shownPlays={shownPlays}
           onReveal={revealField}
+          ctxAway={ctxAway}
+          ctxHome={ctxHome}
           controls={
             final ? (
               <FinalOverlay
@@ -945,6 +955,8 @@ export function App() {
         <RecapModal
           result={result}
           onClose={() => setRecapOpen(false)}
+          ctxAway={ctxAway}
+          ctxHome={ctxHome}
         />
       )}
 

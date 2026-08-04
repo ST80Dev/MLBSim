@@ -31,10 +31,11 @@ affermati **non scende sotto ~60**: è voluto, non un bug. Tre motivi:
   contact 43, Mike Lincoln stuff 48): la varianza a livello di *skill* (e quindi
   del singolo AB) è piena anche dietro un overall 60.
 - **Il passato importato è un presente NOTO** → giustamente più stretto. La
-  regressione per campione (prior 250, `statsToRatings.ts`) tiene i campioni
-  sottili vicini alla media: si *evita* di ri-gonfiare i flukes (il rilievo con
-  mezza stagione fortunata). Abbassare quel prior riaprirebbe proprio quel difetto
-  (manopola globale: fidarsi di più di *tutti* i piccoli campioni, in su e in giù).
+  regressione per campione (prior `REGRESS_PRIOR_BAT`/`REGRESS_PRIOR_PIT` = **90**
+  PA/BF, `statsToRatings.ts`) tiene i campioni sottili vicini alla media: si
+  *evita* di ri-gonfiare i flukes (il rilievo con mezza stagione fortunata).
+  Alzare quel prior stringerebbe ancora di più *tutti* i piccoli campioni verso la
+  media (manopola globale, in su e in giù).
 - **L'imprevedibilità non vive nello spread degli overall affermati**, ma
   nell'**aging/sviluppo** (breakout/bust ciechi) e nell'**RNG di partita**.
 
@@ -86,7 +87,7 @@ debole giù (Ordóñez 69).
 
 La **coda-gemma sui tool** (tetto-stat convesso `topEdge` in `deriveBatterStats`:
 power 100 → ~60 HR, contact 100 → media ~.345) resta e **alimenta la produzione**.
-Il salary (curva invariata, tetto clamp 55M) segue l'OVR: payroll generato ~82%
+Il salary (curva invariata, tetto clamp 55M) segue l'OVR: payroll generato ~78%
 del cap, zone-cap nella tolleranza. Dettaglio in `docs/engine-calibration.md`.
 
 ### Stretch storico: allungare le code per la varianza tra squadre (EPOCA-SAFE)
@@ -180,8 +181,9 @@ orientato al dominio; poi bullpen e profondità. Effetti:
 
 ### Swingman (doppio ruolo SP/RP)
 
-`swingCapable(ratings)` marca i bracci con **resistenza da partenza + qualità da
-rilievo** (resistenza 60-82, overall ≥ 52): possono fare **entrambi**. In UI
+`swingCapable(ratings)` marca i bracci con **resistenza in fascia intermedia**
+(`potentialRole === 'SP/RP'`, cioè **resistenza ∈ [60, 78)** — nessun vincolo di
+overall): possono fare **entrambi**. In UI
 mostrano un chip **SP/RP** (tabella lanciatori e popup), così il giocatore sa chi
 può spostare tra rotazione e bullpen. `buildManagedTeam` **ri-assegna ruolo e
 ricalcola la resistenza** (`asRole` → `deriveStamina(rating, ruolo)`) secondo lo
@@ -191,30 +193,30 @@ non i battitori-soglia della generazione.
 
 ### Età alla generazione (`makeAge`)
 
-L'età dei **battitori** e dei **rilievi** non è uniforme: `makeAge` usa una
-*split-normal* centrata a 27 (σ sinistra 3.0, destra 5.5) clampata a **[20, 40]**
-→ campana asimmetrica con **picco a 26**, **media ~28** (un filo sotto la MLB
-reale, "al ribasso"), coda a destra, estremi 20-21 e 38-40 **rari ma possibili**
-(~1-2%). I **partenti** invece hanno finestre d'età **per-slot** (`SP_SLOTS`): il
-back-end (#4/#5) è più giovane (prospetti da sviluppare).
+L'età dei giocatori non è uniforme: `makeAge` usa una *split-normal* centrata a 27
+(σ sinistra 3.0, destra 5.5) clampata a **[20, 40]** → campana asimmetrica con
+**picco a 26**, **media ~28** (un filo sotto la MLB reale, "al ribasso"), coda a
+destra, estremi 20-21 e 38-40 **rari ma possibili** (~1-2%). *(Nota: non ci sono
+più finestre d'età per-slot; il vecchio gradiente `SP_SLOTS` è stato rimosso — i
+lanciatori nascono da un unico pool con `makeAge`, poi lo slot li assegna a
+rotazione/bullpen per merito, vedi § Un solo pool di bracci.)*
 
 ### Allocazione per merito (best-starts)
 
-I bias di `SP_SLOTS`/`teamTalent` **riducono** ma non **eliminano** il caso in cui
-la coda-gemma fa nascere una stella tra panca/riserve mentre un titolare debole
-parte (il "5★ tra i Disponibili"). Dopo la generazione si **garantisce** che i
-migliori siano attivi:
+Il bias di `teamTalent` **riduce** ma non **elimina** il caso in cui la coda-gemma
+fa nascere una stella tra panca/riserve mentre un titolare debole parte (il "5★ tra
+i Disponibili"). Dopo la generazione si **garantisce** che i migliori siano attivi:
 - **Battitori** — generati per posizione (stesso multiset → copertura invariata),
   il migliore di ogni posizione va in lineup, poi `alignLineupDefense` **permuta i
   9 titolari** al miglior fit *alla posizione* (2ª posizione inclusa, DH al miglior
   bat) e infine `autoLineup` dà l'ordine di battuta.
-- **Partenti** — generati col gradiente `SP_SLOTS`, poi i 5 migliori in rotazione
-  (n.1 = asso), i più deboli in profondità.
-- **Bullpen coerente** — non rilievi a caso: un **closer** shutdown
-  (dominio+controllo), un **setup**/candidato-closer (stessa stoffa, poca
-  resistenza), **2 long-reliever** (resistenza alta) e i **middle** fungibili (con
-  profondità, best-starts fra loro). Il `tilt` per-dote di `makePitcherRatings`
-  modella l'archetipo a somma ~0 (non sposta gli aggregati).
+- **Lanciatori** — un **unico pool** di 15 bracci (tutti generati come `SP` con
+  `makeAge`); i **5 migliori per attitudine a partire** (`pitcherOverall +
+  0.9·resistenza`) vanno in rotazione (n.1 = asso). Dei restanti, il **closer** è
+  il miglior braccio per `closerScore` (dominio+controllo), i **6 successivi**
+  diventano `RP` fungibili, gli altri in profondità. Non c'è più il bullpen
+  "costruito" per archetipi (setup/long/middle) né il `tilt` per-ruolo: ruolo ed
+  endurance li fissa lo **slot** (`asRole` → `deriveStamina`), non la generazione.
 
 Popolazione invariata (stessi ruoli/posizioni, stesso `teamTalent`) → **aggregati
 di lega invariati**: cambia solo *quale slot* occupa ciascuno.
@@ -358,7 +360,9 @@ inverte `ratingMult`; `mult` = rate osservato / rate di lega.
 
 - **Battitore** (`ratingsFromBatterStats`): Occhio ← BB (leva pulita); Potenza ←
   media pesata **HR (0.8)** + 2B (0.2) — l'HR è la leva marcante dell'epoca, i
-  doppi la sfumano; Contatto ← media di singoli e strikeout (dato l'Occhio);
+  doppi la sfumano; Contatto **ancorato alla media** (`contactBa`), con gli
+  strikeout come **rifinitura asimmetrica** (`kAdj`, limitata) e una **correzione
+  di round-trip** `RT = 0.78` per riallineare la stima alla media osservata;
   Velocità ← media di SB (leva diretta) e tripli (data la Potenza).
 - **Lanciatore** (`ratingsFromPitcherStats`): Dominio ← K; Controllo ← BB (meno
   = più); Palla-terra ← HR (meno = più); Movimento ← hit non-HR; Resistenza ←

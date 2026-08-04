@@ -1,6 +1,6 @@
 // Modello di dominio del simulatore.
 //
-// Filosofia: le CARATTERISTICHE (ratings 20-80) sono la fonte di verita' del
+// Filosofia: le CARATTERISTICHE (ratings 40-100, 70 = media di lega) sono la fonte di verita' del
 // giocatore; le statistiche di conteggio (media, HR, ...) sono un OUTPUT, sia
 // derivato dalle caratteristiche sia prodotto dalla simulazione. Cosi' le doti
 // restano poche e confrontabili, ed evolverle (eta'/potenziale) e' banale:
@@ -67,7 +67,7 @@ export type PitcherRole = 'SP' | 'RP' | 'CL';
 /**
  * Dati di carriera/franchigia comuni a battitori e lanciatori (il motore di
  * gioco NON li usa: servono al layer di gestione — scambi, draft, stipendi).
- *   - potential: tetto di crescita (scala 20-80)
+ *   - potential: tetto di crescita (scala 40-100)
  *   - salary: unico stipendio annuale (milioni), rinnovato automaticamente
  *   - retired: true quando il giocatore lascia la lega
  *   - twoWay: raro giocatore a doppio ruolo (batte e lancia)

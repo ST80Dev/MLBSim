@@ -2,6 +2,7 @@ import type { GameResult, TeamGameStats } from '../engine/game';
 import type { Team } from '../engine/types';
 import { batterStatLine, pitcherStatLine } from './statlines';
 import type { StatsMode } from './statlines';
+import type { GameStatCtx } from './stat-context';
 import { TeamBadge } from './widgets';
 import { upperLast } from './format';
 
@@ -71,26 +72,35 @@ export function BoxScore({
   team,
   stats,
   mode,
+  ctx,
 }: {
   team: Team;
   stats: TeamGameStats;
   mode: StatsMode;
+  // Contesto per le stat di stagione/precedente (assente = solo Partita).
+  ctx?: GameStatCtx;
 }) {
   const batById = new Map(team.lineup.map((b) => [b.id, b]));
   const pitById = new Map([...team.rotation, ...team.bullpen].map((p) => [p.id, p]));
 
-  const batRows = stats.batting.map((l) => ({
-    id: l.id,
-    label: l.position,
-    name: l.name,
-    items: batterStatLine(mode, l, batById.get(l.id)),
-  }));
-  const pitRows = stats.pitching.map((l) => ({
-    id: l.id,
-    name: l.name,
-    dec: l.dec,
-    items: pitcherStatLine(mode, l, pitById.get(l.id)),
-  }));
+  const batRows = stats.batting.map((l) => {
+    const b = batById.get(l.id);
+    return {
+      id: l.id,
+      label: l.position,
+      name: l.name,
+      items: batterStatLine(mode, l, b && ctx?.batLine(mode, b)),
+    };
+  });
+  const pitRows = stats.pitching.map((l) => {
+    const p = pitById.get(l.id);
+    return {
+      id: l.id,
+      name: l.name,
+      dec: l.dec,
+      items: pitcherStatLine(mode, l, p && ctx?.pitLine(mode, p)),
+    };
+  });
   const batHead = batRows[0]?.items.map((i) => i.k) ?? [];
   const pitHead = pitRows[0]?.items.map((i) => i.k) ?? [];
 

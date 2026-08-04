@@ -1,0 +1,1530 @@
+import type { Hand, ThrowHand, Position, PitcherRole } from '../../engine/types';
+
+// ---------------------------------------------------------------------------
+// Dataset storico — stagione 2008 (epoca-base "alta offesa anni '90/2000").
+//
+// GENERATO da `scripts/build-historical.mjs` dal Baseball Databank (Lahman):
+// tabellini reali delle 30 squadre. NON modificare a mano: rigenera con
+//   node scripts/build-historical.mjs --year 2008
+//
+// Pipeline: le stat reali sono la FONTE; l'importatore (`import.ts`) le inverte
+// in rating 20-100 (`engine/statsToRatings`) e da lì ri-deriva/ri-simula. Nessun
+// logo/foto (marchi protetti): solo dati statistici fattuali. La rosa è una
+// APPROSSIMAZIONE (titolari per PA, ruoli da Appearances): prova di pipeline
+// end-to-end, non il roster-move esatto giorno per giorno.
+//
+// DEDUP: ogni giocatore reale compare UNA volta sola, con le stat di TUTTA la
+// stagione, sulla squadra dove ha giocato di più. `id` è il playerID Lahman:
+// identità stabile (niente doppioni in classifica, gestibile negli anni). I
+// giocatori fuori rosa confluiscono nel pool free agent (`freeAgents2008.ts`).
+// ---------------------------------------------------------------------------
+
+export interface HistBatLine {
+  /** playerID Lahman: identità reale stabile (namespaced dall'importatore). */
+  id?: string;
+  name: string;
+  pos: Position;
+  bats: Hand;
+  age: number;
+  pa: number;
+  h: number;
+  double: number;
+  triple: number;
+  hr: number;
+  bb: number;
+  so: number;
+  hbp: number;
+  sb: number;
+  cs: number;
+  /** Seconda posizione difensiva REALE (Appearances: 2ª casella più giocata tra
+   *  quelle ammesse dall'archetipo, ≥ soglia partite). Abilita lo schieramento
+   *  fuori-ruolo (canOccupy) per gestione/ottimizzazione lineup. Assente = mono-ruolo. */
+  sec?: Position;
+  /** Difesa/Braccio REALI (40-100 pre-stretch) da Fielding.csv, normalizzati per
+   *  ruolo. Assenti = campione difensivo insufficiente → l'importatore usa
+   *  l'archetipo di ruolo. `arm` c'è solo dove misurabile (ricevitori: CS%;
+   *  esterni: assist); interni/1B usano l'archetipo. */
+  fld?: number;
+  arm?: number;
+  /** Esordiente MLB (nessun track record prima di quest'anno): gate rookie → più
+   *  regressione nel rating (un mezzo anno "caldo" non diventa un OVR da stella). */
+  rk?: boolean;
+}
+
+export interface HistPitLine {
+  /** playerID Lahman: identità reale stabile (namespaced dall'importatore). */
+  id?: string;
+  name: string;
+  role: PitcherRole;
+  throws: ThrowHand;
+  age: number;
+  /** Apparizioni totali (Resistenza dei rilievi: BF/apparizione). Opzionale per le
+   *  fixture a mano; i dataset generati la includono sempre. */
+  g?: number;
+  gs: number;
+  outs: number; // IP*3 (es. 213.1 IP = 640 out)
+  h: number;
+  hr: number;
+  bb: number;
+  so: number;
+  hbp: number;
+  er: number;
+  w: number;
+  l: number;
+  sv: number;
+  /** Difesa REALE del lanciatore (40-100) da Fielding.csv (POS=P): range factor +
+   *  errori sul monte. Assente = pochi inning → l'importatore usa l'archetipo (70). */
+  fld?: number;
+  /** Esordiente MLB (nessun track record prima di quest'anno): gate rookie. */
+  rk?: boolean;
+}
+
+export interface HistTeam {
+  franchiseId: string;
+  season: number;
+  /** 9 titolari nell'ordine di battuta (uno per casella difensiva + DH). */
+  batters: HistBatLine[];
+  /** Panchina (sostituti, platoon). Opzionale: assente = nessuna panca. */
+  bench?: HistBatLine[];
+  /** Profondità oltre i 25 attivi (gestione/scambi). Opzionale. */
+  reserveBatters?: HistBatLine[];
+  /** Staff attivo: rotazione (role SP) + bullpen (role RP/CL). */
+  pitchers: HistPitLine[];
+  /** Lanciatori di profondità oltre lo staff attivo. Opzionale. */
+  reservePitchers?: HistPitLine[];
+}
+
+export const SEASON_2008: HistTeam[] = [
+  // BAL (BAL 2008)
+  {
+    franchiseId: 'BAL',
+    season: 2008,
+    batters: [
+      { id: 'hernara02', name: 'Ramon Hernandez', pos: 'C', bats: 'R', age: 32, pa: 507, h: 119, double: 23, triple: 1, hr: 15, bb: 37, so: 67, hbp: 7, sb: 1, cs: 1, sec: '1B', fld: 66, arm: 63 },
+      { id: 'millake01', name: 'Kevin Millar', pos: '1B', bats: 'R', age: 36, pa: 610, h: 129, double: 27, triple: 0, hr: 19, bb: 75, so: 95, hbp: 6, sb: 1, cs: 1, sec: 'LF', fld: 81 },
+      { id: 'roberbr01', name: 'Brian Roberts', pos: '2B', bats: 'S', age: 30, pa: 704, h: 180, double: 46, triple: 6, hr: 10, bb: 81, so: 97, hbp: 1, sb: 43, cs: 9, sec: 'SS', fld: 76 },
+      { id: 'morame01', name: 'Melvin Mora', pos: '3B', bats: 'R', age: 36, pa: 570, h: 142, double: 26, triple: 1, hr: 19, bb: 43, so: 78, hbp: 9, sb: 6, cs: 5, sec: 'SS', fld: 79 },
+      { id: 'castrju01', name: 'Juan Castro', pos: 'SS', bats: 'R', age: 36, pa: 177, h: 34, double: 7, triple: 1, hr: 2, bb: 9, so: 28, hbp: 1, sb: 0, cs: 0, sec: '3B', fld: 75 },
+      { id: 'scottlu01', name: 'Luke Scott', pos: 'LF', bats: 'L', age: 30, pa: 536, h: 124, double: 32, triple: 4, hr: 23, bb: 58, so: 107, hbp: 5, sb: 3, cs: 2, sec: 'RF', fld: 77, arm: 65 },
+      { id: 'jonesad01', name: 'Adam Jones', pos: 'CF', bats: 'R', age: 22, pa: 514, h: 127, double: 21, triple: 7, hr: 9, bb: 23, so: 113, hbp: 7, sb: 11, cs: 4, sec: 'LF', fld: 79, arm: 65 },
+      { id: 'markani01', name: 'Nick Markakis', pos: 'RF', bats: 'L', age: 24, pa: 697, h: 184, double: 44, triple: 2, hr: 21, bb: 79, so: 109, hbp: 3, sb: 12, cs: 6, sec: 'LF', fld: 76, arm: 86 },
+      { id: 'huffau01', name: 'Aubrey Huff', pos: 'DH', bats: 'L', age: 31, pa: 661, h: 174, double: 42, triple: 3, hr: 26, bb: 54, so: 90, hbp: 3, sb: 2, cs: 0, sec: '3B' },
+    ],
+    bench: [
+      { id: 'paytoja01', name: 'Jay Payton', pos: 'LF', bats: 'R', age: 35, pa: 363, h: 88, double: 14, triple: 3, hr: 6, bb: 18, so: 41, hbp: 2, sb: 6, cs: 2, sec: 'CF', fld: 100, arm: 78 },
+      { id: 'quirogu01', name: 'Guillermo Quiroz', pos: 'C', bats: 'R', age: 26, pa: 148, h: 26, double: 5, triple: 0, hr: 2, bb: 12, so: 34, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 68, arm: 66, rk: true },
+      { id: 'cintral01', name: 'Alex Cintron', pos: 'SS', bats: 'S', age: 29, pa: 144, h: 37, double: 5, triple: 1, hr: 2, bb: 6, so: 19, hbp: 1, sb: 2, cs: 1, sec: '2B', fld: 78 },
+      { id: 'bynumfr01', name: 'Freddie Bynum', pos: 'SS', bats: 'L', age: 28, pa: 121, h: 25, double: 5, triple: 2, hr: 1, bb: 5, so: 33, hbp: 1, sb: 5, cs: 3, sec: '2B', fld: 67 },
+      { id: 'montalu01', name: 'Luis Montanez', pos: 'LF', bats: 'R', age: 26, pa: 117, h: 33, double: 6, triple: 1, hr: 3, bb: 4, so: 20, hbp: 0, sb: 0, cs: 0, sec: 'RF', fld: 43, arm: 67, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'faheybr01', name: 'Brandon Fahey', pos: 'SS', bats: 'L', age: 27, pa: 113, h: 23, double: 6, triple: 2, hr: 0, bb: 6, so: 22, hbp: 1, sb: 1, cs: 1, sec: '2B', fld: 74 },
+      { id: 'salazos01', name: 'Oscar Salazar', pos: '1B', bats: 'R', age: 30, pa: 94, h: 23, double: 3, triple: 0, hr: 5, bb: 12, so: 13, hbp: 0, sb: 0, cs: 1, sec: '3B', rk: true },
+      { id: 'hernalu01', name: 'Luis Hernandez', pos: 'SS', bats: 'S', age: 24, pa: 91, h: 21, double: 2, triple: 0, hr: 0, bb: 5, so: 12, hbp: 0, sb: 2, cs: 1, sec: '2B', fld: 90, rk: true },
+    ],
+    pitchers: [
+      { id: 'guthrje01', name: 'Jeremy Guthrie', role: 'SP', throws: 'R', age: 29, g: 30, gs: 30, outs: 572, h: 178, hr: 24, bb: 57, so: 125, hbp: 6, er: 79, w: 10, l: 12, sv: 0, fld: 70 },
+      { id: 'cabreda01', name: 'Daniel Cabrera', role: 'SP', throws: 'R', age: 27, g: 30, gs: 30, outs: 540, h: 189, hr: 22, bb: 98, so: 128, hbp: 15, er: 107, w: 8, l: 10, sv: 0, fld: 57 },
+      { id: 'olsonga01', name: 'Garrett Olson', role: 'SP', throws: 'L', age: 24, g: 26, gs: 26, outs: 398, h: 167, hr: 17, bb: 69, so: 86, hbp: 8, er: 99, w: 9, l: 10, sv: 0, rk: true },
+      { id: 'burrebr01', name: 'Brian Burres', role: 'SP', throws: 'L', age: 27, g: 31, gs: 22, outs: 389, h: 158, hr: 16, bb: 57, so: 78, hbp: 6, er: 86, w: 7, l: 10, sv: 0 },
+      { id: 'lizra01', name: 'Radhames Liz', role: 'SP', throws: 'R', age: 24, g: 17, gs: 17, outs: 253, h: 96, hr: 15, bb: 55, so: 61, hbp: 3, er: 63, w: 6, l: 6, sv: 0, rk: true },
+      { id: 'sherrge01', name: 'George Sherrill', role: 'CL', throws: 'L', age: 31, g: 57, gs: 0, outs: 160, h: 43, hr: 5, bb: 30, so: 62, hbp: 1, er: 24, w: 3, l: 5, sv: 31 },
+      { id: 'sarfade01', name: 'Dennis Sarfate', role: 'RP', throws: 'R', age: 27, g: 57, gs: 4, outs: 239, h: 63, hr: 7, bb: 59, so: 91, hbp: 6, er: 40, w: 4, l: 3, sv: 0, rk: true },
+      { id: 'cormila01', name: 'Lance Cormier', role: 'RP', throws: 'R', age: 27, g: 45, gs: 1, outs: 215, h: 81, hr: 10, bb: 34, so: 44, hbp: 1, er: 39, w: 3, l: 3, sv: 1 },
+      { id: 'johnsji04', name: 'Jim Johnson', role: 'RP', throws: 'R', age: 25, g: 54, gs: 0, outs: 206, h: 56, hr: 0, bb: 29, so: 37, hbp: 3, er: 20, w: 2, l: 4, sv: 1, rk: true },
+      { id: 'bradfch01', name: 'Chad Bradford', role: 'RP', throws: 'R', age: 33, g: 68, gs: 0, outs: 178, h: 62, hr: 2, bb: 14, so: 24, hbp: 3, er: 17, w: 4, l: 3, sv: 0 },
+      { id: 'alberma01', name: 'Matt Albers', role: 'RP', throws: 'R', age: 25, g: 28, gs: 3, outs: 147, h: 49, hr: 6, bb: 21, so: 28, hbp: 2, er: 26, w: 3, l: 3, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'waterch01', name: 'Chris Waters', role: 'SP', throws: 'L', age: 27, g: 11, gs: 11, outs: 194, h: 70, hr: 9, bb: 29, so: 33, hbp: 3, er: 36, w: 3, l: 5, sv: 0, rk: true },
+      { id: 'trachst01', name: 'Steve Trachsel', role: 'RP', throws: 'R', age: 37, g: 10, gs: 8, outs: 119, h: 49, hr: 6, bb: 22, so: 17, hbp: 1, er: 27, w: 2, l: 5, sv: 0 },
+      { id: 'walkeja01', name: 'Jamie Walker', role: 'RP', throws: 'L', age: 36, g: 59, gs: 0, outs: 114, h: 46, hr: 8, bb: 11, so: 27, hbp: 1, er: 21, w: 1, l: 3, sv: 0 },
+      { id: 'bierdra01', name: 'Randor Bierd', role: 'RP', throws: 'R', age: 24, g: 29, gs: 0, outs: 110, h: 48, hr: 3, bb: 19, so: 25, hbp: 3, er: 20, w: 0, l: 2, sv: 0, rk: true },
+      { id: 'cabrefe01', name: 'Fernando Cabrera', role: 'RP', throws: 'R', age: 26, g: 22, gs: 0, outs: 85, h: 30, hr: 7, bb: 18, so: 32, hbp: 0, er: 19, w: 2, l: 1, sv: 0 },
+    ],
+  },
+  // BOS (BOS 2008)
+  {
+    franchiseId: 'BOS',
+    season: 2008,
+    batters: [
+      { id: 'varitja01', name: 'Jason Varitek', pos: 'C', bats: 'S', age: 36, pa: 483, h: 98, double: 18, triple: 1, hr: 14, bb: 57, so: 116, hbp: 6, sb: 0, cs: 1, fld: 77, arm: 65 },
+      { id: 'youklke01', name: 'Kevin Youkilis', pos: '1B', bats: 'R', age: 29, pa: 621, h: 158, double: 39, triple: 3, hr: 22, bb: 71, so: 107, hbp: 12, sb: 4, cs: 3, sec: '3B', fld: 79 },
+      { id: 'pedrodu01', name: 'Dustin Pedroia', pos: '2B', bats: 'R', age: 24, pa: 726, h: 208, double: 52, triple: 2, hr: 15, bb: 53, so: 52, hbp: 8, sb: 16, cs: 1, sec: 'SS', fld: 69 },
+      { id: 'lowelmi01', name: 'Mike Lowell', pos: '3B', bats: 'R', age: 34, pa: 468, h: 125, double: 28, triple: 1, hr: 16, bb: 37, so: 54, hbp: 4, sb: 2, cs: 2, fld: 79 },
+      { id: 'lugoju01', name: 'Julio Lugo', pos: 'SS', bats: 'R', age: 32, pa: 307, h: 69, double: 15, triple: 1, hr: 4, bb: 27, so: 45, hbp: 2, sb: 15, cs: 4, sec: '2B', fld: 40 },
+      { id: 'ramirma02', name: 'Manny Ramirez', pos: 'LF', bats: 'R', age: 36, pa: 654, h: 175, double: 36, triple: 1, hr: 33, bb: 90, so: 118, hbp: 9, sb: 2, cs: 0, sec: 'RF', fld: 64, arm: 72 },
+      { id: 'crispco01', name: 'Coco Crisp', pos: 'CF', bats: 'S', age: 28, pa: 409, h: 100, double: 19, triple: 4, hr: 6, bb: 34, so: 59, hbp: 1, sb: 20, cs: 5, sec: 'LF', fld: 64, arm: 68 },
+      { id: 'drewjd01', name: 'J. D. Drew', pos: 'RF', bats: 'L', age: 32, pa: 456, h: 104, double: 24, triple: 4, hr: 15, bb: 72, so: 81, hbp: 3, sb: 3, cs: 1, sec: 'CF', fld: 58, arm: 67 },
+      { id: 'ellsbja01', name: 'Jacoby Ellsbury', pos: 'DH', bats: 'L', age: 24, pa: 609, h: 160, double: 23, triple: 7, hr: 10, bb: 41, so: 79, hbp: 7, sb: 49, cs: 10, sec: 'LF', fld: 74, arm: 65, rk: true },
+    ],
+    bench: [
+      { id: 'ortizda01', name: 'David Ortiz', pos: 'DH', bats: 'L', age: 32, pa: 491, h: 120, double: 31, triple: 1, hr: 27, bb: 77, so: 77, hbp: 2, sb: 1, cs: 0, sec: '1B' },
+      { id: 'lowrije01', name: 'Jed Lowrie', pos: 'SS', bats: 'S', age: 24, pa: 306, h: 67, double: 25, triple: 3, hr: 2, bb: 35, so: 68, hbp: 1, sb: 1, cs: 0, sec: '3B', fld: 54, rk: true },
+      { id: 'caseyse01', name: 'Sean Casey', pos: '1B', bats: 'L', age: 33, pa: 218, h: 59, double: 13, triple: 0, hr: 2, bb: 17, so: 21, hbp: 2, sb: 1, cs: 1, sec: '3B', fld: 55 },
+      { id: 'coraal01', name: 'Alex Cora', pos: 'SS', bats: 'L', age: 32, pa: 179, h: 40, double: 7, triple: 3, hr: 1, bb: 11, so: 16, hbp: 7, sb: 2, cs: 1, sec: '2B', fld: 84 },
+      { id: 'cashke01', name: 'Kevin Cash', pos: 'C', bats: 'R', age: 30, pa: 162, h: 30, double: 7, triple: 0, hr: 3, bb: 18, so: 52, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 52, arm: 72 },
+    ],
+    reserveBatters: [
+      { id: 'baileje01', name: 'Jeff Bailey', pos: '1B', bats: 'R', age: 29, pa: 59, h: 13, double: 1, triple: 1, hr: 2, bb: 8, so: 16, hbp: 0, sb: 0, cs: 0, sec: '3B', rk: true },
+    ],
+    pitchers: [
+      { id: 'lestejo01', name: 'Jon Lester', role: 'SP', throws: 'L', age: 24, g: 33, gs: 33, outs: 631, h: 203, hr: 17, bb: 75, so: 152, hbp: 9, er: 82, w: 16, l: 6, sv: 0, fld: 69 },
+      { id: 'wakefti01', name: 'Tim Wakefield', role: 'SP', throws: 'R', age: 41, g: 30, gs: 30, outs: 543, h: 165, hr: 23, bb: 60, so: 111, hbp: 10, er: 88, w: 10, l: 11, sv: 0, fld: 60 },
+      { id: 'beckejo02', name: 'Josh Beckett', role: 'SP', throws: 'R', age: 28, g: 27, gs: 27, outs: 523, h: 168, hr: 19, bb: 40, so: 164, hbp: 7, er: 76, w: 12, l: 10, sv: 0, fld: 68 },
+      { id: 'matsuda01', name: 'Daisuke Matsuzaka', role: 'SP', throws: 'R', age: 27, g: 29, gs: 29, outs: 503, h: 140, hr: 16, bb: 81, so: 158, hbp: 9, er: 66, w: 18, l: 3, sv: 0, fld: 73 },
+      { id: 'buchhcl01', name: 'Clay Buchholz', role: 'SP', throws: 'R', age: 23, g: 16, gs: 15, outs: 228, h: 87, hr: 9, bb: 41, so: 74, hbp: 2, er: 51, w: 2, l: 9, sv: 0, rk: true },
+      { id: 'papeljo01', name: 'Jonathan Papelbon', role: 'CL', throws: 'R', age: 27, g: 67, gs: 0, outs: 208, h: 49, hr: 4, bb: 12, so: 85, hbp: 2, er: 15, w: 5, l: 4, sv: 41 },
+      { id: 'masteju01', name: 'Justin Masterson', role: 'RP', throws: 'R', age: 23, g: 36, gs: 9, outs: 265, h: 68, hr: 10, bb: 40, so: 68, hbp: 8, er: 31, w: 6, l: 5, sv: 0, rk: true },
+      { id: 'delcama01', name: 'Manny Delcarmen', role: 'RP', throws: 'R', age: 26, g: 73, gs: 0, outs: 223, h: 58, hr: 5, bb: 27, so: 69, hbp: 3, er: 26, w: 1, l: 2, sv: 2 },
+      { id: 'okajihi01', name: 'Hideki Okajima', role: 'RP', throws: 'L', age: 32, g: 64, gs: 0, outs: 186, h: 48, hr: 6, bb: 20, so: 60, hbp: 1, er: 17, w: 3, l: 2, sv: 1 },
+      { id: 'lopezja02', name: 'Javier Lopez', role: 'RP', throws: 'L', age: 30, g: 70, gs: 0, outs: 178, h: 52, hr: 4, bb: 27, so: 38, hbp: 3, er: 17, w: 2, l: 0, sv: 0 },
+      { id: 'timlimi01', name: 'Mike Timlin', role: 'RP', throws: 'R', age: 42, g: 47, gs: 0, outs: 148, h: 56, hr: 8, bb: 17, so: 30, hbp: 2, er: 27, w: 4, l: 4, sv: 1 },
+    ],
+    reservePitchers: [
+      { id: 'aardsda01', name: 'David Aardsma', role: 'RP', throws: 'R', age: 26, g: 47, gs: 0, outs: 146, h: 50, hr: 5, bb: 32, so: 51, hbp: 3, er: 30, w: 4, l: 2, sv: 0 },
+      { id: 'hansecr01', name: 'Craig Hansen', role: 'RP', throws: 'R', age: 24, g: 48, gs: 0, outs: 139, h: 44, hr: 4, bb: 38, so: 33, hbp: 3, er: 33, w: 2, l: 7, sv: 3, rk: true },
+      { id: 'colonba01', name: 'Bartolo Colon', role: 'RP', throws: 'R', age: 35, g: 7, gs: 7, outs: 117, h: 47, hr: 6, bb: 10, so: 27, hbp: 2, er: 23, w: 4, l: 2, sv: 0 },
+      { id: 'smithch07', name: 'Chris Smith', role: 'RP', throws: 'R', age: 27, g: 12, gs: 0, outs: 55, h: 18, hr: 6, bb: 7, so: 13, hbp: 0, er: 16, w: 1, l: 0, sv: 0, rk: true },
+      { id: 'pauleda01', name: 'David Pauley', role: 'RP', throws: 'R', age: 25, g: 6, gs: 2, outs: 37, h: 23, hr: 2, bb: 5, so: 10, hbp: 1, er: 14, w: 0, l: 1, sv: 0, rk: true },
+    ],
+  },
+  // NYY (NYA 2008)
+  {
+    franchiseId: 'NYY',
+    season: 2008,
+    batters: [
+      { id: 'molinjo01', name: 'Jose Molina', pos: 'C', bats: 'R', age: 33, pa: 297, h: 63, double: 18, triple: 0, hr: 3, bb: 11, so: 56, hbp: 4, sb: 1, cs: 0, sec: '1B', fld: 72, arm: 86 },
+      { id: 'giambja01', name: 'Jason Giambi', pos: '1B', bats: 'L', age: 37, pa: 565, h: 112, double: 19, triple: 1, hr: 32, bb: 82, so: 112, hbp: 19, sb: 2, cs: 1, sec: 'LF', fld: 54 },
+      { id: 'canoro01', name: 'Robinson Cano', pos: '2B', bats: 'L', age: 25, pa: 634, h: 174, double: 39, triple: 4, hr: 16, bb: 29, so: 71, hbp: 6, sb: 3, cs: 4, sec: 'SS', fld: 78 },
+      { id: 'rodrial01', name: 'Alex Rodriguez', pos: '3B', bats: 'R', age: 32, pa: 594, h: 152, double: 29, triple: 0, hr: 38, bb: 73, so: 112, hbp: 14, sb: 18, cs: 3, sec: 'SS', fld: 68 },
+      { id: 'jeterde01', name: 'Derek Jeter', pos: 'SS', bats: 'R', age: 34, pa: 668, h: 187, double: 31, triple: 3, hr: 11, bb: 54, so: 90, hbp: 11, sb: 16, cs: 6, fld: 59 },
+      { id: 'damonjo01', name: 'Johnny Damon', pos: 'LF', bats: 'L', age: 34, pa: 623, h: 160, double: 28, triple: 4, hr: 16, bb: 65, so: 81, hbp: 2, sb: 28, cs: 7, sec: 'CF', fld: 80, arm: 64 },
+      { id: 'cabreme01', name: 'Melky Cabrera', pos: 'CF', bats: 'S', age: 23, pa: 453, h: 107, double: 16, triple: 3, hr: 7, bb: 33, so: 54, hbp: 3, sb: 9, cs: 3, sec: 'LF', fld: 68, arm: 74 },
+      { id: 'abreubo01', name: 'Bobby Abreu', pos: 'RF', bats: 'L', age: 34, pa: 684, h: 173, double: 39, triple: 4, hr: 18, bb: 85, so: 115, hbp: 2, sb: 24, cs: 9, sec: 'CF', fld: 63, arm: 70 },
+      { id: 'matsuhi01', name: 'Hideki Matsui', pos: 'DH', bats: 'L', age: 34, pa: 378, h: 96, double: 17, triple: 1, hr: 12, bb: 42, so: 45, hbp: 2, sb: 1, cs: 1, sec: 'LF' },
+    ],
+    bench: [
+      { id: 'betemwi01', name: 'Wilson Betemit', pos: '1B', bats: 'S', age: 26, pa: 198, h: 45, double: 11, triple: 0, hr: 8, bb: 16, so: 55, hbp: 1, sb: 0, cs: 1, sec: '3B', fld: 68 },
+      { id: 'posadjo01', name: 'Jorge Posada', pos: 'C', bats: 'S', age: 37, pa: 195, h: 51, double: 13, triple: 1, hr: 6, bb: 24, so: 34, hbp: 2, sb: 1, cs: 0, sec: '1B', fld: 72, arm: 60 },
+      { id: 'gardnbr01', name: 'Brett Gardner', pos: 'CF', bats: 'L', age: 24, pa: 141, h: 29, double: 5, triple: 2, hr: 0, bb: 8, so: 30, hbp: 2, sb: 13, cs: 1, sec: 'LF', fld: 68, arm: 95, rk: true },
+      { id: 'gonzaal03', name: 'Alberto Gonzalez', pos: 'SS', bats: 'R', age: 25, pa: 112, h: 24, double: 7, triple: 0, hr: 1, bb: 8, so: 13, hbp: 1, sb: 0, cs: 2, sec: '3B', fld: 62, rk: true },
+      { id: 'moellch01', name: 'Chad Moeller', pos: 'C', bats: 'R', age: 33, pa: 103, h: 19, double: 4, triple: 0, hr: 1, bb: 5, so: 23, hbp: 3, sb: 0, cs: 0, sec: '1B', fld: 70, arm: 80 },
+    ],
+    reserveBatters: [
+      { id: 'ensbemo01', name: 'Morgan Ensberg', pos: '3B', bats: 'R', age: 32, pa: 80, h: 15, double: 2, triple: 0, hr: 3, bb: 11, so: 17, hbp: 0, sb: 0, cs: 1, sec: '1B' },
+      { id: 'duncash01', name: 'Shelley Duncan', pos: '1B', bats: 'R', age: 28, pa: 65, h: 12, double: 2, triple: 0, hr: 3, bb: 7, so: 14, hbp: 0, sb: 0, cs: 0, sec: '3B', rk: true },
+      { id: 'ransoco01', name: 'Cody Ransom', pos: '1B', bats: 'R', age: 32, pa: 51, h: 11, double: 3, triple: 0, hr: 3, bb: 7, so: 11, hbp: 1, sb: 0, cs: 0, sec: '3B' },
+      { id: 'chrisju01', name: 'Justin Christian', pos: 'LF', bats: 'R', age: 28, pa: 43, h: 10, double: 3, triple: 0, hr: 0, bb: 3, so: 4, hbp: 0, sb: 7, cs: 1, sec: 'RF', rk: true },
+    ],
+    pitchers: [
+      { id: 'pettian01', name: 'Andy Pettitte', role: 'SP', throws: 'L', age: 36, g: 33, gs: 33, outs: 612, h: 230, hr: 19, bb: 61, so: 152, hbp: 4, er: 98, w: 14, l: 14, sv: 0, fld: 67 },
+      { id: 'mussimi01', name: 'Mike Mussina', role: 'SP', throws: 'R', age: 39, g: 34, gs: 34, outs: 601, h: 216, hr: 18, bb: 36, so: 145, hbp: 7, er: 86, w: 20, l: 9, sv: 0, fld: 73 },
+      { id: 'ponsosi01', name: 'Sidney Ponson', role: 'SP', throws: 'R', age: 31, g: 25, gs: 24, outs: 407, h: 172, hr: 16, bb: 51, so: 63, hbp: 7, er: 82, w: 8, l: 5, sv: 0, fld: 67 },
+      { id: 'rasneda01', name: 'Darrell Rasner', role: 'SP', throws: 'R', age: 27, g: 24, gs: 20, outs: 340, h: 134, hr: 14, bb: 38, so: 65, hbp: 6, er: 66, w: 5, l: 10, sv: 0 },
+      { id: 'chambjo03', name: 'Joba Chamberlain', role: 'SP', throws: 'R', age: 22, g: 42, gs: 12, outs: 301, h: 83, hr: 5, bb: 38, so: 123, hbp: 2, er: 26, w: 4, l: 3, sv: 0, rk: true },
+      { id: 'riverma01', name: 'Mariano Rivera', role: 'CL', throws: 'R', age: 38, g: 64, gs: 0, outs: 212, h: 50, hr: 4, bb: 8, so: 67, hbp: 4, er: 15, w: 6, l: 5, sv: 39 },
+      { id: 'ohlenro01', name: 'Ross Ohlendorf', role: 'RP', throws: 'R', age: 25, g: 30, gs: 5, outs: 188, h: 85, hr: 10, bb: 31, so: 52, hbp: 1, er: 44, w: 1, l: 4, sv: 0, rk: true },
+      { id: 'hawkila01', name: 'LaTroy Hawkins', role: 'RP', throws: 'R', age: 35, g: 57, gs: 0, outs: 186, h: 58, hr: 4, bb: 19, so: 39, hbp: 0, er: 26, w: 3, l: 1, sv: 1 },
+      { id: 'farnsky01', name: 'Kyle Farnsworth', role: 'RP', throws: 'R', age: 32, g: 61, gs: 0, outs: 181, h: 65, hr: 12, bb: 25, so: 59, hbp: 1, er: 31, w: 2, l: 3, sv: 1 },
+      { id: 'verasjo01', name: 'Jose Veras', role: 'RP', throws: 'R', age: 27, g: 60, gs: 0, outs: 173, h: 50, hr: 7, bb: 30, so: 60, hbp: 3, er: 25, w: 5, l: 3, sv: 0, rk: true },
+      { id: 'ramired01', name: 'Edwar Ramirez', role: 'RP', throws: 'R', age: 27, g: 55, gs: 0, outs: 166, h: 46, hr: 9, bb: 26, so: 65, hbp: 4, er: 28, w: 5, l: 1, sv: 1, rk: true },
+    ],
+    reservePitchers: [
+      { id: 'wangch01', name: 'Chien-Ming Wang', role: 'SP', throws: 'R', age: 28, g: 15, gs: 15, outs: 285, h: 95, hr: 4, bb: 29, so: 47, hbp: 3, er: 40, w: 8, l: 2, sv: 0 },
+      { id: 'gieseda01', name: 'Dan Giese', role: 'RP', throws: 'R', age: 31, g: 20, gs: 3, outs: 130, h: 39, hr: 5, bb: 13, so: 30, hbp: 1, er: 18, w: 1, l: 3, sv: 0, rk: true },
+      { id: 'kenneia01', name: 'Ian Kennedy', role: 'RP', throws: 'R', age: 23, g: 10, gs: 9, outs: 119, h: 46, hr: 4, bb: 25, so: 29, hbp: 1, er: 30, w: 0, l: 4, sv: 0, rk: true },
+      { id: 'brunebr01', name: 'Brian Bruney', role: 'RP', throws: 'R', age: 26, g: 32, gs: 1, outs: 103, h: 22, hr: 2, bb: 19, so: 29, hbp: 1, er: 11, w: 3, l: 0, sv: 1 },
+      { id: 'pavanca01', name: 'Carl Pavano', role: 'RP', throws: 'R', age: 32, g: 7, gs: 7, outs: 103, h: 41, hr: 5, bb: 9, so: 15, hbp: 3, er: 22, w: 4, l: 2, sv: 0 },
+    ],
+  },
+  // TBR (TBA 2008)
+  {
+    franchiseId: 'TBR',
+    season: 2008,
+    batters: [
+      { id: 'navardi01', name: 'Dioner Navarro', pos: 'C', bats: 'S', age: 24, pa: 470, h: 113, double: 23, triple: 1, hr: 8, bb: 36, so: 60, hbp: 2, sb: 1, cs: 3, sec: '1B', fld: 74, arm: 81 },
+      { id: 'penaca01', name: 'Carlos Pena', pos: '1B', bats: 'L', age: 30, pa: 607, h: 128, double: 26, triple: 2, hr: 37, bb: 98, so: 156, hbp: 11, sb: 1, cs: 1, sec: '3B', fld: 82 },
+      { id: 'iwamuak01', name: 'Akinori Iwamura', pos: '2B', bats: 'L', age: 29, pa: 707, h: 174, double: 29, triple: 10, hr: 7, bb: 71, so: 136, hbp: 3, sb: 10, cs: 7, sec: '3B', fld: 64 },
+      { id: 'longoev01', name: 'Evan Longoria', pos: '3B', bats: 'R', age: 22, pa: 508, h: 122, double: 31, triple: 2, hr: 27, bb: 46, so: 122, hbp: 6, sb: 7, cs: 0, sec: '1B', fld: 73, rk: true },
+      { id: 'bartlja01', name: 'Jason Bartlett', pos: 'SS', bats: 'R', age: 28, pa: 494, h: 126, double: 22, triple: 4, hr: 2, bb: 31, so: 66, hbp: 9, sb: 19, cs: 5, sec: '2B', fld: 61 },
+      { id: 'crawfca02', name: 'Carl Crawford', pos: 'LF', bats: 'L', age: 26, pa: 480, h: 131, double: 19, triple: 9, hr: 9, bb: 27, so: 70, hbp: 3, sb: 33, cs: 7, sec: 'CF', fld: 79, arm: 62 },
+      { id: 'uptonbj01', name: 'B. J. Upton', pos: 'CF', bats: 'R', age: 23, pa: 640, h: 152, double: 33, triple: 2, hr: 15, bb: 87, so: 150, hbp: 3, sb: 37, cs: 13, sec: 'LF', fld: 78, arm: 90 },
+      { id: 'grossga01', name: 'Gabe Gross', pos: 'RF', bats: 'L', age: 28, pa: 399, h: 83, double: 19, triple: 3, hr: 13, bb: 50, so: 81, hbp: 2, sb: 4, cs: 2, sec: 'LF', fld: 77, arm: 74 },
+      { id: 'hinsker01', name: 'Eric Hinske', pos: 'DH', bats: 'L', age: 30, pa: 432, h: 92, double: 22, triple: 2, hr: 18, bb: 49, so: 95, hbp: 3, sb: 8, cs: 2, sec: '3B', fld: 65, arm: 66 },
+    ],
+    bench: [
+      { id: 'aybarwi01', name: 'Willy Aybar', pos: '3B', bats: 'S', age: 25, pa: 362, h: 83, double: 18, triple: 2, hr: 9, bb: 33, so: 45, hbp: 4, sb: 2, cs: 2, sec: '2B', fld: 79 },
+      { id: 'floydcl01', name: 'Cliff Floyd', pos: 'DH', bats: 'L', age: 35, pa: 284, h: 67, double: 12, triple: 0, hr: 9, bb: 28, so: 49, hbp: 6, sb: 1, cs: 0, sec: 'LF' },
+      { id: 'zobribe01', name: 'Ben Zobrist', pos: 'SS', bats: 'S', age: 27, pa: 227, h: 46, double: 8, triple: 2, hr: 8, bb: 19, so: 37, hbp: 2, sb: 3, cs: 1, sec: '2B', fld: 49 },
+      { id: 'gomesjo01', name: 'Jonny Gomes', pos: 'DH', bats: 'R', age: 27, pa: 177, h: 34, double: 8, triple: 1, hr: 8, bb: 18, so: 50, hbp: 4, sb: 5, cs: 2, sec: 'RF' },
+      { id: 'riggash01', name: 'Shawn Riggans', pos: 'C', bats: 'R', age: 27, pa: 152, h: 29, double: 7, triple: 0, hr: 5, bb: 12, so: 30, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 59, arm: 48, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'baldero01', name: 'Rocco Baldelli', pos: 'DH', bats: 'R', age: 26, pa: 90, h: 22, double: 5, triple: 1, hr: 4, bb: 5, so: 20, hbp: 2, sb: 2, cs: 0, sec: '1B' },
+      { id: 'ruggiju01', name: 'Justin Ruggiano', pos: 'LF', bats: 'R', age: 26, pa: 81, h: 15, double: 4, triple: 0, hr: 2, bb: 4, so: 27, hbp: 1, sb: 2, cs: 0, sec: 'RF', fld: 80, arm: 77, rk: true },
+      { id: 'perezfe01', name: 'Fernando Perez', pos: 'CF', bats: 'S', age: 25, pa: 72, h: 15, double: 2, triple: 0, hr: 3, bb: 8, so: 16, hbp: 1, sb: 5, cs: 0, sec: 'LF', fld: 92, arm: 72, rk: true },
+      { id: 'haynena01', name: 'Nathan Haynes', pos: 'RF', bats: 'L', age: 28, pa: 47, h: 11, double: 0, triple: 0, hr: 0, bb: 3, so: 12, hbp: 0, sb: 3, cs: 1, sec: 'CF', rk: true },
+    ],
+    pitchers: [
+      { id: 'shielja02', name: 'James Shields', role: 'SP', throws: 'R', age: 26, g: 33, gs: 33, outs: 645, h: 209, hr: 26, bb: 41, so: 170, hbp: 11, er: 91, w: 14, l: 8, sv: 0, fld: 69 },
+      { id: 'sonnaan01', name: 'Andy Sonnanstine', role: 'SP', throws: 'R', age: 25, g: 32, gs: 32, outs: 580, h: 214, hr: 23, bb: 37, so: 129, hbp: 6, er: 103, w: 13, l: 9, sv: 0, fld: 74 },
+      { id: 'garzama01', name: 'Matt Garza', role: 'SP', throws: 'R', age: 24, g: 30, gs: 30, outs: 554, h: 179, hr: 19, bb: 62, so: 130, hbp: 6, er: 77, w: 11, l: 9, sv: 0, fld: 60 },
+      { id: 'jacksed01', name: 'Edwin Jackson', role: 'SP', throws: 'R', age: 24, g: 32, gs: 31, outs: 550, h: 203, hr: 21, bb: 85, so: 120, hbp: 3, er: 98, w: 14, l: 11, sv: 0, fld: 67 },
+      { id: 'kazmisc01', name: 'Scott Kazmir', role: 'SP', throws: 'L', age: 24, g: 27, gs: 27, outs: 457, h: 133, hr: 18, bb: 65, so: 169, hbp: 4, er: 58, w: 12, l: 8, sv: 0, fld: 50 },
+      { id: 'percitr01', name: 'Troy Percival', role: 'CL', throws: 'R', age: 38, g: 50, gs: 0, outs: 137, h: 29, hr: 7, bb: 22, so: 41, hbp: 1, er: 19, w: 2, l: 1, sv: 28 },
+      { id: 'howeljp01', name: 'J. P. Howell', role: 'RP', throws: 'L', age: 25, g: 64, gs: 0, outs: 268, h: 78, hr: 8, bb: 36, so: 84, hbp: 4, er: 36, w: 6, l: 1, sv: 3 },
+      { id: 'hammeja01', name: 'Jason Hammel', role: 'RP', throws: 'R', age: 25, g: 40, gs: 5, outs: 235, h: 87, hr: 11, bb: 35, so: 50, hbp: 2, er: 47, w: 4, l: 4, sv: 2 },
+      { id: 'wheelda01', name: 'Dan Wheeler', role: 'RP', throws: 'R', age: 30, g: 70, gs: 0, outs: 199, h: 51, hr: 9, bb: 21, so: 60, hbp: 1, er: 27, w: 5, l: 6, sv: 13 },
+      { id: 'balfogr01', name: 'Grant Balfour', role: 'RP', throws: 'R', age: 30, g: 51, gs: 0, outs: 175, h: 35, hr: 3, bb: 27, so: 75, hbp: 0, er: 18, w: 6, l: 2, sv: 4 },
+      { id: 'glovega01', name: 'Gary Glover', role: 'RP', throws: 'R', age: 31, g: 47, gs: 0, outs: 163, h: 63, hr: 8, bb: 21, so: 37, hbp: 1, er: 31, w: 2, l: 3, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'milletr02', name: 'Trever Miller', role: 'RP', throws: 'L', age: 35, g: 68, gs: 0, outs: 130, h: 40, hr: 4, bb: 19, so: 45, hbp: 4, er: 20, w: 2, l: 0, sv: 2 },
+      { id: 'reyesal01', name: 'Alberto Reyes', role: 'RP', throws: 'R', age: 38, g: 26, gs: 0, outs: 68, h: 20, hr: 4, bb: 9, so: 24, hbp: 1, er: 12, w: 2, l: 2, sv: 0 },
+      { id: 'niemaje01', name: 'Jeff Niemann', role: 'RP', throws: 'R', age: 25, g: 5, gs: 2, outs: 48, h: 18, hr: 3, bb: 8, so: 14, hbp: 1, er: 9, w: 2, l: 2, sv: 0, rk: true },
+      { id: 'dohmasc01', name: 'Scott Dohmann', role: 'RP', throws: 'R', age: 30, g: 12, gs: 0, outs: 44, h: 16, hr: 2, bb: 8, so: 12, hbp: 0, er: 9, w: 2, l: 0, sv: 0 },
+      { id: 'priceda01', name: 'David Price', role: 'RP', throws: 'L', age: 22, g: 5, gs: 1, outs: 42, h: 9, hr: 1, bb: 4, so: 12, hbp: 1, er: 3, w: 0, l: 0, sv: 0, rk: true },
+    ],
+  },
+  // TOR (TOR 2008)
+  {
+    franchiseId: 'TOR',
+    season: 2008,
+    batters: [
+      { id: 'barajro01', name: 'Rod Barajas', pos: 'C', bats: 'R', age: 32, pa: 377, h: 85, double: 22, triple: 0, hr: 11, bb: 23, so: 59, hbp: 6, sb: 0, cs: 0, sec: '1B', fld: 77, arm: 77 },
+      { id: 'overbly01', name: 'Lyle Overbay', pos: '1B', bats: 'L', age: 31, pa: 627, h: 149, double: 36, triple: 2, hr: 16, bb: 67, so: 108, hbp: 2, sb: 2, cs: 2, sec: '3B', fld: 89 },
+      { id: 'inglejo01', name: 'Joe Inglett', pos: '2B', bats: 'L', age: 30, pa: 385, h: 102, double: 15, triple: 7, hr: 3, bb: 27, so: 47, hbp: 4, sb: 9, cs: 2, sec: 'SS', fld: 73 },
+      { id: 'rolensc01', name: 'Scott Rolen', pos: '3B', bats: 'R', age: 33, pa: 467, h: 111, double: 30, triple: 2, hr: 12, bb: 44, so: 64, hbp: 8, sb: 5, cs: 2, sec: '1B', fld: 65 },
+      { id: 'scutama01', name: 'Marco Scutaro', pos: 'SS', bats: 'R', age: 32, pa: 592, h: 138, double: 23, triple: 2, hr: 8, bb: 58, so: 68, hbp: 4, sb: 6, cs: 2, sec: '2B', fld: 72 },
+      { id: 'lindad01', name: 'Adam Lind', pos: 'LF', bats: 'L', age: 24, pa: 349, h: 88, double: 17, triple: 2, hr: 10, bb: 17, so: 64, hbp: 2, sb: 2, cs: 1, sec: 'RF', fld: 65, arm: 64 },
+      { id: 'wellsve01', name: 'Vernon Wells', pos: 'CF', bats: 'R', age: 29, pa: 466, h: 119, double: 25, triple: 2, hr: 17, bb: 33, so: 56, hbp: 2, sb: 7, cs: 2, sec: 'RF', fld: 54, arm: 71 },
+      { id: 'riosal01', name: 'Alex Rios', pos: 'RF', bats: 'R', age: 27, pa: 686, h: 185, double: 45, triple: 8, hr: 19, bb: 48, so: 109, hbp: 4, sb: 25, cs: 7, sec: 'CF', fld: 76, arm: 79 },
+      { id: 'stairma01', name: 'Matt Stairs', pos: 'DH', bats: 'L', age: 40, pa: 387, h: 90, double: 18, triple: 1, hr: 15, bb: 42, so: 80, hbp: 4, sb: 1, cs: 1, sec: 'RF' },
+    ],
+    bench: [
+      { id: 'eckstda01', name: 'David Eckstein', pos: 'SS', bats: 'R', age: 33, pa: 376, h: 95, double: 18, triple: 0, hr: 2, bb: 24, so: 26, hbp: 9, sb: 5, cs: 2, sec: '2B', fld: 53 },
+      { id: 'wilkebr01', name: 'Brad Wilkerson', pos: 'RF', bats: 'L', age: 31, pa: 309, h: 60, double: 13, triple: 1, hr: 10, bb: 34, so: 80, hbp: 1, sb: 3, cs: 3, sec: 'LF', fld: 57, arm: 65 },
+      { id: 'zaungr01', name: 'Gregg Zaun', pos: 'C', bats: 'S', age: 37, pa: 288, h: 60, double: 15, triple: 0, hr: 7, bb: 37, so: 39, hbp: 1, sb: 1, cs: 1, fld: 68, arm: 69 },
+      { id: 'hillaa01', name: 'Aaron Hill', pos: '2B', bats: 'R', age: 26, pa: 229, h: 59, double: 14, triple: 1, hr: 4, bb: 15, so: 32, hbp: 2, sb: 2, cs: 1, sec: 'SS', fld: 60 },
+      { id: 'mcdonjo03', name: 'John McDonald', pos: 'SS', bats: 'R', age: 33, pa: 207, h: 44, double: 9, triple: 1, hr: 1, bb: 9, so: 27, hbp: 2, sb: 4, cs: 1, sec: '2B', fld: 54 },
+    ],
+    reserveBatters: [
+      { id: 'stewash01', name: 'Shannon Stewart', pos: 'LF', bats: 'R', age: 34, pa: 200, h: 50, double: 6, triple: 1, hr: 3, bb: 17, so: 19, hbp: 1, sb: 3, cs: 1, sec: 'CF', fld: 64, arm: 76 },
+      { id: 'menchke01', name: 'Kevin Mench', pos: 'LF', bats: 'R', age: 30, pa: 131, h: 31, double: 9, triple: 1, hr: 3, bb: 9, so: 14, hbp: 1, sb: 1, cs: 0, sec: 'RF', fld: 76, arm: 66 },
+      { id: 'snidetr01', name: 'Travis Snider', pos: 'LF', bats: 'L', age: 20, pa: 80, h: 22, double: 6, triple: 0, hr: 2, bb: 5, so: 23, hbp: 0, sb: 0, cs: 0, sec: 'RF', fld: 57, arm: 82, rk: true },
+    ],
+    pitchers: [
+      { id: 'hallaro01', name: 'Roy Halladay', role: 'SP', throws: 'R', age: 31, g: 34, gs: 33, outs: 738, h: 230, hr: 18, bb: 43, so: 177, hbp: 8, er: 85, w: 20, l: 11, sv: 0, fld: 78 },
+      { id: 'burneaj01', name: 'A. J. Burnett', role: 'SP', throws: 'R', age: 31, g: 35, gs: 34, outs: 664, h: 204, hr: 23, bb: 85, so: 230, hbp: 12, er: 98, w: 18, l: 10, sv: 0, fld: 66 },
+      { id: 'litscje01', name: 'Jesse Litsch', role: 'SP', throws: 'R', age: 23, g: 29, gs: 28, outs: 528, h: 178, hr: 20, bb: 44, so: 92, hbp: 9, er: 71, w: 13, l: 9, sv: 0, fld: 89 },
+      { id: 'marcush01', name: 'Shaun Marcum', role: 'SP', throws: 'R', age: 26, g: 25, gs: 25, outs: 454, h: 134, hr: 23, bb: 50, so: 119, hbp: 7, er: 63, w: 9, l: 7, sv: 0, fld: 79 },
+      { id: 'mcgowdu01', name: 'Dustin McGowan', role: 'SP', throws: 'R', age: 26, g: 19, gs: 19, outs: 334, h: 108, hr: 9, bb: 42, so: 91, hbp: 3, er: 54, w: 6, l: 7, sv: 0 },
+      { id: 'ryanbj01', name: 'B. J. Ryan', role: 'CL', throws: 'L', age: 32, g: 60, gs: 0, outs: 174, h: 45, hr: 4, bb: 26, so: 62, hbp: 3, er: 19, w: 2, l: 4, sv: 32 },
+      { id: 'downssc01', name: 'Scott Downs', role: 'RP', throws: 'L', age: 32, g: 66, gs: 0, outs: 212, h: 57, hr: 4, bb: 27, so: 60, hbp: 3, er: 18, w: 0, l: 3, sv: 5 },
+      { id: 'carlsje01', name: 'Jesse Carlson', role: 'RP', throws: 'L', age: 27, g: 69, gs: 0, outs: 180, h: 41, hr: 6, bb: 21, so: 55, hbp: 3, er: 15, w: 7, l: 2, sv: 2, rk: true },
+      { id: 'tallebr01', name: 'Brian Tallet', role: 'RP', throws: 'L', age: 30, g: 51, gs: 0, outs: 169, h: 48, hr: 3, bb: 25, so: 46, hbp: 3, er: 20, w: 1, l: 2, sv: 0 },
+      { id: 'frasoja01', name: 'Jason Frasor', role: 'RP', throws: 'R', age: 30, g: 49, gs: 0, outs: 142, h: 39, hr: 4, bb: 25, so: 47, hbp: 1, er: 23, w: 1, l: 2, sv: 0 },
+      { id: 'parrijo01', name: 'John Parrish', role: 'RP', throws: 'L', age: 30, g: 13, gs: 6, outs: 127, h: 47, hr: 3, bb: 21, so: 25, hbp: 1, er: 21, w: 1, l: 1, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'purceda01', name: 'David Purcey', role: 'SP', throws: 'L', age: 26, g: 12, gs: 12, outs: 195, h: 67, hr: 9, bb: 29, so: 58, hbp: 4, er: 40, w: 3, l: 6, sv: 0, rk: true },
+      { id: 'campsh01', name: 'Shawn Camp', role: 'RP', throws: 'R', age: 32, g: 40, gs: 0, outs: 118, h: 46, hr: 4, bb: 12, so: 29, hbp: 3, er: 21, w: 3, l: 1, sv: 0 },
+      { id: 'leagubr01', name: 'Brandon League', role: 'RP', throws: 'R', age: 25, g: 31, gs: 0, outs: 99, h: 31, hr: 2, bb: 13, so: 22, hbp: 2, er: 10, w: 1, l: 2, sv: 1 },
+      { id: 'richmsc01', name: 'Scott Richmond', role: 'RP', throws: 'R', age: 28, g: 5, gs: 5, outs: 81, h: 32, hr: 2, bb: 2, so: 20, hbp: 2, er: 12, w: 1, l: 3, sv: 0, rk: true },
+      { id: 'wolfebr01', name: 'Brian Wolfe', role: 'RP', throws: 'R', age: 27, g: 20, gs: 0, outs: 66, h: 18, hr: 2, bb: 5, so: 12, hbp: 1, er: 7, w: 0, l: 2, sv: 0, rk: true },
+    ],
+  },
+  // CWS (CHA 2008)
+  {
+    franchiseId: 'CWS',
+    season: 2008,
+    batters: [
+      { id: 'pierzaj01', name: 'A. J. Pierzynski', pos: 'C', bats: 'L', age: 31, pa: 570, h: 148, double: 29, triple: 1, hr: 14, bb: 22, so: 73, hbp: 8, sb: 1, cs: 0, sec: '1B', fld: 72, arm: 61 },
+      { id: 'swishni01', name: 'Nick Swisher', pos: '1B', bats: 'S', age: 27, pa: 588, h: 117, double: 25, triple: 1, hr: 24, bb: 85, so: 128, hbp: 7, sb: 3, cs: 2, sec: 'LF', fld: 71 },
+      { id: 'ramiral03', name: 'Alexei Ramirez', pos: '2B', bats: 'R', age: 26, pa: 509, h: 139, double: 22, triple: 2, hr: 21, bb: 18, so: 61, hbp: 3, sb: 13, cs: 9, sec: 'SS', fld: 72, rk: true },
+      { id: 'credejo01', name: 'Joe Crede', pos: '3B', bats: 'R', age: 30, pa: 373, h: 86, double: 17, triple: 1, hr: 16, bb: 25, so: 44, hbp: 3, sb: 0, cs: 2, sec: '1B', fld: 72 },
+      { id: 'cabreor01', name: 'Orlando Cabrera', pos: 'SS', bats: 'R', age: 33, pa: 730, h: 190, double: 37, triple: 1, hr: 8, bb: 53, so: 68, hbp: 3, sb: 21, cs: 5, sec: '2B', fld: 76 },
+      { id: 'quentca01', name: 'Carlos Quentin', pos: 'LF', bats: 'R', age: 25, pa: 569, h: 130, double: 29, triple: 1, hr: 30, bb: 58, so: 90, hbp: 21, sb: 6, cs: 3, sec: 'RF', fld: 60, arm: 66 },
+      { id: 'anderbr03', name: 'Brian Anderson', pos: 'CF', bats: 'R', age: 26, pa: 193, h: 40, double: 12, triple: 0, hr: 6, bb: 12, so: 45, hbp: 1, sb: 4, cs: 2, sec: 'LF', fld: 50, arm: 56 },
+      { id: 'dyeje01', name: 'Jermaine Dye', pos: 'RF', bats: 'R', age: 34, pa: 645, h: 166, double: 38, triple: 2, hr: 36, bb: 49, so: 113, hbp: 6, sb: 4, cs: 2, sec: 'LF', fld: 61, arm: 57 },
+      { id: 'thomeji01', name: 'Jim Thome', pos: 'DH', bats: 'L', age: 37, pa: 602, h: 129, double: 26, triple: 0, hr: 37, bb: 98, so: 148, hbp: 5, sb: 1, cs: 0, sec: '1B' },
+    ],
+    bench: [
+      { id: 'konerpa01', name: 'Paul Konerko', pos: '1B', bats: 'R', age: 32, pa: 514, h: 115, double: 23, triple: 0, hr: 24, bb: 61, so: 81, hbp: 5, sb: 1, cs: 0, sec: '3B', fld: 71 },
+      { id: 'uribeju01', name: 'Juan Uribe', pos: '3B', bats: 'R', age: 29, pa: 353, h: 78, double: 17, triple: 1, hr: 11, bb: 19, so: 66, hbp: 2, sb: 1, cs: 4, sec: 'SS', fld: 96 },
+      { id: 'wisede01', name: 'Dewayne Wise', pos: 'LF', bats: 'L', age: 30, pa: 143, h: 31, double: 4, triple: 2, hr: 5, bb: 8, so: 31, hbp: 1, sb: 8, cs: 0, sec: 'RF', fld: 77, arm: 71 },
+      { id: 'hallto02', name: 'Toby Hall', pos: 'C', bats: 'R', age: 32, pa: 136, h: 32, double: 5, triple: 0, hr: 2, bb: 5, so: 15, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 74, arm: 61 },
+      { id: 'ozunapa01', name: 'Pablo Ozuna', pos: '2B', bats: 'R', age: 33, pa: 102, h: 26, double: 4, triple: 1, hr: 1, bb: 3, so: 9, hbp: 1, sb: 2, cs: 2, sec: '3B', fld: 62 },
+    ],
+    pitchers: [
+      { id: 'buehrma01', name: 'Mark Buehrle', role: 'SP', throws: 'L', age: 29, g: 34, gs: 34, outs: 656, h: 240, hr: 25, bb: 51, so: 130, hbp: 5, er: 96, w: 15, l: 12, sv: 0, fld: 79 },
+      { id: 'vazquja01', name: 'Javier Vazquez', role: 'SP', throws: 'R', age: 31, g: 33, gs: 33, outs: 625, h: 208, hr: 26, bb: 57, so: 203, hbp: 8, er: 103, w: 12, l: 16, sv: 0, fld: 77 },
+      { id: 'floydga01', name: 'Gavin Floyd', role: 'SP', throws: 'R', age: 25, g: 33, gs: 33, outs: 619, h: 201, hr: 34, bb: 70, so: 141, hbp: 10, er: 97, w: 17, l: 8, sv: 0, fld: 70 },
+      { id: 'danksjo01', name: 'John Danks', role: 'SP', throws: 'L', age: 23, g: 33, gs: 33, outs: 585, h: 191, hr: 22, bb: 62, so: 153, hbp: 4, er: 85, w: 12, l: 9, sv: 0, fld: 75 },
+      { id: 'contrjo01', name: 'Jose Contreras', role: 'SP', throws: 'R', age: 36, g: 20, gs: 20, outs: 363, h: 133, hr: 12, bb: 36, so: 72, hbp: 6, er: 65, w: 7, l: 6, sv: 0 },
+      { id: 'jenksbo01', name: 'Bobby Jenks', role: 'CL', throws: 'R', age: 27, g: 57, gs: 0, outs: 185, h: 50, hr: 3, bb: 17, so: 49, hbp: 1, er: 20, w: 3, l: 1, sv: 30 },
+      { id: 'thornma01', name: 'Matt Thornton', role: 'RP', throws: 'L', age: 31, g: 74, gs: 0, outs: 202, h: 54, hr: 5, bb: 23, so: 68, hbp: 2, er: 24, w: 5, l: 3, sv: 1 },
+      { id: 'doteloc01', name: 'Octavio Dotel', role: 'RP', throws: 'R', age: 34, g: 72, gs: 0, outs: 201, h: 56, hr: 11, bb: 29, so: 88, hbp: 6, er: 30, w: 4, l: 4, sv: 1 },
+      { id: 'masseni01', name: 'Nick Masset', role: 'RP', throws: 'R', age: 26, g: 42, gs: 1, outs: 186, h: 72, hr: 6, bb: 29, so: 39, hbp: 3, er: 32, w: 2, l: 0, sv: 1, rk: true },
+      { id: 'richacl01', name: 'Clayton Richard', role: 'RP', throws: 'L', age: 24, g: 13, gs: 8, outs: 143, h: 61, hr: 5, bb: 13, so: 29, hbp: 0, er: 32, w: 2, l: 5, sv: 0, rk: true },
+      { id: 'linebsc01', name: 'Scott Linebrink', role: 'RP', throws: 'R', age: 31, g: 50, gs: 0, outs: 139, h: 42, hr: 7, bb: 12, so: 36, hbp: 0, er: 18, w: 2, l: 2, sv: 1 },
+    ],
+    reservePitchers: [
+      { id: 'loganbo02', name: 'Boone Logan', role: 'RP', throws: 'L', age: 23, g: 55, gs: 0, outs: 127, h: 54, hr: 6, bb: 17, so: 37, hbp: 1, er: 27, w: 2, l: 3, sv: 0 },
+      { id: 'carradj01', name: 'D. J. Carrasco', role: 'RP', throws: 'R', age: 31, g: 31, gs: 0, outs: 116, h: 30, hr: 2, bb: 14, so: 30, hbp: 5, er: 17, w: 1, l: 0, sv: 0 },
+      { id: 'russead01', name: 'Adam Russell', role: 'RP', throws: 'R', age: 25, g: 22, gs: 0, outs: 78, h: 30, hr: 1, bb: 10, so: 22, hbp: 2, er: 15, w: 4, l: 0, sv: 0, rk: true },
+      { id: 'wasseeh01', name: 'Ehren Wassermann', role: 'RP', throws: 'R', age: 27, g: 24, gs: 0, outs: 59, h: 24, hr: 0, bb: 11, so: 11, hbp: 1, er: 13, w: 1, l: 2, sv: 0, rk: true },
+      { id: 'macdomi01', name: 'Mike MacDougal', role: 'RP', throws: 'R', age: 31, g: 16, gs: 0, outs: 51, h: 18, hr: 1, bb: 11, so: 14, hbp: 1, er: 8, w: 0, l: 0, sv: 0 },
+    ],
+  },
+  // CLE (CLE 2008)
+  {
+    franchiseId: 'CLE',
+    season: 2008,
+    batters: [
+      { id: 'shoppke01', name: 'Kelly Shoppach', pos: 'C', bats: 'R', age: 28, pa: 403, h: 93, double: 27, triple: 0, hr: 19, bb: 33, so: 133, hbp: 8, sb: 0, cs: 0, sec: '1B', fld: 67, arm: 64 },
+      { id: 'garkory01', name: 'Ryan Garko', pos: '1B', bats: 'R', age: 27, pa: 563, h: 140, double: 25, triple: 1, hr: 17, bb: 41, so: 91, hbp: 17, sb: 0, cs: 0, sec: '3B', fld: 74 },
+      { id: 'cabreas01', name: 'Asdrubal Cabrera', pos: '2B', bats: 'S', age: 22, pa: 418, h: 93, double: 20, triple: 1, hr: 6, bb: 44, so: 74, hbp: 4, sb: 3, cs: 3, sec: 'SS', fld: 99 },
+      { id: 'blakeca01', name: 'Casey Blake', pos: '3B', bats: 'R', age: 34, pa: 601, h: 146, double: 34, triple: 2, hr: 20, bb: 50, so: 117, hbp: 10, sb: 4, cs: 2, sec: '1B', fld: 63 },
+      { id: 'peraljh01', name: 'Jhonny Peralta', pos: 'SS', bats: 'R', age: 26, pa: 664, h: 162, double: 35, triple: 3, hr: 21, bb: 55, so: 139, hbp: 4, sb: 3, cs: 2, sec: '2B', fld: 75 },
+      { id: 'francbe01', name: 'Ben Francisco', pos: 'LF', bats: 'R', age: 26, pa: 499, h: 120, double: 32, triple: 0, hr: 16, bb: 39, so: 91, hbp: 6, sb: 4, cs: 4, sec: 'RF', fld: 74, arm: 84, rk: true },
+      { id: 'sizemgr01', name: 'Grady Sizemore', pos: 'CF', bats: 'L', age: 25, pa: 745, h: 174, double: 40, triple: 6, hr: 29, bb: 95, so: 142, hbp: 13, sb: 34, cs: 7, sec: 'LF', fld: 72, arm: 60 },
+      { id: 'gutiefr01', name: 'Franklin Gutierrez', pos: 'RF', bats: 'R', age: 25, pa: 440, h: 102, double: 24, triple: 2, hr: 11, bb: 27, so: 94, hbp: 6, sb: 9, cs: 3, sec: 'LF', fld: 89, arm: 62 },
+      { id: 'delluda01', name: 'David Dellucci', pos: 'DH', bats: 'L', age: 34, pa: 375, h: 82, double: 19, triple: 3, hr: 11, bb: 28, so: 76, hbp: 8, sb: 3, cs: 2, sec: 'LF', fld: 66, arm: 63 },
+    ],
+    bench: [
+      { id: 'carroja01', name: 'Jamey Carroll', pos: '2B', bats: 'R', age: 34, pa: 402, h: 93, double: 14, triple: 3, hr: 2, bb: 38, so: 58, hbp: 7, sb: 8, cs: 4, sec: '3B', fld: 65 },
+      { id: 'choosh01', name: 'Shin-Soo Choo', pos: 'RF', bats: 'L', age: 25, pa: 370, h: 97, double: 27, triple: 3, hr: 13, bb: 43, so: 82, hbp: 5, sb: 5, cs: 4, sec: 'LF', fld: 60, arm: 66 },
+      { id: 'martivi01', name: 'Victor Martinez', pos: 'C', bats: 'S', age: 29, pa: 294, h: 77, double: 17, triple: 0, hr: 7, bb: 28, so: 34, hbp: 3, sb: 0, cs: 0, sec: '1B', fld: 73, arm: 80 },
+      { id: 'martean01', name: 'Andy Marte', pos: '3B', bats: 'R', age: 24, pa: 257, h: 52, double: 13, triple: 1, hr: 4, bb: 14, so: 51, hbp: 1, sb: 1, cs: 1, sec: '1B', fld: 92 },
+      { id: 'hafnetr01', name: 'Travis Hafner', pos: 'DH', bats: 'L', age: 31, pa: 233, h: 49, double: 10, triple: 0, hr: 9, bb: 35, so: 46, hbp: 3, sb: 0, cs: 0, sec: '1B' },
+    ],
+    reserveBatters: [
+      { id: 'fasansa01', name: 'Sal Fasano', pos: 'C', bats: 'R', age: 36, pa: 54, h: 11, double: 3, triple: 0, hr: 1, bb: 2, so: 17, hbp: 2, sb: 0, cs: 0 },
+      { id: 'aubremi01', name: 'Michael Aubrey', pos: '1B', bats: 'L', age: 26, pa: 50, h: 9, double: 0, triple: 0, hr: 2, bb: 5, so: 5, hbp: 0, sb: 0, cs: 0, sec: '3B', rk: true },
+    ],
+    pitchers: [
+      { id: 'leecl02', name: 'Cliff Lee', role: 'SP', throws: 'L', age: 29, g: 31, gs: 31, outs: 670, h: 221, hr: 20, bb: 47, so: 156, hbp: 7, er: 86, w: 22, l: 3, sv: 0, fld: 63 },
+      { id: 'byrdpa01', name: 'Paul Byrd', role: 'SP', throws: 'R', age: 37, g: 30, gs: 30, outs: 540, h: 213, hr: 28, bb: 32, so: 82, hbp: 6, er: 92, w: 11, l: 12, sv: 0, fld: 60 },
+      { id: 'sowerje01', name: 'Jeremy Sowers', role: 'SP', throws: 'L', age: 25, g: 22, gs: 22, outs: 363, h: 140, hr: 17, bb: 37, so: 57, hbp: 4, er: 74, w: 4, l: 9, sv: 0 },
+      { id: 'carmofa01', name: 'Roberto Hernandez', role: 'SP', throws: 'R', age: 27, g: 22, gs: 22, outs: 362, h: 126, hr: 9, bb: 53, so: 74, hbp: 8, er: 60, w: 8, l: 7, sv: 0 },
+      { id: 'laffeaa01', name: 'Aaron Laffey', role: 'SP', throws: 'L', age: 23, g: 16, gs: 16, outs: 281, h: 104, hr: 8, bb: 29, so: 44, hbp: 9, er: 45, w: 5, l: 7, sv: 0, rk: true },
+      { id: 'lewisje01', name: 'Jensen Lewis', role: 'CL', throws: 'R', age: 24, g: 51, gs: 0, outs: 198, h: 67, hr: 7, bb: 26, so: 58, hbp: 4, er: 26, w: 0, l: 4, sv: 13, rk: true },
+      { id: 'perezra01', name: 'Rafael Perez', role: 'RP', throws: 'L', age: 26, g: 73, gs: 0, outs: 229, h: 63, hr: 8, bb: 23, so: 85, hbp: 1, er: 26, w: 4, l: 4, sv: 2 },
+      { id: 'betanra01', name: 'Rafael Betancourt', role: 'RP', throws: 'R', age: 33, g: 69, gs: 0, outs: 213, h: 68, hr: 9, bb: 18, so: 71, hbp: 0, er: 30, w: 3, l: 4, sv: 4 },
+      { id: 'jacksza01', name: 'Zach Jackson', role: 'RP', throws: 'L', age: 25, g: 11, gs: 9, outs: 175, h: 69, hr: 7, bb: 17, so: 31, hbp: 4, er: 36, w: 2, l: 3, sv: 0, rk: true },
+      { id: 'kobayma01', name: 'Masahide Kobayashi', role: 'RP', throws: 'R', age: 34, g: 57, gs: 0, outs: 167, h: 65, hr: 8, bb: 14, so: 35, hbp: 1, er: 28, w: 4, l: 5, sv: 6, rk: true },
+      { id: 'reyesan01', name: 'Anthony Reyes', role: 'RP', throws: 'R', age: 26, g: 16, gs: 6, outs: 147, h: 47, hr: 6, bb: 18, so: 31, hbp: 3, er: 25, w: 4, l: 2, sv: 1 },
+    ],
+    reservePitchers: [
+      { id: 'mujiced01', name: 'Edward Mujica', role: 'RP', throws: 'R', age: 24, g: 33, gs: 0, outs: 116, h: 48, hr: 5, bb: 8, so: 26, hbp: 1, er: 28, w: 3, l: 2, sv: 0, rk: true },
+      { id: 'westbja01', name: 'Jake Westbrook', role: 'RP', throws: 'R', age: 30, g: 5, gs: 5, outs: 104, h: 35, hr: 3, bb: 10, so: 19, hbp: 1, er: 15, w: 1, l: 2, sv: 0 },
+      { id: 'juliojo01', name: 'Jorge Julio', role: 'RP', throws: 'R', age: 29, g: 27, gs: 0, outs: 90, h: 29, hr: 4, bb: 17, so: 33, hbp: 1, er: 15, w: 3, l: 0, sv: 0 },
+      { id: 'lewissc02', name: 'Scott Lewis', role: 'RP', throws: 'L', age: 24, g: 4, gs: 4, outs: 72, h: 20, hr: 4, bb: 6, so: 15, hbp: 0, er: 7, w: 4, l: 0, sv: 0, rk: true },
+      { id: 'gintema01', name: 'Matt Ginter', role: 'RP', throws: 'R', age: 30, g: 4, gs: 4, outs: 63, h: 25, hr: 3, bb: 3, so: 12, hbp: 0, er: 12, w: 1, l: 3, sv: 0 },
+    ],
+  },
+  // DET (DET 2008)
+  {
+    franchiseId: 'DET',
+    season: 2008,
+    batters: [
+      { id: 'rodriiv01', name: 'Ivan Rodriguez', pos: 'C', bats: 'R', age: 36, pa: 429, h: 115, double: 22, triple: 3, hr: 8, bb: 17, so: 71, hbp: 2, sb: 6, cs: 1, fld: 72, arm: 75 },
+      { id: 'cabremi01', name: 'Miguel Cabrera', pos: '1B', bats: 'R', age: 25, pa: 684, h: 186, double: 39, triple: 2, hr: 34, bb: 69, so: 124, hbp: 5, sb: 3, cs: 1, sec: '3B', fld: 64 },
+      { id: 'polanpl01', name: 'Placido Polanco', pos: '2B', bats: 'R', age: 32, pa: 629, h: 184, double: 33, triple: 3, hr: 8, bb: 34, so: 37, hbp: 8, sb: 6, cs: 2, sec: '3B', fld: 84 },
+      { id: 'guillca01', name: 'Carlos Guillen', pos: '3B', bats: 'S', age: 32, pa: 489, h: 127, double: 29, triple: 4, hr: 13, bb: 53, so: 69, hbp: 3, sb: 11, cs: 5, sec: 'SS', fld: 89 },
+      { id: 'renteed01', name: 'Edgar Renteria', pos: 'SS', bats: 'R', age: 31, pa: 547, h: 147, double: 27, triple: 2, hr: 11, bb: 43, so: 70, hbp: 1, sb: 9, cs: 3, sec: '2B', fld: 66 },
+      { id: 'thamema01', name: 'Marcus Thames', pos: 'LF', bats: 'R', age: 31, pa: 342, h: 77, double: 15, triple: 0, hr: 24, bb: 23, so: 90, hbp: 1, sb: 1, cs: 2, sec: 'RF', fld: 74, arm: 69 },
+      { id: 'grandcu01', name: 'Curtis Granderson', pos: 'CF', bats: 'L', age: 27, pa: 629, h: 159, double: 30, triple: 15, hr: 21, bb: 61, so: 127, hbp: 4, sb: 15, cs: 3, sec: 'LF', fld: 80, arm: 67 },
+      { id: 'ordonma01', name: 'Magglio Ordonez', pos: 'RF', bats: 'R', age: 34, pa: 623, h: 184, double: 38, triple: 1, hr: 23, bb: 57, so: 76, hbp: 3, sb: 2, cs: 3, sec: 'CF', fld: 53, arm: 68 },
+      { id: 'sheffga01', name: 'Gary Sheffield', pos: 'DH', bats: 'R', age: 39, pa: 482, h: 101, double: 16, triple: 0, hr: 19, bb: 61, so: 70, hbp: 6, sb: 13, cs: 3, sec: 'RF' },
+    ],
+    bench: [
+      { id: 'ingebr01', name: 'Brandon Inge', pos: 'C', bats: 'R', age: 31, pa: 407, h: 81, double: 17, triple: 2, hr: 12, bb: 36, so: 97, hbp: 7, sb: 5, cs: 2, sec: '1B', fld: 65, arm: 72 },
+      { id: 'joycema01', name: 'Matt Joyce', pos: 'LF', bats: 'L', age: 23, pa: 277, h: 61, double: 16, triple: 3, hr: 12, bb: 31, so: 65, hbp: 2, sb: 0, cs: 2, sec: 'RF', fld: 73, arm: 64, rk: true },
+      { id: 'raburry01', name: 'Ryan Raburn', pos: 'LF', bats: 'R', age: 27, pa: 199, h: 47, double: 12, triple: 2, hr: 4, bb: 14, so: 47, hbp: 0, sb: 3, cs: 1, sec: 'RF', fld: 80, arm: 74 },
+      { id: 'santira01', name: 'Ramon Santiago', pos: 'SS', bats: 'S', age: 28, pa: 156, h: 36, double: 6, triple: 2, hr: 3, bb: 15, so: 19, hbp: 5, sb: 2, cs: 0, sec: '2B', fld: 72 },
+      { id: 'jonesja04', name: 'Jacque Jones', pos: 'LF', bats: 'L', age: 33, pa: 134, h: 31, double: 7, triple: 1, hr: 3, bb: 10, so: 23, hbp: 1, sb: 1, cs: 1, sec: 'RF', fld: 75, arm: 66 },
+    ],
+    reserveBatters: [
+      { id: 'thomacl02', name: 'Clete Thomas', pos: 'LF', bats: 'L', age: 24, pa: 133, h: 33, double: 9, triple: 1, hr: 1, bb: 14, so: 26, hbp: 1, sb: 2, cs: 0, sec: 'CF', fld: 94, arm: 86, rk: true },
+      { id: 'larisje01', name: 'Jeff Larish', pos: '3B', bats: 'L', age: 25, pa: 111, h: 27, double: 6, triple: 0, hr: 2, bb: 7, so: 34, hbp: 0, sb: 2, cs: 2, sec: '1B', rk: true },
+      { id: 'ryandu01', name: 'Dusty Ryan', pos: 'C', bats: 'R', age: 23, pa: 50, h: 14, double: 2, triple: 0, hr: 2, bb: 5, so: 13, hbp: 0, sb: 0, cs: 0, sec: '1B', rk: true },
+      { id: 'sardida01', name: 'Dane Sardinha', pos: 'C', bats: 'R', age: 29, pa: 49, h: 7, double: 0, triple: 1, hr: 0, bb: 4, so: 11, hbp: 0, sb: 0, cs: 0, sec: '1B', rk: true },
+    ],
+    pitchers: [
+      { id: 'verlaju01', name: 'Justin Verlander', role: 'SP', throws: 'R', age: 25, g: 33, gs: 33, outs: 603, h: 194, hr: 20, bb: 78, so: 168, hbp: 15, er: 96, w: 11, l: 17, sv: 0, fld: 63 },
+      { id: 'galarar01', name: 'Armando Galarraga', role: 'SP', throws: 'R', age: 26, g: 30, gs: 28, outs: 536, h: 152, hr: 28, bb: 63, so: 125, hbp: 6, er: 75, w: 13, l: 7, sv: 0, fld: 59, rk: true },
+      { id: 'rogerke01', name: 'Kenny Rogers', role: 'SP', throws: 'L', age: 43, g: 30, gs: 30, outs: 521, h: 202, hr: 22, bb: 68, so: 87, hbp: 8, er: 100, w: 9, l: 13, sv: 0, fld: 94 },
+      { id: 'roberna01', name: 'Nate Robertson', role: 'SP', throws: 'L', age: 30, g: 32, gs: 28, outs: 506, h: 204, hr: 24, bb: 61, so: 113, hbp: 3, er: 103, w: 7, l: 11, sv: 0, fld: 67 },
+      { id: 'minerza01', name: 'Zach Miner', role: 'SP', throws: 'R', age: 26, g: 45, gs: 13, outs: 354, h: 121, hr: 10, bb: 46, so: 67, hbp: 4, er: 54, w: 8, l: 5, sv: 0 },
+      { id: 'jonesto02', name: 'Todd Jones', role: 'CL', throws: 'R', age: 40, g: 45, gs: 0, outs: 125, h: 49, hr: 3, bb: 16, so: 19, hbp: 2, er: 22, w: 4, l: 1, sv: 18 },
+      { id: 'lopezaq01', name: 'Aquilino Lopez', role: 'RP', throws: 'R', age: 33, g: 48, gs: 0, outs: 236, h: 85, hr: 9, bb: 23, so: 57, hbp: 3, er: 33, w: 4, l: 1, sv: 0 },
+      { id: 'seaybo01', name: 'Bobby Seay', role: 'RP', throws: 'L', age: 30, g: 60, gs: 0, outs: 169, h: 56, hr: 3, bb: 24, so: 55, hbp: 3, er: 25, w: 1, l: 2, sv: 0 },
+      { id: 'dolsifr01', name: 'Freddy Dolsi', role: 'RP', throws: 'R', age: 25, g: 42, gs: 0, outs: 143, h: 50, hr: 3, bb: 28, so: 29, hbp: 3, er: 21, w: 1, l: 5, sv: 2, rk: true },
+      { id: 'fossuca01', name: 'Casey Fossum', role: 'RP', throws: 'L', age: 30, g: 31, gs: 0, outs: 124, h: 48, hr: 6, bb: 17, so: 28, hbp: 3, er: 28, w: 3, l: 1, sv: 0 },
+      { id: 'rodnefe01', name: 'Fernando Rodney', role: 'RP', throws: 'R', age: 31, g: 38, gs: 0, outs: 121, h: 35, hr: 4, bb: 24, so: 46, hbp: 3, er: 20, w: 0, l: 6, sv: 13 },
+    ],
+    reservePitchers: [
+      { id: 'bondeje01', name: 'Jeremy Bonderman', role: 'SP', throws: 'R', age: 25, g: 12, gs: 12, outs: 214, h: 79, hr: 9, bb: 26, so: 59, hbp: 2, er: 37, w: 3, l: 4, sv: 0 },
+      { id: 'bonined01', name: 'Eddie Bonine', role: 'RP', throws: 'R', age: 27, g: 5, gs: 5, outs: 80, h: 36, hr: 3, bb: 5, so: 9, hbp: 2, er: 16, w: 2, l: 1, sv: 0, rk: true },
+      { id: 'willido03', name: 'Dontrelle Willis', role: 'RP', throws: 'L', age: 26, g: 8, gs: 7, outs: 72, h: 29, hr: 3, bb: 14, so: 19, hbp: 2, er: 16, w: 0, l: 2, sv: 0 },
+      { id: 'zumayjo01', name: 'Joel Zumaya', role: 'RP', throws: 'R', age: 23, g: 21, gs: 0, outs: 70, h: 21, hr: 2, bb: 17, so: 26, hbp: 0, er: 9, w: 0, l: 2, sv: 1 },
+      { id: 'rapadcl01', name: 'Clay Rapada', role: 'RP', throws: 'L', age: 27, g: 25, gs: 0, outs: 64, h: 19, hr: 1, bb: 14, so: 16, hbp: 1, er: 11, w: 3, l: 0, sv: 0, rk: true },
+    ],
+  },
+  // KCR (KCA 2008)
+  {
+    franchiseId: 'KCR',
+    season: 2008,
+    batters: [
+      { id: 'buckjo01', name: 'John Buck', pos: 'C', bats: 'R', age: 27, pa: 418, h: 84, double: 21, triple: 1, hr: 13, bb: 36, so: 94, hbp: 8, sb: 0, cs: 2, sec: '1B', fld: 72, arm: 60 },
+      { id: 'gloadro01', name: 'Ross Gload', pos: '1B', bats: 'L', age: 32, pa: 418, h: 109, double: 21, triple: 2, hr: 5, bb: 21, so: 42, hbp: 3, sb: 4, cs: 3, sec: 'LF', fld: 63 },
+      { id: 'grudzma01', name: 'Mark Grudzielanek', pos: '2B', bats: 'R', age: 38, pa: 360, h: 100, double: 23, triple: 1, hr: 4, bb: 18, so: 43, hbp: 5, sb: 2, cs: 1, sec: 'SS', fld: 76 },
+      { id: 'gordoal01', name: 'Alex Gordon', pos: '3B', bats: 'L', age: 24, pa: 571, h: 128, double: 35, triple: 2, hr: 15, bb: 55, so: 124, hbp: 9, sb: 11, cs: 3, sec: '1B', fld: 65 },
+      { id: 'avilemi01', name: 'Mike Aviles', pos: 'SS', bats: 'R', age: 27, pa: 441, h: 136, double: 27, triple: 4, hr: 10, bb: 18, so: 58, hbp: 2, sb: 8, cs: 3, sec: '2B', fld: 74, rk: true },
+      { id: 'dejesda01', name: 'David DeJesus', pos: 'LF', bats: 'L', age: 28, pa: 577, h: 146, double: 26, triple: 7, hr: 9, bb: 48, so: 70, hbp: 11, sb: 9, cs: 5, sec: 'CF', fld: 91, arm: 63 },
+      { id: 'gathrjo01', name: 'Joey Gathright', pos: 'CF', bats: 'L', age: 27, pa: 315, h: 73, double: 6, triple: 1, hr: 0, bb: 23, so: 44, hbp: 4, sb: 17, cs: 6, sec: 'LF', fld: 69, arm: 74 },
+      { id: 'teahema01', name: 'Mark Teahen', pos: 'RF', bats: 'L', age: 26, pa: 623, h: 152, double: 31, triple: 6, hr: 14, bb: 51, so: 129, hbp: 3, sb: 8, cs: 3, sec: 'LF', fld: 80, arm: 67 },
+      { id: 'guilljo01', name: 'Jose Guillen', pos: 'DH', bats: 'R', age: 32, pa: 633, h: 158, double: 36, triple: 1, hr: 21, bb: 30, so: 109, hbp: 13, sb: 3, cs: 1, sec: 'RF', fld: 67, arm: 81 },
+    ],
+    bench: [
+      { id: 'butlebi03', name: 'Billy Butler', pos: 'DH', bats: 'R', age: 22, pa: 478, h: 124, double: 25, triple: 1, hr: 11, bb: 34, so: 62, hbp: 1, sb: 0, cs: 1, sec: '1B' },
+      { id: 'olivomi01', name: 'Miguel Olivo', pos: 'C', bats: 'R', age: 29, pa: 317, h: 76, double: 17, triple: 1, hr: 11, bb: 8, so: 81, hbp: 3, sb: 4, cs: 1, sec: '1B', fld: 67, arm: 85 },
+      { id: 'germaes01', name: 'Esteban German', pos: 'LF', bats: 'R', age: 30, pa: 242, h: 56, double: 12, triple: 3, hr: 1, bb: 23, so: 38, hbp: 2, sb: 6, cs: 3, sec: 'CF', fld: 67, arm: 58 },
+      { id: 'penato02', name: 'Tony Pena', pos: 'SS', bats: 'R', age: 27, pa: 235, h: 51, double: 8, triple: 2, hr: 1, bb: 5, so: 40, hbp: 1, sb: 2, cs: 2, sec: '2B', fld: 50 },
+      { id: 'callaal01', name: 'Alberto Callaspo', pos: '2B', bats: 'S', age: 25, pa: 234, h: 59, double: 9, triple: 2, hr: 0, bb: 17, so: 17, hbp: 0, sb: 2, cs: 1, sec: 'SS', fld: 75 },
+    ],
+    reserveBatters: [
+      { id: 'maiermi01', name: 'Mitch Maier', pos: 'CF', bats: 'L', age: 26, pa: 97, h: 25, double: 1, triple: 1, hr: 0, bb: 3, so: 18, hbp: 2, sb: 0, cs: 2, sec: 'LF', fld: 76, arm: 56, rk: true },
+      { id: 'shealry01', name: 'Ryan Shealy', pos: '1B', bats: 'R', age: 28, pa: 79, h: 19, double: 3, triple: 0, hr: 3, bb: 5, so: 21, hbp: 1, sb: 0, cs: 0, sec: '3B', fld: 64 },
+    ],
+    pitchers: [
+      { id: 'mechegi01', name: 'Gil Meche', role: 'SP', throws: 'R', age: 29, g: 34, gs: 34, outs: 631, h: 206, hr: 21, bb: 72, so: 170, hbp: 2, er: 92, w: 14, l: 11, sv: 0, fld: 61 },
+      { id: 'greinza01', name: 'Zack Greinke', role: 'SP', throws: 'R', age: 24, g: 32, gs: 32, outs: 607, h: 202, hr: 21, bb: 57, so: 180, hbp: 4, er: 79, w: 13, l: 10, sv: 0, fld: 68 },
+      { id: 'bannibr01', name: 'Brian Bannister', role: 'SP', throws: 'R', age: 27, g: 32, gs: 32, outs: 548, h: 202, hr: 25, bb: 58, so: 104, hbp: 7, er: 104, w: 9, l: 16, sv: 0, fld: 73 },
+      { id: 'hochelu01', name: 'Luke Hochevar', role: 'SP', throws: 'R', age: 24, g: 22, gs: 22, outs: 387, h: 141, hr: 12, bb: 47, so: 71, hbp: 7, er: 76, w: 6, l: 12, sv: 0, rk: true },
+      { id: 'davieky01', name: 'Kyle Davies', role: 'SP', throws: 'R', age: 24, g: 21, gs: 21, outs: 339, h: 124, hr: 14, bb: 49, so: 75, hbp: 3, er: 64, w: 9, l: 7, sv: 0 },
+      { id: 'soriajo01', name: 'Joakim Soria', role: 'CL', throws: 'R', age: 24, g: 63, gs: 0, outs: 202, h: 41, hr: 4, bb: 19, so: 69, hbp: 4, er: 15, w: 2, l: 3, sv: 42 },
+      { id: 'ramirra02', name: 'Ramon Ramirez', role: 'RP', throws: 'R', age: 26, g: 71, gs: 0, outs: 215, h: 60, hr: 3, bb: 29, so: 67, hbp: 1, er: 27, w: 3, l: 2, sv: 1 },
+      { id: 'mahayro01', name: 'Ron Mahay', role: 'RP', throws: 'L', age: 37, g: 57, gs: 0, outs: 194, h: 58, hr: 6, bb: 32, so: 53, hbp: 1, er: 23, w: 5, l: 0, sv: 0 },
+      { id: 'peraljo01', name: 'Joel Peralta', role: 'RP', throws: 'R', age: 32, g: 40, gs: 0, outs: 158, h: 56, hr: 10, bb: 13, so: 40, hbp: 2, er: 28, w: 1, l: 2, sv: 0 },
+      { id: 'nunezle01', name: 'Juan Carlos Oviedo', role: 'RP', throws: 'R', age: 26, g: 45, gs: 0, outs: 145, h: 47, hr: 5, bb: 14, so: 31, hbp: 3, er: 18, w: 4, l: 1, sv: 0 },
+      { id: 'tejedro01', name: 'Rob Tejeda', role: 'RP', throws: 'R', age: 26, g: 29, gs: 1, outs: 136, h: 40, hr: 6, bb: 23, so: 32, hbp: 2, er: 24, w: 2, l: 2, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'tomkobr01', name: 'Brett Tomko', role: 'SP', throws: 'R', age: 35, g: 22, gs: 10, outs: 210, h: 80, hr: 10, bb: 21, so: 52, hbp: 1, er: 44, w: 2, l: 7, sv: 0 },
+      { id: 'duckwbr01', name: 'Brandon Duckworth', role: 'RP', throws: 'R', age: 32, g: 7, gs: 7, outs: 114, h: 41, hr: 2, bb: 19, so: 19, hbp: 2, er: 20, w: 3, l: 3, sv: 0 },
+      { id: 'yabutya01', name: 'Yasuhiko Yabuta', role: 'RP', throws: 'R', age: 35, g: 31, gs: 0, outs: 113, h: 41, hr: 6, bb: 17, so: 25, hbp: 0, er: 20, w: 1, l: 3, sv: 0, rk: true },
+      { id: 'ramirho01', name: 'Horacio Ramirez', role: 'RP', throws: 'L', age: 28, g: 32, gs: 0, outs: 112, h: 46, hr: 3, bb: 13, so: 15, hbp: 1, er: 23, w: 1, l: 4, sv: 0 },
+      { id: 'gobblji01', name: 'Jimmy Gobble', role: 'RP', throws: 'L', age: 26, g: 39, gs: 0, outs: 95, h: 39, hr: 5, bb: 17, so: 31, hbp: 1, er: 21, w: 0, l: 2, sv: 1 },
+    ],
+  },
+  // MIN (MIN 2008)
+  {
+    franchiseId: 'MIN',
+    season: 2008,
+    batters: [
+      { id: 'mauerjo01', name: 'Joe Mauer', pos: 'C', bats: 'L', age: 25, pa: 633, h: 174, double: 34, triple: 4, hr: 10, bb: 82, so: 56, hbp: 2, sb: 5, cs: 1, sec: '1B', fld: 78, arm: 79 },
+      { id: 'morneju01', name: 'Justin Morneau', pos: '1B', bats: 'L', age: 27, pa: 712, h: 185, double: 41, triple: 3, hr: 28, bb: 70, so: 91, hbp: 4, sb: 1, cs: 1, sec: '3B', fld: 71 },
+      { id: 'casilal01', name: 'Alexi Casilla', pos: '2B', bats: 'S', age: 23, pa: 437, h: 104, double: 14, triple: 1, hr: 5, bb: 29, so: 49, hbp: 2, sb: 11, cs: 2, sec: 'SS', fld: 64 },
+      { id: 'lambmi01', name: 'Mike Lamb', pos: '3B', bats: 'L', age: 32, pa: 272, h: 66, double: 12, triple: 2, hr: 5, bb: 22, so: 34, hbp: 1, sb: 0, cs: 1, sec: '1B', fld: 64 },
+      { id: 'harribr01', name: 'Brendan Harris', pos: 'SS', bats: 'R', age: 27, pa: 490, h: 120, double: 29, triple: 3, hr: 8, bb: 38, so: 91, hbp: 4, sb: 2, cs: 1, sec: '2B', fld: 79 },
+      { id: 'youngde03', name: 'Delmon Young', pos: 'LF', bats: 'R', age: 22, pa: 623, h: 169, double: 31, triple: 2, hr: 11, bb: 29, so: 110, hbp: 6, sb: 12, cs: 4, sec: 'RF', fld: 66, arm: 74 },
+      { id: 'gomezca01', name: 'Carlos Gomez', pos: 'CF', bats: 'R', age: 22, pa: 614, h: 146, double: 23, triple: 6, hr: 7, bb: 26, so: 139, hbp: 8, sb: 36, cs: 11, sec: 'LF', fld: 91, arm: 74 },
+      { id: 'spande01', name: 'Denard Span', pos: 'RF', bats: 'L', age: 24, pa: 411, h: 102, double: 16, triple: 7, hr: 6, bb: 50, so: 60, hbp: 4, sb: 18, cs: 7, sec: 'CF', fld: 87, arm: 69, rk: true },
+      { id: 'kubelja01', name: 'Jason Kubel', pos: 'DH', bats: 'L', age: 26, pa: 517, h: 125, double: 26, triple: 4, hr: 18, bb: 45, so: 91, hbp: 0, sb: 2, cs: 1, sec: 'LF' },
+    ],
+    bench: [
+      { id: 'puntoni01', name: 'Nick Punto', pos: 'SS', bats: 'S', age: 30, pa: 377, h: 86, double: 16, triple: 4, hr: 1, bb: 35, so: 58, hbp: 0, sb: 13, cs: 5, sec: '3B', fld: 83 },
+      { id: 'cuddymi01', name: 'Michael Cuddyer', pos: 'RF', bats: 'R', age: 29, pa: 279, h: 66, double: 14, triple: 3, hr: 7, bb: 27, so: 48, hbp: 4, sb: 3, cs: 0, sec: '1B', fld: 80, arm: 90 },
+      { id: 'buschbr01', name: 'Brian Buscher', pos: '3B', bats: 'L', age: 27, pa: 244, h: 62, double: 8, triple: 0, hr: 4, bb: 20, so: 42, hbp: 0, sb: 1, cs: 2, sec: '1B', fld: 60, rk: true },
+      { id: 'monrocr01', name: 'Craig Monroe', pos: 'DH', bats: 'R', age: 31, pa: 179, h: 37, double: 10, triple: 0, hr: 7, bb: 12, so: 44, hbp: 0, sb: 0, cs: 1, sec: 'LF' },
+      { id: 'everead01', name: 'Adam Everett', pos: 'SS', bats: 'R', age: 31, pa: 150, h: 31, double: 7, triple: 1, hr: 2, bb: 10, so: 18, hbp: 1, sb: 2, cs: 1, sec: '2B', fld: 86 },
+    ],
+    reserveBatters: [
+      { id: 'redmomi01', name: 'Mike Redmond', pos: 'C', bats: 'R', age: 37, pa: 137, h: 38, double: 7, triple: 0, hr: 0, bb: 6, so: 11, hbp: 2, sb: 0, cs: 0, fld: 83, arm: 65 },
+      { id: 'tolbema01', name: 'Matt Tolbert', pos: '3B', bats: 'S', age: 26, pa: 123, h: 32, double: 6, triple: 3, hr: 0, bb: 7, so: 19, hbp: 0, sb: 7, cs: 1, sec: 'SS', rk: true },
+      { id: 'ruizra01', name: 'Randy Ruiz', pos: 'DH', bats: 'R', age: 30, pa: 68, h: 17, double: 2, triple: 0, hr: 1, bb: 6, so: 21, hbp: 0, sb: 0, cs: 0, sec: '1B', rk: true },
+    ],
+    pitchers: [
+      { id: 'blackni01', name: 'Nick Blackburn', role: 'SP', throws: 'R', age: 26, g: 33, gs: 33, outs: 580, h: 227, hr: 23, bb: 39, so: 97, hbp: 7, er: 90, w: 11, l: 11, sv: 0, fld: 72, rk: true },
+      { id: 'hernali01', name: 'Livan Hernandez', role: 'SP', throws: 'R', age: 33, g: 31, gs: 31, outs: 540, h: 236, hr: 27, bb: 57, so: 79, hbp: 3, er: 110, w: 13, l: 11, sv: 0, fld: 75 },
+      { id: 'bakersc02', name: 'Scott Baker', role: 'SP', throws: 'R', age: 26, g: 28, gs: 28, outs: 517, h: 175, hr: 20, bb: 38, so: 131, hbp: 4, er: 75, w: 11, l: 4, sv: 0, fld: 60 },
+      { id: 'sloweke01', name: 'Kevin Slowey', role: 'SP', throws: 'R', age: 24, g: 27, gs: 27, outs: 481, h: 167, hr: 25, bb: 24, so: 119, hbp: 3, er: 73, w: 12, l: 11, sv: 0, fld: 65 },
+      { id: 'perkigl01', name: 'Glen Perkins', role: 'SP', throws: 'L', age: 25, g: 26, gs: 26, outs: 453, h: 176, hr: 23, bb: 42, so: 79, hbp: 4, er: 72, w: 12, l: 4, sv: 0, fld: 69, rk: true },
+      { id: 'nathajo01', name: 'Joe Nathan', role: 'CL', throws: 'R', age: 33, g: 68, gs: 0, outs: 203, h: 45, hr: 4, bb: 18, so: 77, hbp: 1, er: 12, w: 1, l: 2, sv: 39 },
+      { id: 'bassbr01', name: 'Brian Bass', role: 'RP', throws: 'R', age: 26, g: 49, gs: 4, outs: 268, h: 98, hr: 12, bb: 31, so: 45, hbp: 5, er: 48, w: 4, l: 4, sv: 1, rk: true },
+      { id: 'guerrma02', name: 'Matt Guerrier', role: 'RP', throws: 'R', age: 29, g: 76, gs: 0, outs: 229, h: 79, hr: 11, bb: 29, so: 59, hbp: 2, er: 34, w: 6, l: 9, sv: 1 },
+      { id: 'crainje01', name: 'Jesse Crain', role: 'RP', throws: 'R', age: 26, g: 66, gs: 0, outs: 188, h: 64, hr: 7, bb: 21, so: 49, hbp: 1, er: 26, w: 5, l: 4, sv: 0 },
+      { id: 'rincoju01', name: 'Juan Rincon', role: 'RP', throws: 'R', age: 29, g: 47, gs: 0, outs: 166, h: 64, hr: 7, bb: 24, so: 44, hbp: 3, er: 31, w: 3, l: 3, sv: 0 },
+      { id: 'breslcr01', name: 'Craig Breslow', role: 'RP', throws: 'L', age: 27, g: 49, gs: 0, outs: 141, h: 35, hr: 1, bb: 19, so: 39, hbp: 0, er: 11, w: 0, l: 2, sv: 1, rk: true },
+    ],
+    reservePitchers: [
+      { id: 'bonsebo01', name: 'Boof Bonser', role: 'SP', throws: 'R', age: 26, g: 47, gs: 12, outs: 355, h: 136, hr: 18, bb: 39, so: 95, hbp: 2, er: 70, w: 3, l: 7, sv: 0 },
+      { id: 'liriafr01', name: 'Francisco Liriano', role: 'SP', throws: 'L', age: 24, g: 14, gs: 14, outs: 228, h: 70, hr: 7, bb: 29, so: 78, hbp: 1, er: 29, w: 6, l: 4, sv: 0 },
+      { id: 'reyesde01', name: 'Dennys Reyes', role: 'RP', throws: 'L', age: 31, g: 75, gs: 0, outs: 139, h: 40, hr: 3, bb: 19, so: 38, hbp: 2, er: 12, w: 3, l: 0, sv: 0 },
+      { id: 'korecbo01', name: 'Bobby Korecky', role: 'RP', throws: 'R', age: 28, g: 16, gs: 0, outs: 53, h: 19, hr: 2, bb: 8, so: 6, hbp: 0, er: 9, w: 2, l: 0, sv: 0, rk: true },
+      { id: 'neshepa01', name: 'Pat Neshek', role: 'RP', throws: 'R', age: 27, g: 15, gs: 0, outs: 40, h: 9, hr: 2, bb: 5, so: 16, hbp: 0, er: 5, w: 0, l: 1, sv: 0 },
+    ],
+  },
+  // HOU (HOU 2008)
+  {
+    franchiseId: 'HOU',
+    season: 2008,
+    batters: [
+      { id: 'ausmubr01', name: 'Brad Ausmus', pos: 'C', bats: 'R', age: 39, pa: 250, h: 50, double: 9, triple: 1, hr: 2, bb: 24, so: 42, hbp: 3, sb: 2, cs: 1, sec: '1B', fld: 74, arm: 64 },
+      { id: 'berkmla01', name: 'Lance Berkman', pos: '1B', bats: 'S', age: 32, pa: 665, h: 167, double: 36, triple: 3, hr: 33, bb: 97, so: 114, hbp: 7, sb: 12, cs: 3, sec: 'LF', fld: 84 },
+      { id: 'matsuka01', name: 'Kazuo Matsui', pos: '2B', bats: 'S', age: 32, pa: 422, h: 109, double: 24, triple: 4, hr: 5, bb: 34, so: 59, hbp: 0, sb: 23, cs: 4, sec: 'SS', fld: 55 },
+      { id: 'wiggity01', name: 'Ty Wigginton', pos: '3B', bats: 'R', age: 30, pa: 429, h: 109, double: 23, triple: 1, hr: 20, bb: 30, so: 76, hbp: 7, sb: 3, cs: 4, sec: '2B', fld: 68 },
+      { id: 'tejadmi01', name: 'Miguel Tejada', pos: 'SS', bats: 'R', age: 34, pa: 666, h: 183, double: 33, triple: 2, hr: 17, bb: 35, so: 70, hbp: 8, sb: 5, cs: 4, fld: 65 },
+      { id: 'leeca01', name: 'Carlos Lee', pos: 'LF', bats: 'R', age: 32, pa: 481, h: 133, double: 28, triple: 0, hr: 25, bb: 37, so: 46, hbp: 3, sb: 7, cs: 2, sec: 'RF', fld: 68, arm: 66 },
+      { id: 'bournmi01', name: 'Michael Bourn', pos: 'CF', bats: 'L', age: 25, pa: 514, h: 110, double: 10, triple: 5, hr: 5, bb: 39, so: 107, hbp: 2, sb: 45, cs: 10, sec: 'LF', fld: 71, arm: 79 },
+      { id: 'pencehu01', name: 'Hunter Pence', pos: 'RF', bats: 'R', age: 25, pa: 642, h: 172, double: 36, triple: 7, hr: 24, bb: 38, so: 125, hbp: 3, sb: 12, cs: 9, sec: 'CF', fld: 81, arm: 83 },
+      { id: 'blumge01', name: 'Geoff Blum', pos: 'DH', bats: 'S', age: 35, pa: 356, h: 79, double: 17, triple: 1, hr: 9, bb: 24, so: 54, hbp: 2, sb: 1, cs: 1, sec: '3B', fld: 78 },
+    ],
+    bench: [
+      { id: 'erstada01', name: 'Darin Erstad', pos: 'LF', bats: 'L', age: 34, pa: 342, h: 83, double: 15, triple: 1, hr: 4, bb: 20, so: 58, hbp: 2, sb: 4, cs: 3, sec: '1B', fld: 87, arm: 65 },
+      { id: 'loretma01', name: 'Mark Loretta', pos: '2B', bats: 'R', age: 36, pa: 297, h: 75, double: 14, triple: 0, hr: 3, bb: 25, so: 27, hbp: 3, sb: 1, cs: 1, sec: 'SS', fld: 78 },
+      { id: 'quinthu01', name: 'Humberto Quintero', pos: 'C', bats: 'R', age: 28, pa: 183, h: 39, double: 6, triple: 0, hr: 2, bb: 6, so: 35, hbp: 4, sb: 0, cs: 0, sec: '1B', fld: 80, arm: 80 },
+      { id: 'towlejr01', name: 'J. R. Towles', pos: 'C', bats: 'R', age: 24, pa: 171, h: 26, double: 7, triple: 0, hr: 4, bb: 15, so: 35, hbp: 6, sb: 0, cs: 1, sec: '1B', fld: 72, arm: 78, rk: true },
+      { id: 'newhada01', name: 'David Newhan', pos: '2B', bats: 'L', age: 34, pa: 111, h: 25, double: 4, triple: 1, hr: 2, bb: 7, so: 25, hbp: 1, sb: 2, cs: 0, sec: '3B', fld: 40 },
+    ],
+    reserveBatters: [
+      { id: 'abercre01', name: 'Reggie Abercrombie', pos: 'LF', bats: 'R', age: 27, pa: 60, h: 13, double: 3, triple: 0, hr: 1, bb: 2, so: 18, hbp: 1, sb: 3, cs: 1, sec: 'CF' },
+      { id: 'cruzjo02', name: 'Jose Cruz', pos: 'LF', bats: 'S', age: 34, pa: 60, h: 11, double: 2, triple: 0, hr: 1, bb: 8, so: 12, hbp: 0, sb: 1, cs: 0, sec: 'CF' },
+    ],
+    pitchers: [
+      { id: 'oswalro01', name: 'Roy Oswalt', role: 'SP', throws: 'R', age: 30, g: 32, gs: 32, outs: 626, h: 205, hr: 19, bb: 49, so: 158, hbp: 8, er: 76, w: 17, l: 10, sv: 0, fld: 82 },
+      { id: 'backebr01', name: 'Brandon Backe', role: 'SP', throws: 'R', age: 30, g: 31, gs: 31, outs: 500, h: 197, hr: 34, bb: 76, so: 118, hbp: 5, er: 106, w: 9, l: 14, sv: 0, fld: 71 },
+      { id: 'moehlbr01', name: 'Brian Moehler', role: 'SP', throws: 'R', age: 36, g: 31, gs: 26, outs: 450, h: 170, hr: 20, bb: 39, so: 80, hbp: 4, er: 79, w: 11, l: 8, sv: 0, fld: 66 },
+      { id: 'rodriwa01', name: 'Wandy Rodriguez', role: 'SP', throws: 'L', age: 29, g: 25, gs: 25, outs: 412, h: 137, hr: 15, bb: 48, so: 120, hbp: 5, er: 64, w: 9, l: 7, sv: 0, fld: 70 },
+      { id: 'sampsch01', name: 'Chris Sampson', role: 'SP', throws: 'R', age: 30, g: 54, gs: 11, outs: 352, h: 120, hr: 12, bb: 25, so: 55, hbp: 4, er: 55, w: 6, l: 4, sv: 0 },
+      { id: 'valvejo01', name: 'Jose Valverde', role: 'CL', throws: 'R', age: 30, g: 74, gs: 0, outs: 216, h: 60, hr: 9, bb: 26, so: 86, hbp: 3, er: 27, w: 6, l: 3, sv: 44 },
+      { id: 'brocado01', name: 'Doug Brocail', role: 'RP', throws: 'R', age: 41, g: 72, gs: 0, outs: 206, h: 62, hr: 7, bb: 21, so: 53, hbp: 2, er: 28, w: 7, l: 5, sv: 2 },
+      { id: 'gearyge01', name: 'Geoff Geary', role: 'RP', throws: 'R', age: 31, g: 55, gs: 0, outs: 192, h: 56, hr: 5, bb: 23, so: 40, hbp: 4, er: 22, w: 2, l: 3, sv: 0 },
+      { id: 'wrighwe01', name: 'Wesley Wright', role: 'RP', throws: 'L', age: 23, g: 71, gs: 0, outs: 167, h: 45, hr: 8, bb: 34, so: 57, hbp: 4, er: 31, w: 4, l: 3, sv: 1, rk: true },
+      { id: 'byrdati01', name: 'Tim Byrdak', role: 'RP', throws: 'L', age: 34, g: 59, gs: 0, outs: 166, h: 47, hr: 8, bb: 30, so: 50, hbp: 2, er: 24, w: 2, l: 1, sv: 0 },
+      { id: 'villaos01', name: 'Oscar Villarreal', role: 'RP', throws: 'R', age: 26, g: 35, gs: 0, outs: 113, h: 40, hr: 7, bb: 15, so: 25, hbp: 2, er: 19, w: 1, l: 3, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'chacosh01', name: 'Shawn Chacon', role: 'SP', throws: 'R', age: 30, g: 15, gs: 15, outs: 257, h: 88, hr: 13, bb: 43, so: 57, hbp: 4, er: 46, w: 2, l: 3, sv: 0 },
+      { id: 'borkoda01', name: 'Dave Borkowski', role: 'RP', throws: 'R', age: 31, g: 26, gs: 0, outs: 108, h: 45, hr: 6, bb: 16, so: 30, hbp: 1, er: 25, w: 0, l: 2, sv: 0 },
+      { id: 'casseja01', name: 'Jack Cassel', role: 'RP', throws: 'R', age: 27, g: 9, gs: 3, outs: 91, h: 39, hr: 4, bb: 8, so: 14, hbp: 1, er: 17, w: 1, l: 1, sv: 0, rk: true },
+      { id: 'hernaru03', name: 'Runelvys Hernandez', role: 'RP', throws: 'R', age: 30, g: 4, gs: 4, outs: 58, h: 29, hr: 4, bb: 10, so: 12, hbp: 1, er: 16, w: 0, l: 3, sv: 0 },
+      { id: 'nievefe01', name: 'Fernando Nieve', role: 'RP', throws: 'R', age: 25, g: 11, gs: 0, outs: 32, h: 12, hr: 2, bb: 4, so: 9, hbp: 0, er: 7, w: 0, l: 1, sv: 0 },
+    ],
+  },
+  // LAA (LAA 2008)
+  {
+    franchiseId: 'LAA',
+    season: 2008,
+    batters: [
+      { id: 'mathije01', name: 'Jeff Mathis', pos: 'C', bats: 'R', age: 25, pa: 328, h: 56, double: 11, triple: 0, hr: 8, bb: 29, so: 87, hbp: 3, sb: 1, cs: 2, sec: '1B', fld: 65, arm: 69 },
+      { id: 'kotchca01', name: 'Casey Kotchman', pos: '1B', bats: 'L', age: 25, pa: 573, h: 143, double: 32, triple: 2, hr: 13, bb: 45, so: 44, hbp: 7, sb: 2, cs: 2, sec: '3B', fld: 78 },
+      { id: 'kendrho01', name: 'Howie Kendrick', pos: '2B', bats: 'R', age: 24, pa: 361, h: 106, double: 26, triple: 2, hr: 4, bb: 11, so: 59, hbp: 4, sb: 9, cs: 3, sec: 'SS', fld: 82 },
+      { id: 'figgich01', name: 'Chone Figgins', pos: '3B', bats: 'S', age: 30, pa: 520, h: 133, double: 18, triple: 4, hr: 3, bb: 56, so: 80, hbp: 2, sb: 38, cs: 13, sec: '2B', fld: 71 },
+      { id: 'aybarer01', name: 'Erick Aybar', pos: 'SS', bats: 'S', age: 24, pa: 375, h: 92, double: 15, triple: 4, hr: 3, bb: 15, so: 49, hbp: 4, sb: 7, cs: 3, sec: '2B', fld: 74 },
+      { id: 'anderga01', name: 'Garret Anderson', pos: 'LF', bats: 'L', age: 36, pa: 593, h: 161, double: 31, triple: 2, hr: 17, bb: 32, so: 79, hbp: 1, sb: 4, cs: 2, sec: 'CF', fld: 74, arm: 83 },
+      { id: 'hunteto01', name: 'Torii Hunter', pos: 'CF', bats: 'R', age: 32, pa: 608, h: 156, double: 36, triple: 2, hr: 24, bb: 45, so: 103, hbp: 5, sb: 17, cs: 6, sec: 'LF', fld: 78, arm: 64 },
+      { id: 'guerrvl01', name: 'Vladimir Guerrero', pos: 'RF', bats: 'R', age: 33, pa: 600, h: 169, double: 34, triple: 2, hr: 27, bb: 55, so: 67, hbp: 5, sb: 5, cs: 3, sec: 'LF', fld: 62, arm: 76 },
+      { id: 'matthga02', name: 'Gary Matthews', pos: 'DH', bats: 'S', age: 33, pa: 477, h: 111, double: 22, triple: 3, hr: 11, bb: 44, so: 86, hbp: 3, sb: 10, cs: 3, sec: 'RF', fld: 60, arm: 67 },
+    ],
+    bench: [
+      { id: 'izturma01', name: 'Maicer Izturis', pos: 'SS', bats: 'S', age: 27, pa: 321, h: 81, double: 15, triple: 2, hr: 4, bb: 28, so: 30, hbp: 1, sb: 9, cs: 2, sec: '3B', fld: 72 },
+      { id: 'riverju01', name: 'Juan Rivera', pos: 'LF', bats: 'R', age: 29, pa: 280, h: 69, double: 13, triple: 0, hr: 12, bb: 16, so: 33, hbp: 1, sb: 1, cs: 1, sec: 'RF', fld: 58, arm: 76 },
+      { id: 'napolmi01', name: 'Mike Napoli', pos: 'C', bats: 'R', age: 26, pa: 274, h: 58, double: 10, triple: 1, hr: 16, bb: 36, so: 70, hbp: 5, sb: 5, cs: 3, sec: '1B', fld: 69, arm: 61 },
+      { id: 'rodrise01', name: 'Sean Rodriguez', pos: '2B', bats: 'R', age: 23, pa: 187, h: 34, double: 8, triple: 1, hr: 3, bb: 14, so: 55, hbp: 3, sb: 3, cs: 1, sec: 'SS', fld: 70, rk: true },
+      { id: 'quinlro01', name: 'Robb Quinlan', pos: '3B', bats: 'R', age: 31, pa: 181, h: 45, double: 5, triple: 1, hr: 3, bb: 12, so: 26, hbp: 2, sb: 3, cs: 2, sec: '1B', fld: 57 },
+    ],
+    reserveBatters: [
+      { id: 'woodbr01', name: 'Brandon Wood', pos: '3B', bats: 'R', age: 23, pa: 157, h: 29, double: 4, triple: 0, hr: 5, bb: 4, so: 45, hbp: 1, sb: 4, cs: 0, sec: 'SS', fld: 74, rk: true },
+      { id: 'willire03', name: 'Reggie Willits', pos: 'LF', bats: 'S', age: 27, pa: 136, h: 30, double: 5, triple: 0, hr: 0, bb: 19, so: 23, hbp: 1, sb: 6, cs: 2, sec: 'CF', fld: 60, arm: 58 },
+      { id: 'moralke01', name: 'Kendrys Morales', pos: 'RF', bats: 'S', age: 25, pa: 66, h: 15, double: 4, triple: 0, hr: 2, bb: 4, so: 9, hbp: 0, sb: 0, cs: 1, sec: '1B' },
+    ],
+    pitchers: [
+      { id: 'santaer01', name: 'Ervin Santana', role: 'SP', throws: 'R', age: 25, g: 32, gs: 32, outs: 657, h: 205, hr: 26, bb: 60, so: 189, hbp: 9, er: 99, w: 16, l: 7, sv: 0, fld: 67 },
+      { id: 'saundjo01', name: 'Joe Saunders', role: 'SP', throws: 'L', age: 27, g: 31, gs: 31, outs: 594, h: 196, hr: 20, bb: 57, so: 110, hbp: 5, er: 81, w: 17, l: 7, sv: 0, fld: 75 },
+      { id: 'garlajo01', name: 'Jon Garland', role: 'SP', throws: 'R', age: 28, g: 32, gs: 32, outs: 590, h: 230, hr: 22, bb: 55, so: 95, hbp: 6, er: 103, w: 14, l: 8, sv: 0, fld: 81 },
+      { id: 'weaveje02', name: 'Jered Weaver', role: 'SP', throws: 'R', age: 25, g: 30, gs: 30, outs: 530, h: 176, hr: 20, bb: 52, so: 144, hbp: 5, er: 78, w: 11, l: 10, sv: 0, fld: 56 },
+      { id: 'lackejo01', name: 'John Lackey', role: 'SP', throws: 'R', age: 29, g: 24, gs: 24, outs: 490, h: 159, hr: 18, bb: 42, so: 133, hbp: 9, er: 62, w: 12, l: 5, sv: 0, fld: 51 },
+      { id: 'rodrifr03', name: 'Francisco Rodriguez', role: 'CL', throws: 'R', age: 26, g: 76, gs: 0, outs: 205, h: 53, hr: 4, bb: 33, so: 85, hbp: 2, er: 18, w: 2, l: 3, sv: 62 },
+      { id: 'oliveda02', name: 'Darren Oliver', role: 'RP', throws: 'L', age: 37, g: 54, gs: 0, outs: 216, h: 65, hr: 6, bb: 19, so: 52, hbp: 3, er: 26, w: 7, l: 1, sv: 0 },
+      { id: 'speieju01', name: 'Justin Speier', role: 'RP', throws: 'R', age: 34, g: 62, gs: 0, outs: 204, h: 65, hr: 12, bb: 25, so: 63, hbp: 5, er: 32, w: 2, l: 8, sv: 0 },
+      { id: 'shielsc01', name: 'Scot Shields', role: 'RP', throws: 'R', age: 32, g: 64, gs: 0, outs: 190, h: 54, hr: 6, bb: 27, so: 64, hbp: 2, er: 23, w: 6, l: 4, sv: 4 },
+      { id: 'arredjo01', name: 'Jose Arredondo', role: 'RP', throws: 'R', age: 24, g: 52, gs: 0, outs: 183, h: 42, hr: 3, bb: 22, so: 55, hbp: 1, er: 11, w: 10, l: 2, sv: 0, rk: true },
+      { id: 'odayda01', name: 'Darren O\'Day', role: 'RP', throws: 'R', age: 25, g: 30, gs: 0, outs: 130, h: 49, hr: 2, bb: 14, so: 29, hbp: 4, er: 22, w: 0, l: 1, sv: 0, rk: true },
+    ],
+    reservePitchers: [
+      { id: 'moseldu01', name: 'Dustin Moseley', role: 'SP', throws: 'R', age: 26, g: 12, gs: 10, outs: 151, h: 65, hr: 5, bb: 18, so: 33, hbp: 2, er: 33, w: 2, l: 4, sv: 0 },
+      { id: 'bootcch01', name: 'Chris Bootcheck', role: 'RP', throws: 'R', age: 29, g: 10, gs: 0, outs: 48, h: 24, hr: 2, bb: 8, so: 14, hbp: 1, er: 13, w: 0, l: 1, sv: 0 },
+      { id: 'bulgeja01', name: 'Jason Bulger', role: 'RP', throws: 'R', age: 29, g: 14, gs: 0, outs: 48, h: 15, hr: 2, bb: 9, so: 20, hbp: 2, er: 12, w: 0, l: 0, sv: 0, rk: true },
+      { id: 'louxsh01', name: 'Shane Loux', role: 'RP', throws: 'R', age: 28, g: 7, gs: 0, outs: 48, h: 16, hr: 1, bb: 2, so: 4, hbp: 2, er: 5, w: 0, l: 0, sv: 0, rk: true },
+      { id: 'adenhni01', name: 'Nick Adenhart', role: 'RP', throws: 'R', age: 21, g: 3, gs: 3, outs: 36, h: 18, hr: 0, bb: 13, so: 4, hbp: 0, er: 12, w: 1, l: 0, sv: 0, rk: true },
+    ],
+  },
+  // OAK (OAK 2008)
+  {
+    franchiseId: 'OAK',
+    season: 2008,
+    batters: [
+      { id: 'suzukku01', name: 'Kurt Suzuki', pos: 'C', bats: 'R', age: 24, pa: 588, h: 143, double: 26, triple: 1, hr: 9, bb: 47, so: 74, hbp: 10, sb: 2, cs: 2, sec: '1B', fld: 75, arm: 79 },
+      { id: 'bartoda02', name: 'Daric Barton', pos: '1B', bats: 'L', age: 22, pa: 523, h: 106, double: 21, triple: 5, hr: 11, bb: 65, so: 96, hbp: 3, sb: 2, cs: 1, sec: '3B', fld: 62, rk: true },
+      { id: 'ellisma01', name: 'Mark Ellis', pos: '2B', bats: 'R', age: 31, pa: 507, h: 114, double: 23, triple: 2, hr: 13, bb: 44, so: 70, hbp: 7, sb: 10, cs: 2, sec: 'SS', fld: 79 },
+      { id: 'hannaja01', name: 'Jack Hannahan', pos: '3B', bats: 'L', age: 28, pa: 501, h: 99, double: 28, triple: 0, hr: 9, bb: 56, so: 128, hbp: 2, sb: 2, cs: 0, sec: '1B', fld: 70 },
+      { id: 'crosbbo01', name: 'Bobby Crosby', pos: 'SS', bats: 'R', age: 28, pa: 605, h: 130, double: 33, triple: 1, hr: 9, bb: 46, so: 100, hbp: 1, sb: 10, cs: 3, sec: '2B', fld: 62 },
+      { id: 'custja01', name: 'Jack Cust', pos: 'LF', bats: 'L', age: 29, pa: 598, h: 114, double: 20, triple: 0, hr: 32, bb: 116, so: 196, hbp: 2, sb: 0, cs: 1, sec: 'RF', fld: 65, arm: 70 },
+      { id: 'davisra01', name: 'Rajai Davis', pos: 'CF', bats: 'R', age: 27, pa: 226, h: 53, double: 8, triple: 3, hr: 2, bb: 14, so: 36, hbp: 2, sb: 26, cs: 7, sec: 'LF', fld: 85, arm: 77 },
+      { id: 'sweenry01', name: 'Ryan Sweeney', pos: 'RF', bats: 'L', age: 23, pa: 433, h: 108, double: 18, triple: 2, hr: 5, bb: 37, so: 66, hbp: 3, sb: 8, cs: 2, sec: 'CF', fld: 87, arm: 67, rk: true },
+      { id: 'brownem01', name: 'Emil Brown', pos: 'DH', bats: 'R', age: 33, pa: 438, h: 102, double: 18, triple: 2, hr: 11, bb: 30, so: 70, hbp: 4, sb: 7, cs: 2, sec: 'LF', fld: 77, arm: 80 },
+    ],
+    bench: [
+      { id: 'gonzaca01', name: 'Carlos Gonzalez', pos: 'CF', bats: 'L', age: 22, pa: 316, h: 73, double: 22, triple: 1, hr: 4, bb: 13, so: 81, hbp: 0, sb: 4, cs: 1, sec: 'RF', fld: 85, arm: 75, rk: true },
+      { id: 'thomafr04', name: 'Frank Thomas', pos: 'DH', bats: 'R', age: 40, pa: 289, h: 65, double: 10, triple: 0, hr: 12, bb: 39, so: 48, hbp: 3, sb: 0, cs: 0, sec: '1B' },
+      { id: 'bucktr01', name: 'Travis Buck', pos: 'RF', bats: 'L', age: 24, pa: 172, h: 39, double: 10, triple: 2, hr: 5, bb: 16, so: 36, hbp: 3, sb: 2, cs: 0, sec: 'LF', fld: 82, arm: 74 },
+      { id: 'patteer01', name: 'Eric Patterson', pos: '2B', bats: 'L', age: 25, pa: 148, h: 25, double: 4, triple: 0, hr: 1, bb: 16, so: 37, hbp: 0, sb: 10, cs: 1, sec: 'SS', fld: 68, rk: true },
+      { id: 'sweenmi01', name: 'Mike Sweeney', pos: 'DH', bats: 'R', age: 34, pa: 136, h: 33, double: 8, triple: 0, hr: 3, bb: 9, so: 14, hbp: 2, sb: 0, cs: 0, sec: '1B' },
+    ],
+    reserveBatters: [
+      { id: 'murphdo01', name: 'Donnie Murphy', pos: '3B', bats: 'R', age: 25, pa: 117, h: 21, double: 5, triple: 0, hr: 4, bb: 10, so: 35, hbp: 2, sb: 2, cs: 1, sec: '2B', fld: 67 },
+      { id: 'pennicl01', name: 'Cliff Pennington', pos: '2B', bats: 'S', age: 24, pa: 117, h: 24, double: 5, triple: 0, hr: 0, bb: 13, so: 18, hbp: 2, sb: 4, cs: 1, sec: 'SS', fld: 88, rk: true },
+      { id: 'bowenro01', name: 'Rob Bowen', pos: 'C', bats: 'S', age: 27, pa: 98, h: 18, double: 5, triple: 0, hr: 2, bb: 10, so: 33, hbp: 1, sb: 0, cs: 1, sec: '1B', fld: 62, arm: 80 },
+      { id: 'chaveer01', name: 'Eric Chavez', pos: '3B', bats: 'L', age: 30, pa: 95, h: 20, double: 5, triple: 0, hr: 3, bb: 10, so: 18, hbp: 0, sb: 1, cs: 0, sec: '1B' },
+      { id: 'cunniaa01', name: 'Aaron Cunningham', pos: 'LF', bats: 'R', age: 22, pa: 87, h: 20, double: 7, triple: 1, hr: 1, bb: 6, so: 24, hbp: 1, sb: 2, cs: 0, sec: 'RF', fld: 78, arm: 69, rk: true },
+    ],
+    pitchers: [
+      { id: 'blantjo01', name: 'Joe Blanton', role: 'SP', throws: 'R', age: 27, g: 33, gs: 33, outs: 593, h: 217, hr: 18, bb: 54, so: 115, hbp: 4, er: 98, w: 9, l: 12, sv: 0, fld: 73 },
+      { id: 'smithgr02', name: 'Greg Smith', role: 'SP', throws: 'L', age: 24, g: 32, gs: 32, outs: 571, h: 169, hr: 21, bb: 87, so: 111, hbp: 3, er: 88, w: 7, l: 16, sv: 0, fld: 74, rk: true },
+      { id: 'evelada01', name: 'Dana Eveland', role: 'SP', throws: 'L', age: 24, g: 29, gs: 29, outs: 504, h: 175, hr: 10, bb: 79, so: 120, hbp: 13, er: 87, w: 9, l: 9, sv: 0, fld: 66 },
+      { id: 'harderi01', name: 'Rich Harden', role: 'SP', throws: 'R', age: 26, g: 25, gs: 25, outs: 444, h: 96, hr: 12, bb: 63, so: 176, hbp: 3, er: 38, w: 10, l: 2, sv: 0, fld: 61 },
+      { id: 'duchsju01', name: 'Justin Duchscherer', role: 'SP', throws: 'R', age: 30, g: 22, gs: 22, outs: 425, h: 112, hr: 12, bb: 35, so: 99, hbp: 7, er: 43, w: 10, l: 8, sv: 0, fld: 64 },
+      { id: 'streehu01', name: 'Huston Street', role: 'CL', throws: 'R', age: 24, g: 63, gs: 0, outs: 210, h: 58, hr: 6, bb: 22, so: 75, hbp: 1, er: 27, w: 7, l: 5, sv: 18 },
+      { id: 'gaudich01', name: 'Chad Gaudin', role: 'RP', throws: 'R', age: 25, g: 50, gs: 6, outs: 270, h: 88, hr: 9, bb: 39, so: 66, hbp: 3, er: 42, w: 9, l: 5, sv: 0 },
+      { id: 'embreal01', name: 'Alan Embree', role: 'RP', throws: 'L', age: 38, g: 70, gs: 0, outs: 185, h: 61, hr: 6, bb: 24, so: 55, hbp: 1, er: 31, w: 2, l: 5, sv: 0 },
+      { id: 'zieglbr01', name: 'Brad Ziegler', role: 'RP', throws: 'R', age: 28, g: 47, gs: 0, outs: 179, h: 47, hr: 2, bb: 22, so: 30, hbp: 1, er: 7, w: 3, l: 0, sv: 11, rk: true },
+      { id: 'garcija01', name: 'Santiago Casilla', role: 'RP', throws: 'R', age: 27, g: 51, gs: 0, outs: 151, h: 54, hr: 5, bb: 22, so: 48, hbp: 2, er: 24, w: 2, l: 1, sv: 2 },
+      { id: 'devinjo01', name: 'Joey Devine', role: 'RP', throws: 'R', age: 24, g: 42, gs: 0, outs: 137, h: 25, hr: 0, bb: 19, so: 47, hbp: 0, er: 5, w: 6, l: 1, sv: 1, rk: true },
+    ],
+    reservePitchers: [
+      { id: 'bradeda01', name: 'Dallas Braden', role: 'SP', throws: 'L', age: 24, g: 19, gs: 10, outs: 215, h: 81, hr: 8, bb: 25, so: 46, hbp: 2, er: 41, w: 5, l: 4, sv: 0 },
+      { id: 'blevije01', name: 'Jerry Blevins', role: 'RP', throws: 'L', age: 24, g: 36, gs: 0, outs: 113, h: 34, hr: 2, bb: 13, so: 34, hbp: 3, er: 15, w: 1, l: 3, sv: 0, rk: true },
+      { id: 'brownan01', name: 'Andrew Brown', role: 'RP', throws: 'R', age: 27, g: 31, gs: 0, outs: 105, h: 26, hr: 2, bb: 18, so: 31, hbp: 2, er: 14, w: 1, l: 0, sv: 0 },
+      { id: 'gonzagi01', name: 'Gio Gonzalez', role: 'RP', throws: 'L', age: 22, g: 10, gs: 7, outs: 102, h: 32, hr: 9, bb: 25, so: 34, hbp: 3, er: 29, w: 1, l: 4, sv: 0, rk: true },
+      { id: 'foulkke01', name: 'Keith Foulke', role: 'RP', throws: 'R', age: 35, g: 31, gs: 0, outs: 93, h: 30, hr: 7, bb: 10, so: 23, hbp: 1, er: 14, w: 0, l: 3, sv: 1 },
+    ],
+  },
+  // SEA (SEA 2008)
+  {
+    franchiseId: 'SEA',
+    season: 2008,
+    batters: [
+      { id: 'johjike01', name: 'Kenji Johjima', pos: 'C', bats: 'R', age: 32, pa: 409, h: 100, double: 20, triple: 0, hr: 10, bb: 16, so: 33, hbp: 9, sb: 1, cs: 1, sec: '1B', fld: 67, arm: 75 },
+      { id: 'sexsori01', name: 'Richie Sexson', pos: '1B', bats: 'R', age: 33, pa: 327, h: 65, double: 14, triple: 0, hr: 14, bb: 37, so: 76, hbp: 2, sb: 1, cs: 0, sec: 'LF', fld: 77 },
+      { id: 'lopezjo01', name: 'Jose Lopez', pos: '2B', bats: 'R', age: 24, pa: 687, h: 180, double: 33, triple: 3, hr: 15, bb: 26, so: 73, hbp: 4, sb: 5, cs: 3, sec: 'SS', fld: 84 },
+      { id: 'beltrad01', name: 'Adrian Beltre', pos: '3B', bats: 'R', age: 29, pa: 612, h: 151, double: 34, triple: 2, hr: 25, bb: 44, so: 96, hbp: 3, sb: 10, cs: 2, sec: '1B', fld: 75 },
+      { id: 'betanyu01', name: 'Yuniesky Betancourt', pos: 'SS', bats: 'R', age: 26, pa: 590, h: 160, double: 36, triple: 3, hr: 8, bb: 17, so: 47, hbp: 2, sb: 6, cs: 5, sec: '2B', fld: 65 },
+      { id: 'ibanera01', name: 'Raul Ibanez', pos: 'LF', bats: 'L', age: 36, pa: 707, h: 185, double: 40, triple: 4, hr: 25, bb: 63, so: 110, hbp: 3, sb: 1, cs: 3, sec: 'RF', fld: 73, arm: 71 },
+      { id: 'suzukic01', name: 'Ichiro Suzuki', pos: 'CF', bats: 'L', age: 34, pa: 749, h: 224, double: 21, triple: 7, hr: 7, bb: 50, so: 70, hbp: 4, sb: 42, cs: 5, sec: 'RF', fld: 83, arm: 71 },
+      { id: 'balenwl01', name: 'Wladimir Balentien', pos: 'RF', bats: 'R', age: 23, pa: 260, h: 50, double: 14, triple: 0, hr: 8, bb: 16, so: 78, hbp: 0, sb: 0, cs: 1, sec: 'CF', fld: 85, arm: 80, rk: true },
+      { id: 'vidrojo01', name: 'Jose Vidro', pos: 'DH', bats: 'S', age: 33, pa: 330, h: 83, double: 13, triple: 0, hr: 5, bb: 27, so: 32, hbp: 1, sb: 1, cs: 0, sec: '3B' },
+    ],
+    bench: [
+      { id: 'reedje03', name: 'Jeremy Reed', pos: 'CF', bats: 'L', age: 27, pa: 312, h: 74, double: 16, triple: 3, hr: 3, bb: 17, so: 39, hbp: 2, sb: 2, cs: 3, sec: 'RF', fld: 60, arm: 65 },
+      { id: 'cairomi01', name: 'Miguel Cairo', pos: '1B', bats: 'R', age: 34, pa: 250, h: 55, double: 13, triple: 2, hr: 0, bb: 16, so: 32, hbp: 3, sb: 9, cs: 2, sec: '3B', fld: 69 },
+      { id: 'clemeje01', name: 'Jeff Clement', pos: 'C', bats: 'L', age: 24, pa: 224, h: 47, double: 10, triple: 1, hr: 6, bb: 16, so: 62, hbp: 5, sb: 0, cs: 1, sec: '1B', fld: 65, arm: 54, rk: true },
+      { id: 'bloomwi01', name: 'Willie Bloomquist', pos: 'CF', bats: 'R', age: 30, pa: 192, h: 46, double: 2, triple: 0, hr: 1, bb: 19, so: 31, hbp: 1, sb: 11, cs: 3, sec: 'LF', fld: 48, arm: 66 },
+      { id: 'lahaibr01', name: 'Bryan LaHair', pos: '1B', bats: 'L', age: 25, pa: 150, h: 34, double: 4, triple: 0, hr: 3, bb: 13, so: 40, hbp: 0, sb: 0, cs: 1, sec: '3B', fld: 67, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'burkeja02', name: 'Jamie Burke', pos: 'C', bats: 'R', age: 36, pa: 100, h: 25, double: 4, triple: 0, hr: 1, bb: 5, so: 10, hbp: 2, sb: 0, cs: 1, fld: 72, arm: 82 },
+      { id: 'hulettu01', name: 'Tug Hulett', pos: 'DH', bats: 'L', age: 25, pa: 56, h: 11, double: 1, triple: 0, hr: 1, bb: 5, so: 17, hbp: 1, sb: 0, cs: 0, sec: '1B', rk: true },
+      { id: 'valbulu01', name: 'Luis Valbuena', pos: '2B', bats: 'L', age: 22, pa: 54, h: 12, double: 5, triple: 0, hr: 0, bb: 4, so: 11, hbp: 1, sb: 0, cs: 0, sec: 'SS', rk: true },
+      { id: 'tuiasma01', name: 'Matt Tuiasosopo', pos: '3B', bats: 'R', age: 22, pa: 47, h: 7, double: 2, triple: 1, hr: 0, bb: 2, so: 16, hbp: 1, sb: 0, cs: 0, sec: '1B', rk: true },
+    ],
+    pitchers: [
+      { id: 'hernafe02', name: 'Felix Hernandez', role: 'SP', throws: 'R', age: 22, g: 31, gs: 31, outs: 602, h: 207, hr: 20, bb: 70, so: 177, hbp: 6, er: 85, w: 9, l: 11, sv: 0, fld: 76 },
+      { id: 'washbja01', name: 'Jarrod Washburn', role: 'SP', throws: 'L', age: 33, g: 28, gs: 26, outs: 461, h: 168, hr: 19, bb: 51, so: 89, hbp: 7, er: 78, w: 5, l: 14, sv: 1, fld: 72 },
+      { id: 'silvaca01', name: 'Carlos Silva', role: 'SP', throws: 'R', age: 29, g: 28, gs: 28, outs: 460, h: 202, hr: 21, bb: 30, so: 69, hbp: 4, er: 96, w: 4, l: 15, sv: 0, fld: 64 },
+      { id: 'rowlary01', name: 'Ryan Rowland-Smith', role: 'SP', throws: 'L', age: 25, g: 47, gs: 12, outs: 355, h: 115, hr: 13, bb: 48, so: 86, hbp: 3, er: 46, w: 5, l: 3, sv: 2, rk: true },
+      { id: 'batismi01', name: 'Miguel Batista', role: 'SP', throws: 'R', age: 37, g: 44, gs: 20, outs: 345, h: 135, hr: 14, bb: 63, so: 76, hbp: 5, er: 68, w: 4, l: 14, sv: 1 },
+      { id: 'putzjj01', name: 'J. J. Putz', role: 'CL', throws: 'R', age: 31, g: 47, gs: 0, outs: 139, h: 39, hr: 4, bb: 18, so: 63, hbp: 2, er: 15, w: 6, l: 5, sv: 15 },
+      { id: 'greense01', name: 'Sean Green', role: 'RP', throws: 'R', age: 29, g: 72, gs: 0, outs: 237, h: 83, hr: 3, bb: 37, so: 59, hbp: 5, er: 38, w: 4, l: 5, sv: 1 },
+      { id: 'corcoro01', name: 'Roy Corcoran', role: 'RP', throws: 'R', age: 28, g: 50, gs: 0, outs: 218, h: 67, hr: 1, bb: 36, so: 40, hbp: 2, er: 27, w: 6, l: 2, sv: 3, rk: true },
+      { id: 'morrobr01', name: 'Brandon Morrow', role: 'RP', throws: 'R', age: 23, g: 45, gs: 5, outs: 194, h: 44, hr: 7, bb: 39, so: 68, hbp: 0, er: 25, w: 3, l: 4, sv: 10 },
+      { id: 'lowema01', name: 'Mark Lowe', role: 'RP', throws: 'R', age: 25, g: 57, gs: 0, outs: 191, h: 75, hr: 6, bb: 35, so: 57, hbp: 4, er: 37, w: 1, l: 5, sv: 1, rk: true },
+      { id: 'feierry01', name: 'Ryan Feierabend', role: 'RP', throws: 'L', age: 22, g: 8, gs: 8, outs: 119, h: 57, hr: 7, bb: 16, so: 24, hbp: 2, er: 33, w: 1, l: 4, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'dickera01', name: 'R. A. Dickey', role: 'SP', throws: 'R', age: 33, g: 32, gs: 14, outs: 337, h: 125, hr: 17, bb: 51, so: 58, hbp: 2, er: 67, w: 5, l: 8, sv: 0 },
+      { id: 'bedarer01', name: 'Erik Bedard', role: 'SP', throws: 'L', age: 29, g: 15, gs: 15, outs: 243, h: 71, hr: 8, bb: 30, so: 86, hbp: 3, er: 32, w: 6, l: 4, sv: 0 },
+      { id: 'rhodear01', name: 'Arthur Rhodes', role: 'RP', throws: 'L', age: 38, g: 61, gs: 0, outs: 106, h: 30, hr: 0, bb: 18, so: 38, hbp: 0, er: 11, w: 4, l: 1, sv: 2 },
+      { id: 'jimence01', name: 'Cesar Jimenez', role: 'RP', throws: 'L', age: 23, g: 31, gs: 2, outs: 103, h: 33, hr: 3, bb: 13, so: 25, hbp: 1, er: 16, w: 0, l: 2, sv: 0, rk: true },
+      { id: 'woodsja01', name: 'Jake Woods', role: 'RP', throws: 'L', age: 26, g: 15, gs: 0, outs: 57, h: 21, hr: 3, bb: 11, so: 11, hbp: 1, er: 11, w: 0, l: 0, sv: 0 },
+    ],
+  },
+  // TEX (TEX 2008)
+  {
+    franchiseId: 'TEX',
+    season: 2008,
+    batters: [
+      { id: 'lairdge01', name: 'Gerald Laird', pos: 'C', bats: 'R', age: 28, pa: 381, h: 89, double: 21, triple: 1, hr: 7, bb: 23, so: 74, hbp: 4, sb: 3, cs: 3, sec: '1B', fld: 65, arm: 71 },
+      { id: 'davisch02', name: 'Chris Davis', pos: '1B', bats: 'L', age: 22, pa: 317, h: 84, double: 23, triple: 2, hr: 17, bb: 20, so: 88, hbp: 1, sb: 1, cs: 2, sec: '3B', fld: 78, rk: true },
+      { id: 'kinslia01', name: 'Ian Kinsler', pos: '2B', bats: 'R', age: 26, pa: 583, h: 151, double: 34, triple: 3, hr: 19, bb: 52, so: 75, hbp: 7, sb: 23, cs: 2, sec: 'SS', fld: 97 },
+      { id: 'vazqura01', name: 'Ramon Vazquez', pos: '3B', bats: 'L', age: 31, pa: 347, h: 79, double: 16, triple: 3, hr: 7, bb: 34, so: 69, hbp: 1, sb: 0, cs: 1, sec: 'SS', fld: 57 },
+      { id: 'youngmi02', name: 'Michael Young', pos: 'SS', bats: 'R', age: 31, pa: 708, h: 194, double: 39, triple: 2, hr: 11, bb: 51, so: 106, hbp: 3, sb: 10, cs: 1, sec: '2B', fld: 78 },
+      { id: 'boggsbr01', name: 'Brandon Boggs', pos: 'LF', bats: 'S', age: 25, pa: 334, h: 64, double: 17, triple: 4, hr: 8, bb: 44, so: 93, hbp: 3, sb: 3, cs: 2, sec: 'RF', fld: 75, arm: 80, rk: true },
+      { id: 'hamiljo03', name: 'Josh Hamilton', pos: 'CF', bats: 'L', age: 27, pa: 704, h: 188, double: 35, triple: 5, hr: 34, bb: 65, so: 128, hbp: 7, sb: 8, cs: 2, sec: 'RF', fld: 70, arm: 71 },
+      { id: 'murphda07', name: 'David Murphy', pos: 'RF', bats: 'L', age: 26, pa: 454, h: 118, double: 31, triple: 4, hr: 14, bb: 31, so: 72, hbp: 0, sb: 6, cs: 2, sec: 'LF', fld: 76, arm: 59 },
+      { id: 'bradlmi01', name: 'Milton Bradley', pos: 'DH', bats: 'S', age: 30, pa: 509, h: 131, double: 27, triple: 1, hr: 22, bb: 74, so: 102, hbp: 7, sb: 7, cs: 3, sec: 'RF' },
+    ],
+    bench: [
+      { id: 'byrdma01', name: 'Marlon Byrd', pos: 'CF', bats: 'R', age: 30, pa: 462, h: 121, double: 23, triple: 5, hr: 10, bb: 40, so: 75, hbp: 8, sb: 6, cs: 3, sec: 'LF', fld: 72, arm: 75 },
+      { id: 'blaloha01', name: 'Hank Blalock', pos: '1B', bats: 'L', age: 27, pa: 281, h: 72, double: 17, triple: 2, hr: 10, bb: 22, so: 42, hbp: 1, sb: 2, cs: 0, sec: '3B', fld: 62 },
+      { id: 'catalfr01', name: 'Frank Catalanotto', pos: '1B', bats: 'L', age: 34, pa: 278, h: 68, double: 19, triple: 2, hr: 5, bb: 22, so: 26, hbp: 6, sb: 1, cs: 1, sec: 'LF', fld: 75 },
+      { id: 'saltaja01', name: 'Jarrod Saltalamacchia', pos: 'C', bats: 'S', age: 23, pa: 230, h: 54, double: 11, triple: 0, hr: 5, bb: 22, so: 63, hbp: 0, sb: 0, cs: 1, sec: '1B', fld: 55, arm: 62 },
+      { id: 'durange01', name: 'German Duran', pos: '3B', bats: 'R', age: 23, pa: 158, h: 33, double: 6, triple: 1, hr: 3, bb: 7, so: 32, hbp: 2, sb: 1, cs: 1, sec: '2B', fld: 43, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'cruzne02', name: 'Nelson Cruz', pos: 'RF', bats: 'R', age: 27, pa: 133, h: 32, double: 7, triple: 1, hr: 5, bb: 11, so: 32, hbp: 1, sb: 2, cs: 1, sec: 'LF', fld: 75, arm: 57 },
+      { id: 'ariasjo01', name: 'Joaquin Arias', pos: '2B', bats: 'R', age: 23, pa: 120, h: 33, double: 7, triple: 3, hr: 0, bb: 7, so: 12, hbp: 2, sb: 4, cs: 1, sec: 'SS', fld: 62, rk: true },
+      { id: 'sheltch01', name: 'Chris Shelton', pos: '1B', bats: 'R', age: 28, pa: 117, h: 25, double: 5, triple: 1, hr: 3, bb: 13, so: 32, hbp: 1, sb: 1, cs: 0, sec: '3B', fld: 68 },
+      { id: 'brousbe01', name: 'Ben Broussard', pos: '1B', bats: 'L', age: 31, pa: 89, h: 21, double: 3, triple: 0, hr: 3, bb: 5, so: 19, hbp: 1, sb: 0, cs: 0, sec: 'LF', fld: 76 },
+      { id: 'metcatr01', name: 'Travis Metcalf', pos: '3B', bats: 'R', age: 25, pa: 61, h: 14, double: 3, triple: 0, hr: 3, bb: 4, so: 13, hbp: 0, sb: 0, cs: 0, sec: '1B' },
+    ],
+    pitchers: [
+      { id: 'padilvi01', name: 'Vicente Padilla', role: 'SP', throws: 'R', age: 30, g: 29, gs: 29, outs: 513, h: 188, hr: 23, bb: 65, so: 121, hbp: 14, er: 94, w: 14, l: 8, sv: 0, fld: 62 },
+      { id: 'millwke01', name: 'Kevin Millwood', role: 'SP', throws: 'R', age: 33, g: 29, gs: 29, outs: 506, h: 210, hr: 18, bb: 53, so: 124, hbp: 6, er: 94, w: 9, l: 10, sv: 0, fld: 68 },
+      { id: 'feldmsc01', name: 'Scott Feldman', role: 'SP', throws: 'R', age: 25, g: 28, gs: 25, outs: 454, h: 160, hr: 20, bb: 63, so: 76, hbp: 10, er: 87, w: 6, l: 8, sv: 0, fld: 73 },
+      { id: 'harrima01', name: 'Matt Harrison', role: 'SP', throws: 'L', age: 22, g: 15, gs: 15, outs: 251, h: 100, hr: 12, bb: 31, so: 42, hbp: 2, er: 51, w: 9, l: 3, sv: 0, rk: true },
+      { id: 'mendolu01', name: 'Luis Mendoza', role: 'SP', throws: 'R', age: 24, g: 25, gs: 11, outs: 190, h: 93, hr: 7, bb: 24, so: 35, hbp: 6, er: 56, w: 3, l: 8, sv: 1, rk: true },
+      { id: 'wilsocj01', name: 'C. J. Wilson', role: 'CL', throws: 'L', age: 27, g: 50, gs: 0, outs: 139, h: 43, hr: 6, bb: 25, so: 44, hbp: 3, er: 24, w: 2, l: 2, sv: 24 },
+      { id: 'rupejo01', name: 'Josh Rupe', role: 'RP', throws: 'R', age: 25, g: 46, gs: 0, outs: 268, h: 94, hr: 8, bb: 44, so: 52, hbp: 9, er: 50, w: 3, l: 1, sv: 0, rk: true },
+      { id: 'wrighja01', name: 'Jamey Wright', role: 'RP', throws: 'R', age: 33, g: 75, gs: 0, outs: 253, h: 89, hr: 6, bb: 38, so: 51, hbp: 7, er: 45, w: 8, l: 7, sv: 0 },
+      { id: 'nippedu01', name: 'Dustin Nippert', role: 'RP', throws: 'R', age: 27, g: 20, gs: 6, outs: 215, h: 90, hr: 10, bb: 35, so: 58, hbp: 1, er: 52, w: 3, l: 5, sv: 0 },
+      { id: 'francfr01', name: 'Frank Francisco', role: 'RP', throws: 'R', age: 28, g: 58, gs: 0, outs: 190, h: 50, hr: 6, bb: 30, so: 68, hbp: 1, er: 25, w: 3, l: 5, sv: 5 },
+      { id: 'guarded01', name: 'Eddie Guardado', role: 'RP', throws: 'L', age: 37, g: 64, gs: 0, outs: 169, h: 53, hr: 6, bb: 18, so: 36, hbp: 1, er: 27, w: 4, l: 4, sv: 4 },
+    ],
+    reservePitchers: [
+      { id: 'gabbaka01', name: 'Kason Gabbard', role: 'SP', throws: 'L', age: 26, g: 12, gs: 12, outs: 168, h: 58, hr: 5, bb: 35, so: 37, hbp: 3, er: 30, w: 2, l: 3, sv: 0 },
+      { id: 'benoijo01', name: 'Joaquin Benoit', role: 'RP', throws: 'R', age: 30, g: 44, gs: 0, outs: 135, h: 41, hr: 4, bb: 25, so: 49, hbp: 1, er: 21, w: 3, l: 2, sv: 1 },
+      { id: 'madriwa01', name: 'Warner Madrigal', role: 'RP', throws: 'R', age: 24, g: 31, gs: 1, outs: 108, h: 36, hr: 4, bb: 14, so: 22, hbp: 0, er: 19, w: 0, l: 2, sv: 1, rk: true },
+      { id: 'loeka01', name: 'Kameron Loe', role: 'RP', throws: 'R', age: 26, g: 14, gs: 0, outs: 92, h: 36, hr: 3, bb: 11, so: 17, hbp: 1, er: 16, w: 1, l: 0, sv: 0 },
+      { id: 'jennija01', name: 'Jason Jennings', role: 'RP', throws: 'R', age: 29, g: 6, gs: 6, outs: 82, h: 33, hr: 5, bb: 13, so: 19, hbp: 1, er: 19, w: 0, l: 5, sv: 0 },
+    ],
+  },
+  // ATL (ATL 2008)
+  {
+    franchiseId: 'ATL',
+    season: 2008,
+    batters: [
+      { id: 'mccanbr01', name: 'Brian McCann', pos: 'C', bats: 'L', age: 24, pa: 573, h: 152, double: 41, triple: 1, hr: 22, bb: 49, so: 68, hbp: 4, sb: 3, cs: 0, sec: '1B', fld: 71, arm: 66 },
+      { id: 'teixema01', name: 'Mark Teixeira', pos: '1B', bats: 'S', age: 28, pa: 685, h: 176, double: 41, triple: 1, hr: 33, bb: 91, so: 110, hbp: 7, sb: 1, cs: 0, sec: '3B', fld: 74 },
+      { id: 'johnske05', name: 'Kelly Johnson', pos: '2B', bats: 'L', age: 26, pa: 614, h: 152, double: 34, triple: 8, hr: 14, bb: 63, so: 115, hbp: 3, sb: 10, cs: 6, sec: 'SS', fld: 77 },
+      { id: 'jonesch06', name: 'Chipper Jones', pos: '3B', bats: 'S', age: 36, pa: 534, h: 156, double: 30, triple: 2, hr: 24, bb: 81, so: 66, hbp: 1, sb: 5, cs: 0, sec: 'SS', fld: 71 },
+      { id: 'escobyu01', name: 'Yunel Escobar', pos: 'SS', bats: 'R', age: 25, pa: 587, h: 155, double: 29, triple: 1, hr: 10, bb: 55, so: 65, hbp: 6, sb: 4, cs: 5, sec: '3B', fld: 79 },
+      { id: 'blancgr01', name: 'Gregor Blanco', pos: 'LF', bats: 'L', age: 24, pa: 519, h: 108, double: 14, triple: 4, hr: 1, bb: 74, so: 99, hbp: 6, sb: 13, cs: 5, sec: 'CF', fld: 71, arm: 71, rk: true },
+      { id: 'kotsama01', name: 'Mark Kotsay', pos: 'CF', bats: 'L', age: 32, pa: 436, h: 105, double: 25, triple: 3, hr: 5, bb: 33, so: 43, hbp: 0, sb: 3, cs: 3, sec: 'RF', fld: 58, arm: 65 },
+      { id: 'francje02', name: 'Jeff Francoeur', pos: 'RF', bats: 'R', age: 24, pa: 652, h: 157, double: 33, triple: 2, hr: 16, bb: 36, so: 117, hbp: 8, sb: 2, cs: 2, sec: 'LF', fld: 64, arm: 79 },
+      { id: 'nortogr01', name: 'Greg Norton', pos: 'DH', bats: 'S', age: 35, pa: 220, h: 50, double: 10, triple: 0, hr: 7, bb: 31, so: 46, hbp: 0, sb: 0, cs: 1, sec: '3B', fld: 68, arm: 58 },
+    ],
+    bench: [
+      { id: 'infanom01', name: 'Omar Infante', pos: 'LF', bats: 'R', age: 26, pa: 348, h: 91, double: 20, triple: 3, hr: 4, bb: 21, so: 50, hbp: 2, sb: 2, cs: 1, sec: 'CF', fld: 62, arm: 58 },
+      { id: 'pradoma01', name: 'Martin Prado', pos: '3B', bats: 'R', age: 24, pa: 254, h: 72, double: 17, triple: 4, hr: 2, bb: 20, so: 29, hbp: 1, sb: 2, cs: 1, sec: '2B', fld: 94, rk: true },
+      { id: 'anderjo03', name: 'Josh Anderson', pos: 'CF', bats: 'L', age: 25, pa: 146, h: 42, double: 7, triple: 1, hr: 2, bb: 8, so: 28, hbp: 2, sb: 8, cs: 1, sec: 'LF', fld: 44, arm: 65, rk: true },
+      { id: 'diazma02', name: 'Matt Diaz', pos: 'LF', bats: 'R', age: 30, pa: 140, h: 41, double: 6, triple: 0, hr: 3, bb: 5, so: 25, hbp: 2, sb: 2, cs: 1, sec: 'RF', fld: 66, arm: 71 },
+      { id: 'jonesbr02', name: 'Brandon Jones', pos: 'LF', bats: 'L', age: 24, pa: 128, h: 30, double: 10, triple: 1, hr: 1, bb: 6, so: 30, hbp: 2, sb: 1, cs: 0, sec: 'RF', fld: 72, arm: 73, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'gotayru01', name: 'Ruben Gotay', pos: '3B', bats: 'S', age: 25, pa: 117, h: 28, double: 6, triple: 0, hr: 2, bb: 11, so: 27, hbp: 0, sb: 1, cs: 1, sec: '2B' },
+      { id: 'lillibr01', name: 'Brent Lillibridge', pos: 'SS', bats: 'R', age: 24, pa: 85, h: 16, double: 6, triple: 1, hr: 1, bb: 3, so: 23, hbp: 1, sb: 2, cs: 0, sec: '2B', fld: 73, rk: true },
+      { id: 'milleco01', name: 'Corky Miller', pos: 'C', bats: 'R', age: 32, pa: 67, h: 7, double: 1, triple: 0, hr: 1, bb: 4, so: 14, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 47, arm: 82 },
+      { id: 'sammocl01', name: 'Clint Sammons', pos: 'C', bats: 'R', age: 25, pa: 59, h: 9, double: 1, triple: 0, hr: 1, bb: 5, so: 12, hbp: 0, sb: 0, cs: 0, sec: '1B', rk: true },
+    ],
+    pitchers: [
+      { id: 'jurrjja01', name: 'Jair Jurrjens', role: 'SP', throws: 'R', age: 22, g: 31, gs: 31, outs: 565, h: 185, hr: 12, bb: 70, so: 134, hbp: 4, er: 79, w: 13, l: 10, sv: 0, fld: 77, rk: true },
+      { id: 'campijo01', name: 'Jorge Campillo', role: 'SP', throws: 'R', age: 29, g: 39, gs: 25, outs: 476, h: 160, hr: 18, bb: 39, so: 106, hbp: 2, er: 72, w: 8, l: 7, sv: 0, fld: 65, rk: true },
+      { id: 'hudsoti01', name: 'Tim Hudson', role: 'SP', throws: 'R', age: 32, g: 23, gs: 22, outs: 426, h: 134, hr: 10, bb: 39, so: 84, hbp: 4, er: 55, w: 11, l: 7, sv: 0, fld: 72 },
+      { id: 'reyesjo03', name: 'Jo-Jo Reyes', role: 'SP', throws: 'L', age: 23, g: 23, gs: 22, outs: 339, h: 131, hr: 18, bb: 55, so: 74, hbp: 3, er: 74, w: 3, l: 11, sv: 0 },
+      { id: 'hamptmi01', name: 'Mike Hampton', role: 'SP', throws: 'L', age: 35, g: 13, gs: 13, outs: 234, h: 83, hr: 10, bb: 28, so: 38, hbp: 1, er: 42, w: 3, l: 4, sv: 0 },
+      { id: 'gonzami02', name: 'Mike Gonzalez', role: 'CL', throws: 'L', age: 30, g: 36, gs: 0, outs: 101, h: 26, hr: 3, bb: 16, so: 39, hbp: 1, er: 12, w: 0, l: 3, sv: 14 },
+      { id: 'benneje01', name: 'Jeff Bennett', role: 'RP', throws: 'R', age: 28, g: 72, gs: 4, outs: 292, h: 88, hr: 6, bb: 45, so: 71, hbp: 6, er: 40, w: 3, l: 7, sv: 3 },
+      { id: 'boyerbl01', name: 'Blaine Boyer', role: 'RP', throws: 'R', age: 26, g: 76, gs: 0, outs: 216, h: 76, hr: 9, bb: 24, so: 65, hbp: 2, er: 46, w: 2, l: 6, sv: 1, rk: true },
+      { id: 'carlybu01', name: 'Buddy Carlyle', role: 'RP', throws: 'R', age: 30, g: 45, gs: 0, outs: 188, h: 60, hr: 8, bb: 22, so: 50, hbp: 1, er: 30, w: 2, l: 0, sv: 0 },
+      { id: 'ohmanwi01', name: 'Will Ohman', role: 'RP', throws: 'L', age: 30, g: 83, gs: 0, outs: 176, h: 52, hr: 4, bb: 24, so: 54, hbp: 2, er: 26, w: 4, l: 1, sv: 1 },
+      { id: 'tavarju01', name: 'Julian Tavarez', role: 'RP', throws: 'R', age: 35, g: 52, gs: 0, outs: 164, h: 68, hr: 6, bb: 25, so: 39, hbp: 3, er: 32, w: 1, l: 5, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'mortoch02', name: 'Charlie Morton', role: 'SP', throws: 'R', age: 24, g: 16, gs: 15, outs: 224, h: 80, hr: 9, bb: 41, so: 48, hbp: 2, er: 51, w: 4, l: 8, sv: 0, rk: true },
+      { id: 'glavito02', name: 'Tom Glavine', role: 'SP', throws: 'L', age: 42, g: 13, gs: 13, outs: 190, h: 70, hr: 8, bb: 25, so: 35, hbp: 1, er: 33, w: 2, l: 4, sv: 0 },
+      { id: 'acostma01', name: 'Manny Acosta', role: 'RP', throws: 'R', age: 27, g: 46, gs: 0, outs: 159, h: 44, hr: 7, bb: 28, so: 36, hbp: 1, er: 20, w: 3, l: 5, sv: 3, rk: true },
+      { id: 'nunezvl01', name: 'Vladimir Nunez', role: 'RP', throws: 'R', age: 33, g: 23, gs: 0, outs: 98, h: 32, hr: 0, bb: 19, so: 24, hbp: 1, er: 14, w: 1, l: 2, sv: 0 },
+      { id: 'jamesch03', name: 'Chuck James', role: 'RP', throws: 'L', age: 26, g: 7, gs: 7, outs: 89, h: 34, hr: 7, bb: 14, so: 24, hbp: 1, er: 18, w: 2, l: 5, sv: 0 },
+    ],
+  },
+  // MIA (FLO 2008)
+  {
+    franchiseId: 'MIA',
+    season: 2008,
+    batters: [
+      { id: 'treanma01', name: 'Matt Treanor', pos: 'C', bats: 'R', age: 32, pa: 234, h: 50, double: 7, triple: 1, hr: 3, bb: 20, so: 46, hbp: 4, sb: 1, cs: 0, sec: '1B', fld: 67, arm: 68 },
+      { id: 'jacobmi02', name: 'Mike Jacobs', pos: '1B', bats: 'L', age: 27, pa: 519, h: 122, double: 30, triple: 2, hr: 26, bb: 37, so: 115, hbp: 1, sb: 1, cs: 1, sec: '3B', fld: 62 },
+      { id: 'ugglada01', name: 'Dan Uggla', pos: '2B', bats: 'R', age: 28, pa: 619, h: 139, double: 36, triple: 2, hr: 29, bb: 64, so: 150, hbp: 9, sb: 4, cs: 4, sec: 'SS', fld: 68 },
+      { id: 'cantujo01', name: 'Jorge Cantu', pos: '3B', bats: 'R', age: 26, pa: 685, h: 169, double: 39, triple: 0, hr: 25, bb: 42, so: 118, hbp: 10, sb: 5, cs: 2, sec: '2B', fld: 56 },
+      { id: 'ramirha01', name: 'Hanley Ramirez', pos: 'SS', bats: 'R', age: 24, pa: 693, h: 189, double: 40, triple: 6, hr: 29, bb: 72, so: 113, hbp: 7, sb: 43, cs: 13, sec: '2B', fld: 66 },
+      { id: 'willijo03', name: 'Josh Willingham', pos: 'LF', bats: 'R', age: 29, pa: 416, h: 94, double: 21, triple: 3, hr: 16, bb: 45, so: 82, hbp: 12, sb: 4, cs: 1, sec: 'RF', fld: 68, arm: 73 },
+      { id: 'rossco01', name: 'Cody Ross', pos: 'CF', bats: 'R', age: 27, pa: 506, h: 123, double: 31, triple: 4, hr: 24, bb: 37, so: 112, hbp: 7, sb: 5, cs: 1, sec: 'RF', fld: 74, arm: 76 },
+      { id: 'hermije01', name: 'Jeremy Hermida', pos: 'RF', bats: 'L', age: 24, pa: 559, h: 132, double: 28, triple: 2, hr: 17, bb: 51, so: 130, hbp: 6, sb: 5, cs: 2, sec: 'LF', fld: 71, arm: 57 },
+      { id: 'gonzalu01', name: 'Luis Gonzalez', pos: 'DH', bats: 'L', age: 40, pa: 387, h: 92, double: 24, triple: 1, hr: 9, bb: 41, so: 40, hbp: 2, sb: 2, cs: 1, sec: 'LF', fld: 62, arm: 61 },
+    ],
+    bench: [
+      { id: 'amezaal01', name: 'Alfredo Amezaga', pos: 'CF', bats: 'S', age: 30, pa: 337, h: 80, double: 11, triple: 5, hr: 2, bb: 24, so: 43, hbp: 3, sb: 10, cs: 5, sec: 'LF', fld: 87, arm: 90 },
+      { id: 'helmswe01', name: 'Wes Helms', pos: '3B', bats: 'R', age: 32, pa: 278, h: 64, double: 14, triple: 1, hr: 6, bb: 18, so: 60, hbp: 4, sb: 0, cs: 1, sec: '1B', fld: 70 },
+      { id: 'bakerjo01', name: 'John Baker', pos: 'C', bats: 'L', age: 27, pa: 233, h: 59, double: 14, triple: 0, hr: 5, bb: 30, so: 48, hbp: 2, sb: 0, cs: 0, sec: '1B', fld: 71, arm: 60, rk: true },
+      { id: 'rabelmi01', name: 'Mike Rabelo', pos: 'C', bats: 'S', age: 28, pa: 122, h: 25, double: 4, triple: 1, hr: 2, bb: 6, so: 26, hbp: 2, sb: 0, cs: 0, sec: '1B', fld: 70, arm: 70 },
+      { id: 'andinro01', name: 'Robert Andino', pos: '2B', bats: 'R', age: 24, pa: 68, h: 14, double: 2, triple: 0, hr: 2, bb: 3, so: 21, hbp: 0, sb: 0, cs: 0, sec: 'SS', rk: true },
+    ],
+    reserveBatters: [
+      { id: 'hoovepa01', name: 'Paul Hoover', pos: 'C', bats: 'R', age: 32, pa: 42, h: 9, double: 1, triple: 0, hr: 0, bb: 2, so: 16, hbp: 0, sb: 0, cs: 0, sec: '1B', rk: true },
+    ],
+    pitchers: [
+      { id: 'nolasri01', name: 'Ricky Nolasco', role: 'SP', throws: 'R', age: 25, g: 34, gs: 32, outs: 637, h: 199, hr: 28, bb: 47, so: 172, hbp: 8, er: 89, w: 15, l: 8, sv: 0, fld: 66 },
+      { id: 'olsensc01', name: 'Scott Olsen', role: 'SP', throws: 'L', age: 24, g: 33, gs: 33, outs: 605, h: 205, hr: 29, bb: 78, so: 132, hbp: 3, er: 101, w: 8, l: 11, sv: 0, fld: 61 },
+      { id: 'hendrma01', name: 'Mark Hendrickson', role: 'SP', throws: 'L', age: 34, g: 36, gs: 19, outs: 401, h: 150, hr: 16, bb: 44, so: 87, hbp: 3, er: 77, w: 7, l: 8, sv: 0, fld: 73 },
+      { id: 'millean01', name: 'Andrew Miller', role: 'SP', throws: 'L', age: 23, g: 29, gs: 20, outs: 322, h: 118, hr: 9, bb: 59, so: 89, hbp: 6, er: 68, w: 6, l: 10, sv: 0 },
+      { id: 'johnsjo09', name: 'Josh Johnson', role: 'SP', throws: 'R', age: 24, g: 14, gs: 14, outs: 262, h: 88, hr: 7, bb: 33, so: 75, hbp: 1, er: 35, w: 7, l: 1, sv: 0 },
+      { id: 'greggke01', name: 'Kevin Gregg', role: 'CL', throws: 'R', age: 30, g: 72, gs: 0, outs: 206, h: 56, hr: 5, bb: 32, so: 64, hbp: 4, er: 27, w: 7, l: 8, sv: 29 },
+      { id: 'pintore01', name: 'Renyel Pinto', role: 'RP', throws: 'L', age: 25, g: 67, gs: 0, outs: 194, h: 51, hr: 8, bb: 40, so: 60, hbp: 4, er: 29, w: 2, l: 5, sv: 0 },
+      { id: 'waechdo01', name: 'Doug Waechter', role: 'RP', throws: 'R', age: 27, g: 48, gs: 0, outs: 190, h: 66, hr: 7, bb: 21, so: 42, hbp: 3, er: 30, w: 4, l: 2, sv: 0 },
+      { id: 'lindsma01', name: 'Matt Lindstrom', role: 'RP', throws: 'R', age: 28, g: 66, gs: 0, outs: 172, h: 57, hr: 1, bb: 23, so: 48, hbp: 2, er: 20, w: 3, l: 3, sv: 5 },
+      { id: 'kensilo01', name: 'Logan Kensing', role: 'RP', throws: 'R', age: 25, g: 48, gs: 0, outs: 166, h: 49, hr: 7, bb: 32, so: 57, hbp: 5, er: 24, w: 3, l: 1, sv: 0 },
+      { id: 'nelsojo01', name: 'Joe Nelson', role: 'RP', throws: 'R', age: 33, g: 59, gs: 0, outs: 162, h: 42, hr: 5, bb: 23, so: 58, hbp: 2, er: 15, w: 3, l: 1, sv: 1, rk: true },
+    ],
+    reservePitchers: [
+      { id: 'volstch01', name: 'Chris Volstad', role: 'SP', throws: 'R', age: 21, g: 15, gs: 14, outs: 253, h: 76, hr: 3, bb: 36, so: 52, hbp: 5, er: 27, w: 6, l: 4, sv: 0, rk: true },
+      { id: 'sanchan01', name: 'Anibal Sanchez', role: 'SP', throws: 'R', age: 24, g: 10, gs: 10, outs: 155, h: 54, hr: 6, bb: 26, so: 40, hbp: 4, er: 26, w: 2, l: 5, sv: 0 },
+      { id: 'badenbu01', name: 'Burke Badenhop', role: 'RP', throws: 'R', age: 25, g: 13, gs: 8, outs: 142, h: 55, hr: 7, bb: 21, so: 35, hbp: 3, er: 32, w: 2, l: 3, sv: 0, rk: true },
+      { id: 'milleju01', name: 'Justin Miller', role: 'RP', throws: 'R', age: 30, g: 46, gs: 0, outs: 140, h: 44, hr: 4, bb: 20, so: 50, hbp: 2, er: 21, w: 4, l: 2, sv: 0 },
+      { id: 'tuckery01', name: 'Ryan Tucker', role: 'RP', throws: 'R', age: 21, g: 13, gs: 6, outs: 111, h: 46, hr: 8, bb: 23, so: 28, hbp: 2, er: 34, w: 2, l: 3, sv: 0, rk: true },
+    ],
+  },
+  // NYM (NYN 2008)
+  {
+    franchiseId: 'NYM',
+    season: 2008,
+    batters: [
+      { id: 'schnebr01', name: 'Brian Schneider', pos: 'C', bats: 'L', age: 31, pa: 384, h: 83, double: 13, triple: 0, hr: 6, bb: 41, so: 51, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 74, arm: 76 },
+      { id: 'delgaca01', name: 'Carlos Delgado', pos: '1B', bats: 'L', age: 36, pa: 686, h: 159, double: 33, triple: 1, hr: 35, bb: 69, so: 128, hbp: 10, sb: 2, cs: 1, sec: 'LF', fld: 72 },
+      { id: 'castilu01', name: 'Luis Castillo', pos: '2B', bats: 'S', age: 32, pa: 359, h: 88, double: 10, triple: 2, hr: 2, bb: 38, so: 31, hbp: 1, sb: 14, cs: 4, sec: 'SS', fld: 57 },
+      { id: 'wrighda03', name: 'David Wright', pos: '3B', bats: 'R', age: 25, pa: 735, h: 195, double: 43, triple: 2, hr: 32, bb: 92, so: 119, hbp: 5, sb: 23, cs: 5, sec: '1B', fld: 61 },
+      { id: 'reyesjo01', name: 'Jose Reyes', pos: 'SS', bats: 'S', age: 25, pa: 763, h: 200, double: 36, triple: 17, hr: 15, bb: 68, so: 81, hbp: 1, sb: 65, cs: 18, sec: '2B', fld: 59 },
+      { id: 'chaveen01', name: 'Endy Chavez', pos: 'LF', bats: 'L', age: 30, pa: 298, h: 76, double: 12, triple: 3, hr: 2, bb: 17, so: 26, hbp: 0, sb: 7, cs: 2, sec: 'CF', fld: 92, arm: 81 },
+      { id: 'beltrca01', name: 'Carlos Beltran', pos: 'CF', bats: 'S', age: 31, pa: 706, h: 169, double: 39, triple: 4, hr: 33, bb: 90, so: 107, hbp: 2, sb: 24, cs: 3, sec: 'LF', fld: 77, arm: 71 },
+      { id: 'churcry01', name: 'Ryan Church', pos: 'RF', bats: 'L', age: 29, pa: 359, h: 87, double: 22, triple: 1, hr: 12, bb: 34, so: 79, hbp: 4, sb: 3, cs: 2, sec: 'LF', fld: 79, arm: 76 },
+      { id: 'easleda01', name: 'Damion Easley', pos: 'DH', bats: 'R', age: 38, pa: 347, h: 83, double: 10, triple: 1, hr: 10, bb: 24, so: 44, hbp: 7, sb: 0, cs: 1, sec: '3B', fld: 67 },
+    ],
+    bench: [
+      { id: 'tatisfe01', name: 'Fernando Tatis', pos: 'LF', bats: 'R', age: 33, pa: 306, h: 80, double: 17, triple: 1, hr: 11, bb: 29, so: 60, hbp: 3, sb: 3, cs: 0, sec: 'RF', fld: 56, arm: 64 },
+      { id: 'castrra01', name: 'Ramon Castro', pos: 'C', bats: 'R', age: 32, pa: 157, h: 37, double: 7, triple: 0, hr: 8, bb: 13, so: 37, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 71, arm: 65 },
+      { id: 'anderma02', name: 'Marlon Anderson', pos: 'LF', bats: 'L', age: 34, pa: 151, h: 35, double: 7, triple: 1, hr: 3, bb: 11, so: 25, hbp: 0, sb: 3, cs: 2, sec: 'RF', fld: 80, arm: 69 },
+      { id: 'murphda08', name: 'Daniel Murphy', pos: 'LF', bats: 'L', age: 23, pa: 151, h: 41, double: 9, triple: 3, hr: 2, bb: 18, so: 28, hbp: 1, sb: 0, cs: 2, sec: 'RF', fld: 58, arm: 65, rk: true },
+      { id: 'reyesar01', name: 'Argenis Reyes', pos: '2B', bats: 'S', age: 25, pa: 121, h: 24, double: 0, triple: 0, hr: 1, bb: 4, so: 20, hbp: 2, sb: 2, cs: 0, sec: 'SS', fld: 81, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'evansni01', name: 'Nick Evans', pos: 'LF', bats: 'R', age: 22, pa: 119, h: 28, double: 10, triple: 0, hr: 2, bb: 7, so: 24, hbp: 1, sb: 0, cs: 0, sec: 'RF', fld: 70, arm: 78, rk: true },
+      { id: 'paganan01', name: 'Angel Pagan', pos: 'LF', bats: 'S', age: 26, pa: 105, h: 25, double: 6, triple: 1, hr: 2, bb: 9, so: 19, hbp: 0, sb: 3, cs: 1, sec: 'RF', fld: 60, arm: 58 },
+      { id: 'casanra01', name: 'Raul Casanova', pos: 'C', bats: 'S', age: 35, pa: 61, h: 14, double: 1, triple: 0, hr: 3, bb: 5, so: 11, hbp: 0, sb: 0, cs: 0 },
+      { id: 'aloumo01', name: 'Moises Alou', pos: 'LF', bats: 'R', age: 41, pa: 54, h: 16, double: 3, triple: 0, hr: 2, bb: 4, so: 4, hbp: 0, sb: 0, cs: 0, sec: 'RF' },
+      { id: 'cancero01', name: 'Robinson Cancel', pos: 'C', bats: 'R', age: 32, pa: 53, h: 12, double: 2, triple: 0, hr: 1, bb: 3, so: 6, hbp: 0, sb: 1, cs: 2, sec: '1B', rk: true },
+    ],
+    pitchers: [
+      { id: 'santajo01', name: 'Johan Santana', role: 'SP', throws: 'L', age: 29, g: 34, gs: 34, outs: 703, h: 202, hr: 27, bb: 59, so: 230, hbp: 4, er: 75, w: 16, l: 7, sv: 0, fld: 68 },
+      { id: 'pelfrmi01', name: 'Mike Pelfrey', role: 'SP', throws: 'R', age: 24, g: 32, gs: 32, outs: 602, h: 210, hr: 13, bb: 72, so: 111, hbp: 15, er: 90, w: 13, l: 11, sv: 0, fld: 79 },
+      { id: 'perezol01', name: 'Oliver Perez', role: 'SP', throws: 'L', age: 26, g: 34, gs: 34, outs: 582, h: 173, hr: 25, bb: 100, so: 183, hbp: 10, er: 92, w: 10, l: 7, sv: 0, fld: 62 },
+      { id: 'mainejo01', name: 'John Maine', role: 'SP', throws: 'R', age: 27, g: 25, gs: 25, outs: 420, h: 123, hr: 17, bb: 61, so: 127, hbp: 4, er: 63, w: 10, l: 8, sv: 0, fld: 67 },
+      { id: 'martipe02', name: 'Pedro Martinez', role: 'SP', throws: 'R', age: 36, g: 20, gs: 20, outs: 327, h: 121, hr: 17, bb: 40, so: 100, hbp: 7, er: 62, w: 5, l: 6, sv: 0 },
+      { id: 'wagnebi02', name: 'Billy Wagner', role: 'CL', throws: 'L', age: 36, g: 45, gs: 0, outs: 141, h: 34, hr: 4, bb: 12, so: 53, hbp: 1, er: 12, w: 0, l: 1, sv: 27 },
+      { id: 'heilmaa01', name: 'Aaron Heilman', role: 'RP', throws: 'R', age: 29, g: 78, gs: 0, outs: 228, h: 74, hr: 8, bb: 34, so: 73, hbp: 7, er: 37, w: 3, l: 8, sv: 3 },
+      { id: 'smithjo05', name: 'Joe Smith', role: 'RP', throws: 'R', age: 24, g: 82, gs: 0, outs: 190, h: 55, hr: 4, bb: 30, so: 54, hbp: 6, er: 24, w: 6, l: 3, sv: 0, rk: true },
+      { id: 'sanchdu01', name: 'Duaner Sanchez', role: 'RP', throws: 'R', age: 28, g: 66, gs: 0, outs: 175, h: 52, hr: 5, bb: 24, so: 45, hbp: 3, er: 25, w: 5, l: 1, sv: 0 },
+      { id: 'schoesc01', name: 'Scott Schoeneweis', role: 'RP', throws: 'L', age: 34, g: 73, gs: 0, outs: 170, h: 56, hr: 7, bb: 25, so: 35, hbp: 3, er: 26, w: 2, l: 6, sv: 1 },
+      { id: 'felicpe01', name: 'Pedro Feliciano', role: 'RP', throws: 'L', age: 31, g: 86, gs: 0, outs: 160, h: 51, hr: 5, bb: 25, so: 52, hbp: 3, er: 21, w: 3, l: 4, sv: 2 },
+    ],
+    reservePitchers: [
+      { id: 'figuene01', name: 'Nelson Figueroa', role: 'RP', throws: 'R', age: 34, g: 16, gs: 6, outs: 136, h: 48, hr: 3, bb: 26, so: 36, hbp: 2, er: 23, w: 3, l: 3, sv: 0 },
+      { id: 'vargacl01', name: 'Claudio Vargas', role: 'RP', throws: 'R', age: 30, g: 11, gs: 4, outs: 111, h: 38, hr: 5, bb: 12, so: 26, hbp: 1, er: 19, w: 3, l: 2, sv: 0 },
+      { id: 'stokebr01', name: 'Brian Stokes', role: 'RP', throws: 'R', age: 28, g: 24, gs: 1, outs: 100, h: 39, hr: 5, bb: 10, so: 20, hbp: 1, er: 19, w: 1, l: 0, sv: 1 },
+      { id: 'munizca01', name: 'Carlos Muniz', role: 'RP', throws: 'R', age: 27, g: 18, gs: 0, outs: 70, h: 23, hr: 4, bb: 8, so: 16, hbp: 2, er: 14, w: 1, l: 1, sv: 0, rk: true },
+      { id: 'sosajo02', name: 'Jorge Sosa', role: 'RP', throws: 'R', age: 30, g: 20, gs: 0, outs: 65, h: 26, hr: 4, bb: 9, so: 14, hbp: 0, er: 14, w: 4, l: 1, sv: 0 },
+    ],
+  },
+  // PHI (PHI 2008)
+  {
+    franchiseId: 'PHI',
+    season: 2008,
+    batters: [
+      { id: 'ruizca01', name: 'Carlos Ruiz', pos: 'C', bats: 'R', age: 29, pa: 373, h: 77, double: 18, triple: 1, hr: 5, bb: 40, so: 40, hbp: 4, sb: 3, cs: 1, sec: '1B', fld: 73, arm: 67 },
+      { id: 'howarry01', name: 'Ryan Howard', pos: '1B', bats: 'L', age: 28, pa: 700, h: 158, double: 26, triple: 2, hr: 51, bb: 96, so: 201, hbp: 5, sb: 1, cs: 1, sec: '3B', fld: 63 },
+      { id: 'utleych01', name: 'Chase Utley', pos: '2B', bats: 'L', age: 29, pa: 707, h: 188, double: 45, triple: 4, hr: 30, bb: 61, so: 108, hbp: 25, sb: 13, cs: 2, sec: 'SS', fld: 79 },
+      { id: 'felizpe01', name: 'Pedro Feliz', pos: '3B', bats: 'R', age: 33, pa: 463, h: 108, double: 21, triple: 2, hr: 15, bb: 27, so: 60, hbp: 0, sb: 1, cs: 1, sec: '1B', fld: 74 },
+      { id: 'rolliji01', name: 'Jimmy Rollins', pos: 'SS', bats: 'S', age: 29, pa: 625, h: 161, double: 35, triple: 11, hr: 18, bb: 49, so: 62, hbp: 5, sb: 39, cs: 4, sec: '2B', fld: 75 },
+      { id: 'burrepa01', name: 'Pat Burrell', pos: 'LF', bats: 'R', age: 31, pa: 645, h: 133, double: 31, triple: 2, hr: 33, bb: 110, so: 136, hbp: 2, sb: 0, cs: 0, sec: '1B', fld: 58, arm: 77 },
+      { id: 'victosh01', name: 'Shane Victorino', pos: 'CF', bats: 'R', age: 27, pa: 627, h: 163, double: 29, triple: 7, hr: 13, bb: 43, so: 72, hbp: 10, sb: 35, cs: 8, sec: 'RF', fld: 66, arm: 71 },
+      { id: 'jenkige01', name: 'Geoff Jenkins', pos: 'RF', bats: 'L', age: 33, pa: 322, h: 74, double: 16, triple: 1, hr: 11, bb: 25, so: 74, hbp: 4, sb: 1, cs: 1, sec: 'LF', fld: 60, arm: 80 },
+      { id: 'costech01', name: 'Chris Coste', pos: 'DH', bats: 'R', age: 35, pa: 305, h: 77, double: 15, triple: 0, hr: 10, bb: 14, so: 49, hbp: 8, sb: 0, cs: 1, sec: 'C', fld: 77, arm: 66 },
+    ],
+    bench: [
+      { id: 'werthja01', name: 'Jayson Werth', pos: 'RF', bats: 'R', age: 29, pa: 482, h: 116, double: 16, triple: 4, hr: 21, bb: 61, so: 118, hbp: 4, sb: 17, cs: 1, sec: 'LF', fld: 75, arm: 75 },
+      { id: 'dobbsgr01', name: 'Greg Dobbs', pos: '3B', bats: 'L', age: 29, pa: 240, h: 64, double: 14, triple: 2, hr: 8, bb: 15, so: 42, hbp: 1, sb: 2, cs: 1, sec: '1B', fld: 77 },
+      { id: 'brunter01', name: 'Eric Bruntlett', pos: 'SS', bats: 'R', age: 30, pa: 238, h: 48, double: 9, triple: 1, hr: 1, bb: 23, so: 36, hbp: 2, sb: 8, cs: 3, sec: '2B', fld: 61 },
+      { id: 'tagucso01', name: 'So Taguchi', pos: 'LF', bats: 'R', age: 38, pa: 103, h: 25, double: 5, triple: 0, hr: 1, bb: 8, so: 12, hbp: 1, sb: 3, cs: 1, sec: 'CF', fld: 50, arm: 58 },
+      { id: 'cervemi01', name: 'Mike Cervenak', pos: '3B', bats: 'R', age: 31, pa: 13, h: 2, double: 0, triple: 0, hr: 0, bb: 0, so: 5, hbp: 0, sb: 0, cs: 0, sec: '1B', rk: true },
+    ],
+    pitchers: [
+      { id: 'hamelco01', name: 'Cole Hamels', role: 'SP', throws: 'L', age: 24, g: 33, gs: 33, outs: 682, h: 195, hr: 29, bb: 56, so: 207, hbp: 2, er: 82, w: 14, l: 10, sv: 0, fld: 68 },
+      { id: 'moyerja01', name: 'Jamie Moyer', role: 'SP', throws: 'L', age: 45, g: 33, gs: 33, outs: 589, h: 207, hr: 25, bb: 60, so: 121, hbp: 8, er: 92, w: 16, l: 7, sv: 0, fld: 71 },
+      { id: 'myersbr01', name: 'Brett Myers', role: 'SP', throws: 'R', age: 27, g: 30, gs: 30, outs: 570, h: 192, hr: 28, bb: 66, so: 179, hbp: 5, er: 93, w: 10, l: 13, sv: 0, fld: 74 },
+      { id: 'kendrky01', name: 'Kyle Kendrick', role: 'SP', throws: 'R', age: 23, g: 31, gs: 30, outs: 467, h: 190, hr: 23, bb: 50, so: 68, hbp: 13, er: 88, w: 11, l: 9, sv: 0, fld: 82 },
+      { id: 'eatonad01', name: 'Adam Eaton', role: 'SP', throws: 'R', age: 30, g: 21, gs: 19, outs: 321, h: 129, hr: 18, bb: 45, so: 62, hbp: 7, er: 71, w: 4, l: 8, sv: 0 },
+      { id: 'lidgebr01', name: 'Brad Lidge', role: 'CL', throws: 'R', age: 31, g: 72, gs: 0, outs: 208, h: 54, hr: 6, bb: 33, so: 91, hbp: 3, er: 23, w: 2, l: 0, sv: 41 },
+      { id: 'durbich01', name: 'Chad Durbin', role: 'RP', throws: 'R', age: 30, g: 71, gs: 0, outs: 263, h: 85, hr: 10, bb: 34, so: 54, hbp: 5, er: 36, w: 5, l: 4, sv: 1 },
+      { id: 'madsory01', name: 'Ryan Madson', role: 'RP', throws: 'R', age: 27, g: 76, gs: 0, outs: 248, h: 82, hr: 8, bb: 27, so: 62, hbp: 3, er: 33, w: 4, l: 2, sv: 1 },
+      { id: 'condrcl01', name: 'Clay Condrey', role: 'RP', throws: 'R', age: 32, g: 56, gs: 0, outs: 207, h: 84, hr: 6, bb: 20, so: 35, hbp: 3, er: 29, w: 3, l: 4, sv: 1 },
+      { id: 'romerjc01', name: 'J. C. Romero', role: 'RP', throws: 'L', age: 32, g: 81, gs: 0, outs: 177, h: 44, hr: 4, bb: 38, so: 47, hbp: 3, er: 20, w: 4, l: 4, sv: 1 },
+      { id: 'seaneru01', name: 'Rudy Seanez', role: 'RP', throws: 'R', age: 39, g: 42, gs: 0, outs: 130, h: 42, hr: 4, bb: 21, so: 37, hbp: 2, er: 19, w: 5, l: 4, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'happja01', name: 'J. A. Happ', role: 'RP', throws: 'L', age: 25, g: 8, gs: 4, outs: 95, h: 30, hr: 5, bb: 14, so: 27, hbp: 1, er: 15, w: 1, l: 0, sv: 0, rk: true },
+      { id: 'gordoto01', name: 'Tom Gordon', role: 'RP', throws: 'R', age: 40, g: 34, gs: 0, outs: 89, h: 31, hr: 4, bb: 13, so: 28, hbp: 1, er: 16, w: 5, l: 4, sv: 2 },
+      { id: 'eyresc01', name: 'Scott Eyre', role: 'RP', throws: 'L', age: 36, g: 38, gs: 0, outs: 77, h: 24, hr: 2, bb: 12, so: 26, hbp: 1, er: 11, w: 5, l: 0, sv: 0 },
+      { id: 'walrole01', name: 'Les Walrond', role: 'RP', throws: 'L', age: 31, g: 6, gs: 0, outs: 31, h: 13, hr: 0, bb: 9, so: 12, hbp: 0, er: 7, w: 1, l: 1, sv: 0, rk: true },
+    ],
+  },
+  // WSH (WAS 2008)
+  {
+    franchiseId: 'WSH',
+    season: 2008,
+    batters: [
+      { id: 'floreje02', name: 'Jesus Flores', pos: 'C', bats: 'R', age: 23, pa: 324, h: 76, double: 17, triple: 1, hr: 8, bb: 17, so: 78, hbp: 4, sb: 0, cs: 1, sec: '1B', fld: 67, arm: 69 },
+      { id: 'belliro01', name: 'Ronnie Belliard', pos: '1B', bats: 'R', age: 33, pa: 337, h: 87, double: 21, triple: 0, hr: 8, bb: 27, so: 50, hbp: 2, sb: 2, cs: 1, sec: '3B', fld: 65 },
+      { id: 'lopezfe01', name: 'Felipe Lopez', pos: '2B', bats: 'S', age: 28, pa: 532, h: 127, double: 23, triple: 3, hr: 7, bb: 46, so: 86, hbp: 3, sb: 17, cs: 8, sec: 'SS', fld: 60 },
+      { id: 'zimmery01', name: 'Ryan Zimmerman', pos: '3B', bats: 'R', age: 23, pa: 466, h: 117, double: 27, triple: 2, hr: 15, bb: 36, so: 77, hbp: 2, sb: 3, cs: 2, sec: '1B', fld: 83 },
+      { id: 'guzmacr01', name: 'Cristian Guzman', pos: 'SS', bats: 'S', age: 30, pa: 612, h: 183, double: 32, triple: 7, hr: 9, bb: 27, so: 59, hbp: 5, sb: 6, cs: 4, sec: '2B', fld: 69 },
+      { id: 'harriwi01', name: 'Willie Harris', pos: 'LF', bats: 'L', age: 30, pa: 424, h: 94, double: 17, triple: 6, hr: 9, bb: 47, so: 71, hbp: 3, sb: 16, cs: 7, sec: 'CF', fld: 88, arm: 69 },
+      { id: 'millela02', name: 'Lastings Milledge', pos: 'CF', bats: 'R', age: 23, pa: 587, h: 139, double: 24, triple: 2, hr: 15, bb: 38, so: 102, hbp: 15, sb: 20, cs: 8, sec: 'RF', fld: 71, arm: 58 },
+      { id: 'kearnau01', name: 'Austin Kearns', pos: 'RF', bats: 'R', age: 28, pa: 357, h: 77, double: 16, triple: 0, hr: 9, bb: 38, so: 63, hbp: 7, sb: 2, cs: 2, sec: 'CF', fld: 75, arm: 58 },
+      { id: 'penawi01', name: 'Wily Mo Pena', pos: 'DH', bats: 'R', age: 26, pa: 206, h: 46, double: 8, triple: 1, hr: 6, bb: 12, so: 56, hbp: 2, sb: 1, cs: 1, sec: 'RF', fld: 75, arm: 72 },
+    ],
+    bench: [
+      { id: 'dukesel01', name: 'Elijah Dukes', pos: 'RF', bats: 'R', age: 24, pa: 334, h: 67, double: 13, triple: 2, hr: 14, bb: 50, so: 75, hbp: 5, sb: 10, cs: 5, sec: 'CF', fld: 67, arm: 89 },
+      { id: 'booneaa01', name: 'Aaron Boone', pos: '1B', bats: 'R', age: 35, pa: 255, h: 58, double: 13, triple: 1, hr: 6, bb: 19, so: 47, hbp: 6, sb: 1, cs: 1, sec: '3B', fld: 65 },
+      { id: 'nievewi01', name: 'Wil Nieves', pos: 'C', bats: 'R', age: 30, pa: 196, h: 43, double: 9, triple: 1, hr: 1, bb: 12, so: 29, hbp: 0, sb: 0, cs: 1, sec: '1B', fld: 72, arm: 64 },
+      { id: 'loducpa01', name: 'Paul Lo Duca', pos: 'C', bats: 'R', age: 36, pa: 193, h: 49, double: 9, triple: 0, hr: 2, bb: 11, so: 13, hbp: 3, sb: 1, cs: 0, sec: '1B', fld: 70, arm: 54 },
+      { id: 'bonifem01', name: 'Emilio Bonifacio', pos: '2B', bats: 'S', age: 23, pa: 186, h: 40, double: 6, triple: 5, hr: 0, bb: 15, so: 44, hbp: 0, sb: 6, cs: 4, sec: 'SS', fld: 46, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'castoko01', name: 'Kory Casto', pos: '1B', bats: 'L', age: 26, pa: 182, h: 33, double: 9, triple: 0, hr: 2, bb: 17, so: 39, hbp: 0, sb: 1, cs: 0, sec: 'LF', fld: 64, rk: true },
+      { id: 'youngdm01', name: 'Dmitri Young', pos: '1B', bats: 'S', age: 34, pa: 180, h: 48, double: 10, triple: 0, hr: 5, bb: 19, so: 28, hbp: 1, sb: 0, cs: 0, sec: 'LF', fld: 48 },
+      { id: 'johnsni01', name: 'Nick Johnson', pos: '1B', bats: 'L', age: 29, pa: 147, h: 30, double: 10, triple: 0, hr: 5, bb: 29, so: 24, hbp: 3, sb: 1, cs: 0, sec: '3B', fld: 67 },
+      { id: 'langery01', name: 'Ryan Langerhans', pos: 'LF', bats: 'L', age: 28, pa: 139, h: 24, double: 5, triple: 1, hr: 3, bb: 20, so: 38, hbp: 1, sb: 1, cs: 0, sec: 'CF', fld: 78, arm: 75 },
+      { id: 'hernaan01', name: 'Anderson Hernandez', pos: '2B', bats: 'S', age: 25, pa: 91, h: 24, double: 3, triple: 0, hr: 0, bb: 8, so: 10, hbp: 0, sb: 0, cs: 0, sec: 'SS', fld: 80, rk: true },
+    ],
+    pitchers: [
+      { id: 'lannajo01', name: 'John Lannan', role: 'SP', throws: 'L', age: 23, g: 31, gs: 31, outs: 546, h: 173, hr: 22, bb: 74, so: 109, hbp: 7, er: 79, w: 9, l: 15, sv: 0, fld: 74, rk: true },
+      { id: 'redditi01', name: 'Tim Redding', role: 'SP', throws: 'R', age: 30, g: 33, gs: 33, outs: 546, h: 192, hr: 26, bb: 69, so: 116, hbp: 7, er: 94, w: 10, l: 11, sv: 0, fld: 60 },
+      { id: 'perezod01', name: 'Odalis Perez', role: 'SP', throws: 'L', age: 30, g: 30, gs: 30, outs: 479, h: 192, hr: 20, bb: 53, so: 101, hbp: 6, er: 87, w: 7, l: 12, sv: 0, fld: 77 },
+      { id: 'bergmja01', name: 'Jason Bergmann', role: 'SP', throws: 'R', age: 26, g: 30, gs: 22, outs: 419, h: 145, hr: 24, bb: 50, so: 101, hbp: 3, er: 79, w: 2, l: 11, sv: 0, fld: 57 },
+      { id: 'balesco01', name: 'Collin Balester', role: 'SP', throws: 'R', age: 22, g: 15, gs: 15, outs: 240, h: 92, hr: 12, bb: 28, so: 50, hbp: 6, er: 49, w: 3, l: 7, sv: 0, rk: true },
+      { id: 'rauchjo01', name: 'Jon Rauch', role: 'CL', throws: 'R', age: 29, g: 74, gs: 0, outs: 215, h: 65, hr: 9, bb: 19, so: 64, hbp: 0, er: 30, w: 4, l: 8, sv: 18 },
+      { id: 'hanrajo01', name: 'Joel Hanrahan', role: 'RP', throws: 'R', age: 26, g: 69, gs: 0, outs: 253, h: 77, hr: 10, bb: 46, so: 84, hbp: 1, er: 41, w: 6, l: 3, sv: 9 },
+      { id: 'riversa01', name: 'Saul Rivera', role: 'RP', throws: 'R', age: 30, g: 76, gs: 0, outs: 252, h: 86, hr: 3, bb: 37, so: 62, hbp: 2, er: 36, w: 5, l: 6, sv: 0 },
+      { id: 'ayalalu01', name: 'Luis Ayala', role: 'RP', throws: 'R', age: 30, g: 81, gs: 0, outs: 227, h: 84, hr: 9, bb: 24, so: 51, hbp: 3, er: 43, w: 2, l: 10, sv: 9 },
+      { id: 'colomje01', name: 'Jesus Colome', role: 'RP', throws: 'R', age: 30, g: 61, gs: 0, outs: 213, h: 64, hr: 6, bb: 36, so: 52, hbp: 3, er: 33, w: 2, l: 2, sv: 0 },
+      { id: 'shellst01', name: 'Steven Shell', role: 'RP', throws: 'R', age: 25, g: 39, gs: 0, outs: 150, h: 34, hr: 5, bb: 20, so: 41, hbp: 2, er: 12, w: 2, l: 2, sv: 2, rk: true },
+    ],
+    reservePitchers: [
+      { id: 'hillsh01', name: 'Shawn Hill', role: 'SP', throws: 'R', age: 27, g: 12, gs: 12, outs: 190, h: 77, hr: 6, bb: 21, so: 42, hbp: 3, er: 35, w: 1, l: 5, sv: 0 },
+      { id: 'chicoma01', name: 'Matt Chico', role: 'RP', throws: 'L', age: 25, g: 11, gs: 8, outs: 144, h: 57, hr: 8, bb: 20, so: 29, hbp: 1, er: 28, w: 0, l: 6, sv: 0 },
+      { id: 'mannich01', name: 'Charlie Manning', role: 'RP', throws: 'L', age: 29, g: 57, gs: 0, outs: 126, h: 35, hr: 8, bb: 31, so: 37, hbp: 0, er: 24, w: 1, l: 3, sv: 0, rk: true },
+      { id: 'mockga01', name: 'Garrett Mock', role: 'RP', throws: 'R', age: 25, g: 26, gs: 3, outs: 123, h: 37, hr: 4, bb: 23, so: 46, hbp: 0, er: 19, w: 1, l: 3, sv: 0, rk: true },
+      { id: 'martish01', name: 'Shairon Martis', role: 'RP', throws: 'R', age: 21, g: 5, gs: 4, outs: 62, h: 18, hr: 5, bb: 12, so: 23, hbp: 0, er: 13, w: 1, l: 3, sv: 0, rk: true },
+    ],
+  },
+  // CHC (CHN 2008)
+  {
+    franchiseId: 'CHC',
+    season: 2008,
+    batters: [
+      { id: 'sotoge01', name: 'Geovany Soto', pos: 'C', bats: 'R', age: 25, pa: 563, h: 144, double: 36, triple: 2, hr: 23, bb: 60, so: 121, hbp: 2, sb: 0, cs: 1, sec: '1B', fld: 76, arm: 69, rk: true },
+      { id: 'leede02', name: 'Derrek Lee', pos: '1B', bats: 'R', age: 32, pa: 698, h: 185, double: 42, triple: 2, hr: 22, bb: 74, so: 121, hbp: 3, sb: 9, cs: 4, sec: '3B', fld: 73 },
+      { id: 'derosma01', name: 'Mark DeRosa', pos: '2B', bats: 'R', age: 33, pa: 593, h: 149, double: 32, triple: 3, hr: 16, bb: 62, so: 103, hbp: 8, sb: 4, cs: 1, sec: '3B', fld: 50 },
+      { id: 'ramirar01', name: 'Aramis Ramirez', pos: '3B', bats: 'R', age: 30, pa: 645, h: 168, double: 42, triple: 3, hr: 30, bb: 62, so: 83, hbp: 9, sb: 1, cs: 1, sec: '1B', fld: 41 },
+      { id: 'theriry01', name: 'Ryan Theriot', pos: 'SS', bats: 'R', age: 28, pa: 661, h: 171, double: 25, triple: 4, hr: 2, bb: 66, so: 58, hbp: 2, sb: 27, cs: 10, sec: '2B', fld: 53 },
+      { id: 'soriaal01', name: 'Alfonso Soriano', pos: 'LF', bats: 'R', age: 32, pa: 503, h: 131, double: 30, triple: 2, hr: 29, bb: 37, so: 106, hbp: 4, sb: 20, cs: 6, sec: 'CF', fld: 63, arm: 78 },
+      { id: 'edmonji01', name: 'Jim Edmonds', pos: 'CF', bats: 'L', age: 38, pa: 401, h: 85, double: 17, triple: 2, hr: 17, bb: 49, so: 82, hbp: 1, sb: 2, cs: 2, sec: 'LF', fld: 65, arm: 59 },
+      { id: 'fukudko01', name: 'Kosuke Fukudome', pos: 'RF', bats: 'L', age: 31, pa: 590, h: 129, double: 25, triple: 3, hr: 10, bb: 81, so: 104, hbp: 1, sb: 12, cs: 4, sec: 'CF', fld: 63, arm: 61, rk: true },
+      { id: 'wardda01', name: 'Daryle Ward', pos: 'DH', bats: 'L', age: 33, pa: 119, h: 27, double: 9, triple: 0, hr: 4, bb: 16, so: 22, hbp: 0, sb: 0, cs: 0, sec: '1B' },
+    ],
+    bench: [
+      { id: 'johnsre02', name: 'Reed Johnson', pos: 'CF', bats: 'R', age: 31, pa: 374, h: 96, double: 20, triple: 1, hr: 6, bb: 20, so: 66, hbp: 13, sb: 5, cs: 4, sec: 'LF', fld: 62, arm: 67 },
+      { id: 'fontemi01', name: 'Mike Fontenot', pos: '2B', bats: 'L', age: 28, pa: 284, h: 73, double: 19, triple: 2, hr: 7, bb: 30, so: 49, hbp: 2, sb: 3, cs: 2, sec: 'SS', fld: 59 },
+      { id: 'cedenro02', name: 'Ronny Cedeno', pos: '2B', bats: 'R', age: 25, pa: 236, h: 55, double: 10, triple: 1, hr: 3, bb: 13, so: 44, hbp: 1, sb: 4, cs: 2, sec: 'SS', fld: 57 },
+      { id: 'blanche01', name: 'Henry Blanco', pos: 'C', bats: 'R', age: 36, pa: 128, h: 31, double: 5, triple: 0, hr: 3, bb: 6, so: 22, hbp: 0, sb: 0, cs: 0, sec: '1B', fld: 67, arm: 87 },
+      { id: 'piefe01', name: 'Felix Pie', pos: 'CF', bats: 'L', age: 23, pa: 93, h: 19, double: 3, triple: 1, hr: 1, bb: 7, so: 24, hbp: 1, sb: 3, cs: 0, sec: 'LF', fld: 80, arm: 68 },
+    ],
+    reserveBatters: [
+      { id: 'hoffpmi01', name: 'Micah Hoffpauir', pos: 'LF', bats: 'L', age: 28, pa: 80, h: 25, double: 8, triple: 0, hr: 2, bb: 6, so: 24, hbp: 1, sb: 1, cs: 0, sec: 'RF', rk: true },
+      { id: 'murtoma01', name: 'Matt Murton', pos: 'LF', bats: 'R', age: 26, pa: 73, h: 18, double: 3, triple: 0, hr: 2, bb: 6, so: 10, hbp: 0, sb: 0, cs: 0, sec: 'RF' },
+    ],
+    pitchers: [
+      { id: 'dempsry01', name: 'Ryan Dempster', role: 'SP', throws: 'R', age: 31, g: 33, gs: 33, outs: 620, h: 177, hr: 16, bb: 80, so: 182, hbp: 6, er: 78, w: 17, l: 6, sv: 0, fld: 80 },
+      { id: 'lillyte01', name: 'Ted Lilly', role: 'SP', throws: 'L', age: 32, g: 34, gs: 34, outs: 614, h: 187, hr: 31, bb: 65, so: 180, hbp: 5, er: 92, w: 17, l: 9, sv: 0, fld: 65 },
+      { id: 'zambrca01', name: 'Carlos Zambrano', role: 'SP', throws: 'R', age: 27, g: 30, gs: 30, outs: 566, h: 163, hr: 19, bb: 82, so: 147, hbp: 9, er: 80, w: 14, l: 6, sv: 0, fld: 71 },
+      { id: 'marquja01', name: 'Jason Marquis', role: 'SP', throws: 'R', age: 29, g: 29, gs: 28, outs: 501, h: 173, hr: 19, bb: 68, so: 91, hbp: 10, er: 89, w: 11, l: 9, sv: 0, fld: 82 },
+      { id: 'gallase01', name: 'Sean Gallagher', role: 'SP', throws: 'R', age: 22, g: 23, gs: 21, outs: 346, h: 119, hr: 14, bb: 60, so: 97, hbp: 6, er: 69, w: 5, l: 7, sv: 0, rk: true },
+      { id: 'woodke02', name: 'Kerry Wood', role: 'CL', throws: 'R', age: 31, g: 65, gs: 0, outs: 199, h: 53, hr: 3, bb: 22, so: 77, hbp: 5, er: 24, w: 5, l: 4, sv: 34 },
+      { id: 'marmoca01', name: 'Carlos Marmol', role: 'RP', throws: 'R', age: 25, g: 82, gs: 0, outs: 262, h: 48, hr: 9, bb: 44, so: 104, hbp: 5, er: 27, w: 2, l: 4, sv: 7 },
+      { id: 'howrybo01', name: 'Bob Howry', role: 'RP', throws: 'R', age: 34, g: 72, gs: 0, outs: 212, h: 80, hr: 10, bb: 15, so: 64, hbp: 2, er: 35, w: 7, l: 5, sv: 1 },
+      { id: 'marshse01', name: 'Sean Marshall', role: 'RP', throws: 'L', age: 25, g: 34, gs: 7, outs: 196, h: 64, hr: 9, bb: 24, so: 47, hbp: 3, er: 31, w: 3, l: 5, sv: 1 },
+      { id: 'liebejo01', name: 'Jon Lieber', role: 'RP', throws: 'R', age: 38, g: 26, gs: 1, outs: 140, h: 56, hr: 7, bb: 9, so: 29, hbp: 2, er: 24, w: 2, l: 3, sv: 0 },
+      { id: 'wuertmi01', name: 'Michael Wuertz', role: 'RP', throws: 'R', age: 29, g: 45, gs: 0, outs: 134, h: 42, hr: 5, bb: 21, so: 41, hbp: 0, er: 17, w: 1, l: 1, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'cottsne01', name: 'Neal Cotts', role: 'RP', throws: 'L', age: 28, g: 50, gs: 0, outs: 107, h: 37, hr: 6, bb: 15, so: 36, hbp: 2, er: 18, w: 0, l: 2, sv: 0 },
+      { id: 'hartke01', name: 'Kevin Hart', role: 'RP', throws: 'R', age: 25, g: 21, gs: 0, outs: 83, h: 36, hr: 2, bb: 17, so: 26, hbp: 2, er: 17, w: 2, l: 2, sv: 0, rk: true },
+      { id: 'samarje01', name: 'Jeff Samardzija', role: 'RP', throws: 'R', age: 23, g: 26, gs: 0, outs: 83, h: 24, hr: 0, bb: 15, so: 25, hbp: 1, er: 7, w: 1, l: 0, sv: 1, rk: true },
+      { id: 'hillri01', name: 'Rich Hill', role: 'RP', throws: 'L', age: 28, g: 5, gs: 5, outs: 59, h: 18, hr: 3, bb: 8, so: 19, hbp: 1, er: 9, w: 1, l: 0, sv: 0 },
+    ],
+  },
+  // CIN (CIN 2008)
+  {
+    franchiseId: 'CIN',
+    season: 2008,
+    batters: [
+      { id: 'bakopa01', name: 'Paul Bako', pos: 'C', bats: 'L', age: 36, pa: 338, h: 64, double: 9, triple: 2, hr: 4, bb: 32, so: 92, hbp: 1, sb: 0, cs: 2, fld: 68, arm: 71 },
+      { id: 'vottojo01', name: 'Joey Votto', pos: '1B', bats: 'L', age: 24, pa: 589, h: 158, double: 33, triple: 3, hr: 24, bb: 57, so: 102, hbp: 2, sb: 7, cs: 5, sec: '3B', fld: 81, rk: true },
+      { id: 'phillbr01', name: 'Brandon Phillips', pos: '2B', bats: 'R', age: 27, pa: 609, h: 153, double: 24, triple: 5, hr: 22, bb: 35, so: 93, hbp: 7, sb: 25, cs: 8, sec: 'SS', fld: 79 },
+      { id: 'encared01', name: 'Edwin Encarnacion', pos: '3B', bats: 'R', age: 25, pa: 582, h: 137, double: 30, triple: 1, hr: 22, bb: 53, so: 97, hbp: 12, sb: 4, cs: 1, sec: '1B', fld: 42 },
+      { id: 'keppije01', name: 'Jeff Keppinger', pos: 'SS', bats: 'R', age: 28, pa: 502, h: 128, double: 25, triple: 2, hr: 5, bb: 34, so: 24, hbp: 3, sb: 3, cs: 1, sec: '2B', fld: 60 },
+      { id: 'dunnad01', name: 'Adam Dunn', pos: 'LF', bats: 'L', age: 28, pa: 651, h: 129, double: 25, triple: 1, hr: 40, bb: 114, so: 170, hbp: 6, sb: 5, cs: 1, sec: '1B', fld: 62, arm: 66 },
+      { id: 'patteco01', name: 'Corey Patterson', pos: 'CF', bats: 'L', age: 28, pa: 392, h: 88, double: 18, triple: 2, hr: 9, bb: 16, so: 58, hbp: 2, sb: 24, cs: 8, sec: 'LF', fld: 77, arm: 66 },
+      { id: 'griffke02', name: 'Ken Griffey', pos: 'RF', bats: 'L', age: 38, pa: 575, h: 128, double: 26, triple: 1, hr: 24, bb: 74, so: 91, hbp: 2, sb: 2, cs: 1, sec: 'CF', fld: 62, arm: 71 },
+      { id: 'bruceja01', name: 'Jay Bruce', pos: 'DH', bats: 'L', age: 21, pa: 452, h: 105, double: 17, triple: 1, hr: 21, bb: 33, so: 110, hbp: 4, sb: 4, cs: 6, sec: 'RF', fld: 64, arm: 73, rk: true },
+    ],
+    bench: [
+      { id: 'hairsje02', name: 'Jerry Hairston', pos: 'SS', bats: 'R', age: 32, pa: 297, h: 72, double: 16, triple: 1, hr: 5, bb: 21, so: 39, hbp: 3, sb: 12, cs: 3, sec: '2B', fld: 63 },
+      { id: 'rossda01', name: 'David Ross', pos: 'C', bats: 'R', age: 31, pa: 182, h: 34, double: 7, triple: 0, hr: 8, bb: 23, so: 44, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 64, arm: 71 },
+      { id: 'valenja01', name: 'Javier Valentin', pos: 'C', bats: 'S', age: 32, pa: 144, h: 35, double: 9, triple: 0, hr: 3, bb: 12, so: 20, hbp: 0, sb: 0, cs: 0, sec: '1B' },
+      { id: 'freelry01', name: 'Ryan Freel', pos: 'CF', bats: 'R', age: 32, pa: 143, h: 34, double: 7, triple: 1, hr: 1, bb: 11, so: 23, hbp: 2, sb: 8, cs: 4, sec: 'RF', fld: 67, arm: 68 },
+      { id: 'cabrejo02', name: 'Jolbert Cabrera', pos: 'LF', bats: 'R', age: 35, pa: 126, h: 29, double: 6, triple: 1, hr: 3, bb: 8, so: 29, hbp: 2, sb: 2, cs: 0, sec: 'CF', fld: 47, arm: 85 },
+    ],
+    reserveBatters: [
+      { id: 'dickech01', name: 'Chris Dickerson', pos: 'LF', bats: 'L', age: 26, pa: 122, h: 31, double: 9, triple: 2, hr: 6, bb: 17, so: 35, hbp: 2, sb: 5, cs: 3, sec: 'RF', fld: 70, arm: 58, rk: true },
+      { id: 'hanigry01', name: 'Ryan Hanigan', pos: 'C', bats: 'R', age: 27, pa: 98, h: 23, double: 2, triple: 0, hr: 2, bb: 10, so: 10, hbp: 3, sb: 0, cs: 0, sec: '1B', fld: 76, arm: 77, rk: true },
+      { id: 'janispa01', name: 'Paul Janish', pos: 'SS', bats: 'R', age: 25, pa: 89, h: 15, double: 2, triple: 0, hr: 1, bb: 7, so: 18, hbp: 2, sb: 0, cs: 0, sec: '2B', fld: 78, rk: true },
+      { id: 'phillan01', name: 'Andy Phillips', pos: '3B', bats: 'R', age: 31, pa: 85, h: 20, double: 3, triple: 0, hr: 2, bb: 5, so: 14, hbp: 1, sb: 0, cs: 1, sec: '1B' },
+      { id: 'hattesc01', name: 'Scott Hatteberg', pos: '1B', bats: 'L', age: 38, pa: 61, h: 15, double: 4, triple: 0, hr: 1, bb: 8, so: 5, hbp: 0, sb: 0, cs: 0 },
+    ],
+    pitchers: [
+      { id: 'arroybr01', name: 'Bronson Arroyo', role: 'SP', throws: 'R', age: 31, g: 34, gs: 34, outs: 600, h: 215, hr: 28, bb: 63, so: 158, hbp: 8, er: 97, w: 15, l: 11, sv: 0, fld: 80 },
+      { id: 'volqued01', name: 'Edinson Volquez', role: 'SP', throws: 'R', age: 24, g: 33, gs: 32, outs: 588, h: 175, hr: 16, bb: 92, so: 195, hbp: 13, er: 76, w: 17, l: 6, sv: 0, fld: 68 },
+      { id: 'haranaa01', name: 'Aaron Harang', role: 'SP', throws: 'R', age: 30, g: 30, gs: 29, outs: 553, h: 193, hr: 28, bb: 47, so: 167, hbp: 5, er: 88, w: 6, l: 17, sv: 0, fld: 64 },
+      { id: 'cuetojo01', name: 'Johnny Cueto', role: 'SP', throws: 'R', age: 22, g: 31, gs: 31, outs: 522, h: 178, hr: 29, bb: 68, so: 158, hbp: 14, er: 93, w: 9, l: 14, sv: 0, fld: 64, rk: true },
+      { id: 'foggjo01', name: 'Josh Fogg', role: 'SP', throws: 'R', age: 31, g: 22, gs: 14, outs: 235, h: 95, hr: 13, bb: 28, so: 45, hbp: 5, er: 52, w: 2, l: 7, sv: 0 },
+      { id: 'cordefr01', name: 'Francisco Cordero', role: 'CL', throws: 'R', age: 33, g: 72, gs: 0, outs: 211, h: 62, hr: 6, bb: 32, so: 86, hbp: 2, er: 26, w: 5, l: 4, sv: 34 },
+      { id: 'affelje01', name: 'Jeremy Affeldt', role: 'RP', throws: 'L', age: 29, g: 74, gs: 0, outs: 235, h: 74, hr: 8, bb: 34, so: 65, hbp: 3, er: 34, w: 1, l: 1, sv: 0 },
+      { id: 'lincomi01', name: 'Mike Lincoln', role: 'RP', throws: 'R', age: 33, g: 64, gs: 0, outs: 211, h: 66, hr: 10, bb: 24, so: 57, hbp: 3, er: 35, w: 2, l: 5, sv: 0 },
+      { id: 'weathda01', name: 'David Weathers', role: 'RP', throws: 'R', age: 38, g: 72, gs: 0, outs: 208, h: 69, hr: 6, bb: 29, so: 47, hbp: 3, er: 27, w: 4, l: 6, sv: 0 },
+      { id: 'burtoja01', name: 'Jared Burton', role: 'RP', throws: 'R', age: 27, g: 54, gs: 0, outs: 176, h: 51, hr: 5, bb: 27, so: 56, hbp: 2, er: 20, w: 5, l: 1, sv: 0, rk: true },
+      { id: 'braybi01', name: 'Bill Bray', role: 'RP', throws: 'L', age: 25, g: 63, gs: 0, outs: 141, h: 51, hr: 4, bb: 22, so: 49, hbp: 1, er: 19, w: 2, l: 2, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'majewga01', name: 'Gary Majewski', role: 'RP', throws: 'R', age: 28, g: 37, gs: 0, outs: 120, h: 60, hr: 5, bb: 14, so: 25, hbp: 3, er: 28, w: 1, l: 0, sv: 0 },
+      { id: 'baileho02', name: 'Homer Bailey', role: 'RP', throws: 'R', age: 22, g: 8, gs: 8, outs: 109, h: 50, hr: 6, bb: 20, so: 21, hbp: 1, er: 29, w: 0, l: 6, sv: 0, rk: true },
+      { id: 'belisma01', name: 'Matt Belisle', role: 'RP', throws: 'R', age: 28, g: 6, gs: 6, outs: 89, h: 39, hr: 4, bb: 8, so: 21, hbp: 1, er: 19, w: 1, l: 4, sv: 0 },
+      { id: 'ramirra03', name: 'Ramon Ramirez', role: 'RP', throws: 'R', age: 25, g: 5, gs: 4, outs: 81, h: 17, hr: 3, bb: 11, so: 21, hbp: 1, er: 8, w: 1, l: 1, sv: 0, rk: true },
+      { id: 'coffeto01', name: 'Todd Coffey', role: 'RP', throws: 'R', age: 27, g: 26, gs: 0, outs: 80, h: 32, hr: 4, bb: 9, so: 19, hbp: 1, er: 14, w: 1, l: 0, sv: 0 },
+    ],
+  },
+  // MIL (MIL 2008)
+  {
+    franchiseId: 'MIL',
+    season: 2008,
+    batters: [
+      { id: 'kendaja01', name: 'Jason Kendall', pos: 'C', bats: 'R', age: 34, pa: 587, h: 132, double: 26, triple: 1, hr: 2, bb: 46, so: 47, hbp: 12, sb: 7, cs: 4, fld: 77, arm: 85 },
+      { id: 'fieldpr01', name: 'Prince Fielder', pos: '1B', bats: 'L', age: 24, pa: 694, h: 165, double: 33, triple: 2, hr: 39, bb: 83, so: 130, hbp: 13, sb: 3, cs: 2, sec: '3B', fld: 62 },
+      { id: 'weeksri01', name: 'Rickie Weeks', pos: '2B', bats: 'R', age: 25, pa: 560, h: 113, double: 22, triple: 6, hr: 15, bb: 69, so: 121, hbp: 16, sb: 23, cs: 4, sec: 'SS', fld: 71 },
+      { id: 'hallbi03', name: 'Bill Hall', pos: '3B', bats: 'R', age: 28, pa: 448, h: 98, double: 27, triple: 1, hr: 16, bb: 38, so: 120, hbp: 2, sb: 5, cs: 6, sec: 'SS', fld: 63 },
+      { id: 'hardyjj01', name: 'J. J. Hardy', pos: 'SS', bats: 'R', age: 25, pa: 629, h: 160, double: 30, triple: 3, hr: 25, bb: 47, so: 88, hbp: 1, sb: 2, cs: 2, sec: '2B', fld: 71 },
+      { id: 'braunry02', name: 'Ryan Braun', pos: 'LF', bats: 'R', age: 24, pa: 663, h: 182, double: 38, triple: 7, hr: 40, bb: 41, so: 136, hbp: 7, sb: 16, cs: 5, sec: 'RF', fld: 72, arm: 71 },
+      { id: 'camermi01', name: 'Mike Cameron', pos: 'CF', bats: 'R', age: 35, pa: 508, h: 110, double: 26, triple: 4, hr: 20, bb: 54, so: 130, hbp: 6, sb: 16, cs: 5, sec: 'RF', fld: 70, arm: 63 },
+      { id: 'hartco01', name: 'Corey Hart', pos: 'RF', bats: 'R', age: 26, pa: 657, h: 168, double: 42, triple: 7, hr: 23, bb: 33, so: 114, hbp: 8, sb: 23, cs: 8, sec: 'CF', fld: 64, arm: 64 },
+      { id: 'gwynnto02', name: 'Tony Gwynn', pos: 'DH', bats: 'L', age: 25, pa: 49, h: 11, double: 1, triple: 0, hr: 0, bb: 4, so: 8, hbp: 0, sb: 3, cs: 1, sec: 'RF' },
+    ],
+    bench: [
+      { id: 'counscr01', name: 'Craig Counsell', pos: '3B', bats: 'L', age: 37, pa: 302, h: 59, double: 12, triple: 2, hr: 2, bb: 38, so: 41, hbp: 5, sb: 5, cs: 2, sec: '2B', fld: 71 },
+      { id: 'kaplega01', name: 'Gabe Kapler', pos: 'CF', bats: 'R', age: 32, pa: 245, h: 67, double: 16, triple: 2, hr: 7, bb: 15, so: 37, hbp: 2, sb: 3, cs: 1, sec: 'RF', fld: 50, arm: 62 },
+      { id: 'branyru01', name: 'Russell Branyan', pos: '3B', bats: 'L', age: 32, pa: 152, h: 29, double: 6, triple: 0, hr: 10, bb: 20, so: 48, hbp: 1, sb: 1, cs: 0, sec: '1B', fld: 73 },
+      { id: 'dillojo02', name: 'Joe Dillon', pos: '2B', bats: 'R', age: 32, pa: 90, h: 21, double: 5, triple: 1, hr: 1, bb: 10, so: 19, hbp: 1, sb: 1, cs: 0, sec: 'SS', rk: true },
+      { id: 'rivermi02', name: 'Mike Rivera', pos: 'C', bats: 'R', age: 31, pa: 69, h: 18, double: 4, triple: 0, hr: 2, bb: 5, so: 10, hbp: 1, sb: 1, cs: 0, sec: '1B' },
+    ],
+    pitchers: [
+      { id: 'sabatcc01', name: 'CC Sabathia', role: 'SP', throws: 'L', age: 27, g: 35, gs: 35, outs: 759, h: 233, hr: 20, bb: 52, so: 236, hbp: 8, er: 82, w: 17, l: 10, sv: 0, fld: 62 },
+      { id: 'sheetbe01', name: 'Ben Sheets', role: 'SP', throws: 'R', age: 29, g: 31, gs: 31, outs: 595, h: 185, hr: 19, bb: 45, so: 161, hbp: 1, er: 74, w: 13, l: 9, sv: 0, fld: 59 },
+      { id: 'bushda01', name: 'Dave Bush', role: 'SP', throws: 'R', age: 28, g: 31, gs: 29, outs: 555, h: 179, hr: 27, bb: 43, so: 121, hbp: 11, er: 91, w: 9, l: 10, sv: 0, fld: 67 },
+      { id: 'suppaje01', name: 'Jeff Suppan', role: 'SP', throws: 'R', age: 33, g: 31, gs: 31, outs: 533, h: 206, hr: 23, bb: 64, so: 94, hbp: 7, er: 93, w: 10, l: 10, sv: 0, fld: 76 },
+      { id: 'parrama01', name: 'Manny Parra', role: 'SP', throws: 'L', age: 25, g: 32, gs: 29, outs: 498, h: 179, hr: 17, bb: 75, so: 149, hbp: 3, er: 80, w: 10, l: 8, sv: 0, fld: 63, rk: true },
+      { id: 'torresa01', name: 'Salomon Torres', role: 'CL', throws: 'R', age: 36, g: 71, gs: 0, outs: 240, h: 79, hr: 7, bb: 31, so: 57, hbp: 5, er: 34, w: 7, l: 5, sv: 28 },
+      { id: 'villaca01', name: 'Carlos Villanueva', role: 'RP', throws: 'R', age: 24, g: 47, gs: 9, outs: 325, h: 104, hr: 17, bb: 37, so: 92, hbp: 3, er: 48, w: 4, l: 7, sv: 1 },
+      { id: 'motagu01', name: 'Guillermo Mota', role: 'RP', throws: 'R', age: 34, g: 58, gs: 0, outs: 171, h: 56, hr: 8, bb: 24, so: 48, hbp: 1, er: 30, w: 5, l: 6, sv: 1 },
+      { id: 'shousbr01', name: 'Brian Shouse', role: 'RP', throws: 'L', age: 39, g: 69, gs: 0, outs: 154, h: 47, hr: 3, bb: 15, so: 32, hbp: 2, er: 17, w: 5, l: 1, sv: 2 },
+      { id: 'gagneer01', name: 'Eric Gagne', role: 'RP', throws: 'R', age: 32, g: 50, gs: 0, outs: 139, h: 45, hr: 7, bb: 21, so: 42, hbp: 2, er: 25, w: 4, l: 3, sv: 10 },
+      { id: 'riskeda01', name: 'David Riske', role: 'RP', throws: 'R', age: 31, g: 45, gs: 0, outs: 127, h: 44, hr: 6, bb: 21, so: 31, hbp: 1, er: 19, w: 1, l: 2, sv: 2 },
+    ],
+    reservePitchers: [
+      { id: 'mccluse01', name: 'Seth McClung', role: 'SP', throws: 'R', age: 27, g: 37, gs: 12, outs: 316, h: 98, hr: 10, bb: 57, so: 80, hbp: 6, er: 52, w: 6, l: 6, sv: 0 },
+      { id: 'stettmi01', name: 'Mitch Stetter', role: 'RP', throws: 'L', age: 27, g: 30, gs: 0, outs: 76, h: 14, hr: 2, bb: 18, so: 30, hbp: 5, er: 9, w: 3, l: 1, sv: 0, rk: true },
+      { id: 'gallayo01', name: 'Yovani Gallardo', role: 'RP', throws: 'R', age: 22, g: 4, gs: 4, outs: 72, h: 22, hr: 2, bb: 8, so: 21, hbp: 0, er: 9, w: 0, l: 0, sv: 0 },
+      { id: 'difelma01', name: 'Mark DiFelice', role: 'RP', throws: 'R', age: 31, g: 15, gs: 0, outs: 57, h: 17, hr: 4, bb: 4, so: 20, hbp: 0, er: 6, w: 1, l: 0, sv: 0, rk: true },
+      { id: 'dillati01', name: 'Tim Dillard', role: 'RP', throws: 'R', age: 24, g: 13, gs: 0, outs: 43, h: 17, hr: 2, bb: 6, so: 5, hbp: 0, er: 7, w: 0, l: 0, sv: 0, rk: true },
+    ],
+  },
+  // PIT (PIT 2008)
+  {
+    franchiseId: 'PIT',
+    season: 2008,
+    batters: [
+      { id: 'doumiry01', name: 'Ryan Doumit', pos: 'C', bats: 'S', age: 27, pa: 465, h: 127, double: 33, triple: 1, hr: 15, bb: 28, so: 71, hbp: 8, sb: 2, cs: 2, sec: '1B', fld: 65, arm: 70 },
+      { id: 'larocad01', name: 'Adam LaRoche', pos: '1B', bats: 'L', age: 28, pa: 554, h: 134, double: 35, triple: 2, hr: 24, bb: 54, so: 120, hbp: 2, sb: 1, cs: 1, sec: '3B', fld: 69 },
+      { id: 'sanchfr01', name: 'Freddy Sanchez', pos: '2B', bats: 'R', age: 30, pa: 608, h: 166, double: 35, triple: 3, hr: 9, bb: 26, so: 64, hbp: 6, sb: 0, cs: 1, sec: '3B', fld: 81 },
+      { id: 'bautijo02', name: 'Jose Bautista', pos: '3B', bats: 'R', age: 27, pa: 424, h: 90, double: 20, triple: 1, hr: 13, bb: 43, so: 84, hbp: 4, sb: 2, cs: 2, sec: '1B', fld: 85 },
+      { id: 'wilsoja02', name: 'Jack Wilson', pos: 'SS', bats: 'R', age: 30, pa: 330, h: 84, double: 17, triple: 1, hr: 4, bb: 18, so: 30, hbp: 4, sb: 2, cs: 2, sec: '2B', fld: 91 },
+      { id: 'bayja01', name: 'Jason Bay', pos: 'LF', bats: 'R', age: 29, pa: 670, h: 158, double: 31, triple: 3, hr: 29, bb: 79, so: 145, hbp: 6, sb: 8, cs: 1, sec: 'CF', fld: 61, arm: 69 },
+      { id: 'mclouna01', name: 'Nate McLouth', pos: 'CF', bats: 'L', age: 26, pa: 685, h: 160, double: 43, triple: 4, hr: 24, bb: 64, so: 108, hbp: 13, sb: 27, cs: 3, sec: 'RF', fld: 75, arm: 66 },
+      { id: 'nadyxa01', name: 'Xavier Nady', pos: 'RF', bats: 'R', age: 29, pa: 607, h: 163, double: 34, triple: 1, hr: 24, bb: 36, so: 111, hbp: 11, sb: 3, cs: 1, sec: 'LF', fld: 77, arm: 79 },
+      { id: 'mossbr01', name: 'Brandon Moss', pos: 'DH', bats: 'L', age: 24, pa: 263, h: 58, double: 15, triple: 3, hr: 7, bb: 22, so: 69, hbp: 1, sb: 1, cs: 2, sec: 'LF', fld: 77, arm: 87, rk: true },
+    ],
+    bench: [
+      { id: 'mientdo01', name: 'Doug Mientkiewicz', pos: '1B', bats: 'L', age: 34, pa: 334, h: 80, double: 20, triple: 2, hr: 4, bb: 38, so: 34, hbp: 3, sb: 1, cs: 0, sec: '3B', fld: 75 },
+      { id: 'michaja01', name: 'Jason Michaels', pos: 'RF', bats: 'R', age: 32, pa: 321, h: 72, double: 14, triple: 1, hr: 7, bb: 25, so: 61, hbp: 2, sb: 3, cs: 2, sec: 'LF', fld: 84, arm: 67 },
+      { id: 'larocan01', name: 'Andy LaRoche', pos: '3B', bats: 'R', age: 24, pa: 252, h: 39, double: 6, triple: 0, hr: 4, bb: 29, so: 41, hbp: 2, sb: 3, cs: 1, sec: '1B', fld: 78, rk: true },
+      { id: 'rivaslu01', name: 'Luis Rivas', pos: 'SS', bats: 'R', age: 28, pa: 223, h: 46, double: 6, triple: 3, hr: 4, bb: 13, so: 26, hbp: 1, sb: 3, cs: 2, sec: '2B', fld: 61 },
+      { id: 'gomezch02', name: 'Chris Gomez', pos: '3B', bats: 'R', age: 37, pa: 200, h: 54, double: 9, triple: 0, hr: 1, bb: 11, so: 25, hbp: 1, sb: 0, cs: 1, sec: 'SS' },
+    ],
+    reserveBatters: [
+      { id: 'morgany01', name: 'Nyjer Morgan', pos: 'LF', bats: 'L', age: 27, pa: 175, h: 47, double: 10, triple: 2, hr: 0, bb: 11, so: 31, hbp: 3, sb: 9, cs: 5, sec: 'CF', fld: 87, arm: 58, rk: true },
+      { id: 'pauliro01', name: 'Ronny Paulino', pos: 'C', bats: 'R', age: 27, pa: 130, h: 32, double: 6, triple: 0, hr: 2, bb: 9, so: 22, hbp: 0, sb: 0, cs: 0, sec: '1B', fld: 73, arm: 69 },
+      { id: 'chavera01', name: 'Raul Chavez', pos: 'C', bats: 'R', age: 35, pa: 122, h: 29, double: 4, triple: 0, hr: 1, bb: 4, so: 14, hbp: 1, sb: 0, cs: 0, fld: 71, arm: 90 },
+      { id: 'bixlebr01', name: 'Brian Bixler', pos: 'SS', bats: 'R', age: 25, pa: 120, h: 17, double: 2, triple: 1, hr: 0, bb: 6, so: 36, hbp: 4, sb: 1, cs: 0, sec: '2B', fld: 98, rk: true },
+      { id: 'pearcst01', name: 'Steve Pearce', pos: 'RF', bats: 'R', age: 25, pa: 119, h: 29, double: 7, triple: 0, hr: 3, bb: 6, so: 21, hbp: 2, sb: 2, cs: 0, sec: 'LF', fld: 56, arm: 59, rk: true },
+    ],
+    pitchers: [
+      { id: 'maholpa01', name: 'Paul Maholm', role: 'SP', throws: 'L', age: 26, g: 31, gs: 31, outs: 619, h: 213, hr: 22, bb: 65, so: 131, hbp: 9, er: 96, w: 9, l: 9, sv: 0, fld: 67 },
+      { id: 'dukeza01', name: 'Zach Duke', role: 'SP', throws: 'L', age: 25, g: 31, gs: 31, outs: 555, h: 235, hr: 19, bb: 48, so: 85, hbp: 6, er: 100, w: 5, l: 14, sv: 0, fld: 81 },
+      { id: 'snellia01', name: 'Ian Snell', role: 'SP', throws: 'R', age: 26, g: 31, gs: 31, outs: 493, h: 191, hr: 20, bb: 75, so: 146, hbp: 4, er: 89, w: 7, l: 12, sv: 0, fld: 70 },
+      { id: 'gorzeto01', name: 'Tom Gorzelanny', role: 'SP', throws: 'L', age: 25, g: 21, gs: 21, outs: 316, h: 118, hr: 14, bb: 53, so: 72, hbp: 4, er: 61, w: 6, l: 9, sv: 0 },
+      { id: 'dumatph01', name: 'Phil Dumatrait', role: 'SP', throws: 'L', age: 26, g: 21, gs: 11, outs: 236, h: 90, hr: 9, bb: 42, so: 49, hbp: 2, er: 55, w: 3, l: 4, sv: 0, rk: true },
+      { id: 'cappsma01', name: 'Matt Capps', role: 'CL', throws: 'R', age: 24, g: 49, gs: 0, outs: 161, h: 46, hr: 5, bb: 8, so: 40, hbp: 2, er: 17, w: 2, l: 3, sv: 21 },
+      { id: 'grabojo02', name: 'John Grabow', role: 'RP', throws: 'L', age: 29, g: 74, gs: 0, outs: 228, h: 67, hr: 9, bb: 33, so: 63, hbp: 1, er: 29, w: 6, l: 3, sv: 4 },
+      { id: 'yatesty01', name: 'Tyler Yates', role: 'RP', throws: 'R', age: 30, g: 72, gs: 0, outs: 220, h: 71, hr: 7, bb: 40, so: 69, hbp: 2, er: 39, w: 6, l: 3, sv: 1 },
+      { id: 'marteda01', name: 'Damaso Marte', role: 'RP', throws: 'L', age: 33, g: 72, gs: 0, outs: 195, h: 51, hr: 5, bb: 27, so: 71, hbp: 3, er: 25, w: 5, l: 3, sv: 5 },
+      { id: 'osorifr01', name: 'Franquelis Osoria', role: 'RP', throws: 'R', age: 26, g: 43, gs: 0, outs: 182, h: 84, hr: 9, bb: 14, so: 31, hbp: 5, er: 39, w: 4, l: 3, sv: 0 },
+      { id: 'bautide01', name: 'Denny Bautista', role: 'RP', throws: 'R', age: 27, g: 51, gs: 0, outs: 181, h: 66, hr: 6, bb: 38, so: 43, hbp: 3, er: 38, w: 4, l: 4, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'burnese01', name: 'Sean Burnett', role: 'RP', throws: 'L', age: 25, g: 58, gs: 0, outs: 170, h: 57, hr: 7, bb: 34, so: 42, hbp: 2, er: 30, w: 1, l: 1, sv: 0 },
+      { id: 'karstje01', name: 'Jeff Karstens', role: 'RP', throws: 'R', age: 25, g: 9, gs: 9, outs: 154, h: 58, hr: 8, bb: 15, so: 21, hbp: 0, er: 27, w: 2, l: 6, sv: 0 },
+      { id: 'beamtj01', name: 'T. J. Beam', role: 'RP', throws: 'R', age: 27, g: 32, gs: 0, outs: 137, h: 45, hr: 7, bb: 19, so: 24, hbp: 2, er: 23, w: 2, l: 2, sv: 1, rk: true },
+      { id: 'davisja02', name: 'Jason Davis', role: 'RP', throws: 'R', age: 28, g: 14, gs: 4, outs: 102, h: 39, hr: 2, bb: 17, so: 17, hbp: 2, er: 19, w: 2, l: 4, sv: 0 },
+      { id: 'morrima01', name: 'Matt Morris', role: 'RP', throws: 'R', age: 33, g: 5, gs: 5, outs: 67, h: 31, hr: 3, bb: 8, so: 13, hbp: 1, er: 15, w: 0, l: 4, sv: 0 },
+    ],
+  },
+  // STL (SLN 2008)
+  {
+    franchiseId: 'STL',
+    season: 2008,
+    batters: [
+      { id: 'molinya01', name: 'Yadier Molina', pos: 'C', bats: 'R', age: 25, pa: 485, h: 123, double: 20, triple: 0, hr: 7, bb: 34, so: 38, hbp: 3, sb: 1, cs: 2, sec: '1B', fld: 68, arm: 77 },
+      { id: 'pujolal01', name: 'Albert Pujols', pos: '1B', bats: 'R', age: 28, pa: 641, h: 181, double: 39, triple: 0, hr: 37, bb: 99, so: 54, hbp: 5, sb: 5, cs: 4, sec: 'LF', fld: 87 },
+      { id: 'milesaa01', name: 'Aaron Miles', pos: '2B', bats: 'S', age: 31, pa: 408, h: 112, double: 15, triple: 2, hr: 3, bb: 25, so: 37, hbp: 1, sb: 2, cs: 2, sec: 'SS', fld: 65 },
+      { id: 'glaustr01', name: 'Troy Glaus', pos: '3B', bats: 'R', age: 31, pa: 637, h: 144, double: 30, triple: 1, hr: 29, bb: 86, so: 120, hbp: 4, sb: 1, cs: 1, sec: 'SS', fld: 77 },
+      { id: 'izturce01', name: 'Cesar Izturis', pos: 'SS', bats: 'S', age: 28, pa: 454, h: 108, double: 14, triple: 3, hr: 1, bb: 28, so: 26, hbp: 4, sb: 16, cs: 6, sec: '3B', fld: 83 },
+      { id: 'schumsk01', name: 'Skip Schumaker', pos: 'LF', bats: 'L', age: 28, pa: 594, h: 165, double: 24, triple: 5, hr: 8, bb: 43, so: 61, hbp: 2, sb: 7, cs: 2, sec: 'CF', fld: 59, arm: 79 },
+      { id: 'ankieri01', name: 'Rick Ankiel', pos: 'CF', bats: 'L', age: 28, pa: 463, h: 111, double: 21, triple: 2, hr: 25, bb: 40, so: 100, hbp: 4, sb: 2, cs: 1, sec: 'RF', fld: 53, arm: 67 },
+      { id: 'ludwiry01', name: 'Ryan Ludwick', pos: 'RF', bats: 'R', age: 29, pa: 617, h: 157, double: 40, triple: 2, hr: 34, bb: 58, so: 142, hbp: 9, sb: 5, cs: 5, sec: 'LF', fld: 77, arm: 78 },
+      { id: 'kennead01', name: 'Adam Kennedy', pos: 'DH', bats: 'L', age: 32, pa: 365, h: 88, double: 16, triple: 3, hr: 3, bb: 24, so: 44, hbp: 2, sb: 8, cs: 3, sec: 'RF', fld: 81 },
+    ],
+    bench: [
+      { id: 'duncach01', name: 'Chris Duncan', pos: 'LF', bats: 'L', age: 27, pa: 257, h: 58, double: 10, triple: 0, hr: 11, bb: 32, so: 62, hbp: 1, sb: 1, cs: 1, sec: '1B', fld: 70, arm: 63 },
+      { id: 'ryanbr01', name: 'Brendan Ryan', pos: 'SS', bats: 'R', age: 26, pa: 218, h: 51, double: 9, triple: 0, hr: 2, bb: 16, so: 27, hbp: 2, sb: 7, cs: 1, sec: '2B', fld: 82 },
+      { id: 'larueja01', name: 'Jason LaRue', pos: 'C', bats: 'R', age: 34, pa: 189, h: 31, double: 7, triple: 0, hr: 4, bb: 17, so: 39, hbp: 5, sb: 0, cs: 0, fld: 74, arm: 80 },
+      { id: 'bartobr01', name: 'Brian Barton', pos: 'LF', bats: 'R', age: 26, pa: 179, h: 41, double: 9, triple: 2, hr: 2, bb: 19, so: 39, hbp: 2, sb: 3, cs: 1, sec: 'RF', fld: 68, arm: 73, rk: true },
+      { id: 'mathejo02', name: 'Joe Mather', pos: 'LF', bats: 'R', age: 25, pa: 147, h: 32, double: 7, triple: 0, hr: 8, bb: 12, so: 32, hbp: 1, sb: 1, cs: 0, sec: 'RF', fld: 82, arm: 65, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'stavini01', name: 'Nick Stavinoha', pos: 'LF', bats: 'R', age: 26, pa: 61, h: 11, double: 1, triple: 0, hr: 0, bb: 2, so: 11, hbp: 0, sb: 0, cs: 0, sec: 'RF', rk: true },
+    ],
+    pitchers: [
+      { id: 'lohseky01', name: 'Kyle Lohse', role: 'SP', throws: 'R', age: 29, g: 33, gs: 33, outs: 600, h: 212, hr: 20, bb: 54, so: 124, hbp: 7, er: 94, w: 15, l: 6, sv: 0, fld: 80 },
+      { id: 'loopebr01', name: 'Braden Looper', role: 'SP', throws: 'R', age: 33, g: 33, gs: 33, outs: 597, h: 213, hr: 24, bb: 50, so: 105, hbp: 8, er: 97, w: 12, l: 14, sv: 0, fld: 71 },
+      { id: 'welleto01', name: 'Todd Wellemeyer', role: 'SP', throws: 'R', age: 29, g: 32, gs: 32, outs: 575, h: 176, hr: 24, bb: 73, so: 134, hbp: 7, er: 82, w: 13, l: 9, sv: 0, fld: 67 },
+      { id: 'pineijo01', name: 'Joel Pineiro', role: 'SP', throws: 'R', age: 29, g: 26, gs: 25, outs: 446, h: 177, hr: 21, bb: 40, so: 82, hbp: 4, er: 85, w: 7, l: 7, sv: 1, fld: 85 },
+      { id: 'wainwad01', name: 'Adam Wainwright', role: 'SP', throws: 'R', age: 26, g: 20, gs: 20, outs: 396, h: 126, hr: 10, bb: 39, so: 91, hbp: 5, er: 49, w: 11, l: 3, sv: 0 },
+      { id: 'frankry01', name: 'Ryan Franklin', role: 'CL', throws: 'R', age: 35, g: 74, gs: 0, outs: 236, h: 83, hr: 10, bb: 25, so: 49, hbp: 3, er: 32, w: 6, l: 6, sv: 17 },
+      { id: 'mccleky01', name: 'Kyle McClellan', role: 'RP', throws: 'R', age: 24, g: 68, gs: 0, outs: 227, h: 79, hr: 7, bb: 26, so: 59, hbp: 4, er: 34, w: 2, l: 7, sv: 1, rk: true },
+      { id: 'thompbr01', name: 'Brad Thompson', role: 'RP', throws: 'R', age: 26, g: 26, gs: 6, outs: 194, h: 73, hr: 8, bb: 20, so: 29, hbp: 5, er: 33, w: 6, l: 3, sv: 0 },
+      { id: 'sprinru01', name: 'Russ Springer', role: 'RP', throws: 'R', age: 39, g: 70, gs: 0, outs: 151, h: 37, hr: 4, bb: 16, so: 47, hbp: 2, er: 14, w: 2, l: 1, sv: 0 },
+      { id: 'villoro01', name: 'Ron Villone', role: 'RP', throws: 'L', age: 38, g: 74, gs: 0, outs: 150, h: 46, hr: 5, bb: 32, so: 44, hbp: 3, er: 26, w: 1, l: 2, sv: 1 },
+      { id: 'isrinja01', name: 'Jason Isringhausen', role: 'RP', throws: 'R', age: 35, g: 42, gs: 0, outs: 128, h: 40, hr: 5, bb: 23, so: 39, hbp: 3, er: 20, w: 1, l: 5, sv: 12 },
+    ],
+    reservePitchers: [
+      { id: 'perezch01', name: 'Chris Perez', role: 'RP', throws: 'R', age: 22, g: 41, gs: 0, outs: 125, h: 34, hr: 5, bb: 22, so: 42, hbp: 1, er: 16, w: 3, l: 3, sv: 7, rk: true },
+      { id: 'boggsmi01', name: 'Mitchell Boggs', role: 'RP', throws: 'R', age: 24, g: 8, gs: 6, outs: 102, h: 42, hr: 5, bb: 22, so: 13, hbp: 2, er: 28, w: 3, l: 2, sv: 0, rk: true },
+      { id: 'florera01', name: 'Randy Flores', role: 'RP', throws: 'L', age: 32, g: 43, gs: 0, outs: 77, h: 35, hr: 2, bb: 13, so: 22, hbp: 1, er: 15, w: 1, l: 0, sv: 1 },
+      { id: 'jimenke01', name: 'Kelvin Jimenez', role: 'RP', throws: 'R', age: 27, g: 15, gs: 0, outs: 72, h: 30, hr: 3, bb: 12, so: 12, hbp: 2, er: 18, w: 0, l: 0, sv: 0, rk: true },
+      { id: 'parismi01', name: 'Mike Parisi', role: 'RP', throws: 'R', age: 25, g: 12, gs: 2, outs: 69, h: 37, hr: 2, bb: 15, so: 13, hbp: 0, er: 21, w: 0, l: 4, sv: 0, rk: true },
+    ],
+  },
+  // ARI (ARI 2008)
+  {
+    franchiseId: 'ARI',
+    season: 2008,
+    batters: [
+      { id: 'snydech02', name: 'Chris Snyder', pos: 'C', bats: 'R', age: 27, pa: 404, h: 84, double: 21, triple: 1, hr: 15, bb: 50, so: 88, hbp: 5, sb: 0, cs: 0, sec: '1B', fld: 77, arm: 74 },
+      { id: 'tracych01', name: 'Chad Tracy', pos: '1B', bats: 'L', age: 28, pa: 292, h: 72, double: 18, triple: 1, hr: 8, bb: 23, so: 51, hbp: 1, sb: 1, cs: 0, sec: '3B', fld: 61 },
+      { id: 'hudsoor01', name: 'Orlando Hudson', pos: '2B', bats: 'S', age: 30, pa: 455, h: 119, double: 25, triple: 5, hr: 8, bb: 45, so: 62, hbp: 2, sb: 6, cs: 2, sec: 'SS', fld: 67 },
+      { id: 'reynoma01', name: 'Mark Reynolds', pos: '3B', bats: 'R', age: 24, pa: 613, h: 136, double: 29, triple: 4, hr: 27, bb: 61, so: 200, hbp: 4, sb: 8, cs: 2, sec: '1B', fld: 40 },
+      { id: 'drewst01', name: 'Stephen Drew', pos: 'SS', bats: 'L', age: 25, pa: 663, h: 165, double: 39, triple: 9, hr: 18, bb: 49, so: 111, hbp: 2, sb: 6, cs: 2, sec: '2B', fld: 56 },
+      { id: 'jacksco01', name: 'Conor Jackson', pos: 'LF', bats: 'R', age: 26, pa: 612, h: 158, double: 32, triple: 4, hr: 15, bb: 62, so: 65, hbp: 8, sb: 6, cs: 2, sec: '1B', fld: 71, arm: 72 },
+      { id: 'youngch04', name: 'Chris Young', pos: 'CF', bats: 'R', age: 24, pa: 699, h: 154, double: 38, triple: 6, hr: 27, bb: 57, so: 161, hbp: 3, sb: 20, cs: 6, sec: 'LF', fld: 71, arm: 65 },
+      { id: 'uptonju01', name: 'Justin Upton', pos: 'RF', bats: 'R', age: 20, pa: 417, h: 88, double: 20, triple: 6, hr: 13, bb: 49, so: 117, hbp: 4, sb: 2, cs: 3, sec: 'LF', fld: 47, arm: 67 },
+      { id: 'burkech01', name: 'Chris Burke', pos: 'DH', bats: 'R', age: 28, pa: 199, h: 39, double: 9, triple: 1, hr: 3, bb: 19, so: 32, hbp: 4, sb: 5, cs: 1, sec: 'LF' },
+    ],
+    bench: [
+      { id: 'ojedaau01', name: 'Augie Ojeda', pos: '2B', bats: 'S', age: 33, pa: 272, h: 58, double: 8, triple: 3, hr: 1, bb: 27, so: 25, hbp: 8, sb: 1, cs: 0, sec: 'SS', fld: 85 },
+      { id: 'byrneer01', name: 'Eric Byrnes', pos: 'LF', bats: 'R', age: 32, pa: 224, h: 53, double: 11, triple: 2, hr: 7, bb: 16, so: 33, hbp: 3, sb: 11, cs: 2, sec: 'CF', fld: 59, arm: 62 },
+      { id: 'montemi01', name: 'Miguel Montero', pos: 'C', bats: 'L', age: 24, pa: 207, h: 44, double: 12, triple: 1, hr: 6, bb: 18, so: 40, hbp: 2, sb: 0, cs: 0, sec: '1B', fld: 75, arm: 64 },
+      { id: 'salazje01', name: 'Jeff Salazar', pos: 'LF', bats: 'L', age: 27, pa: 152, h: 31, double: 6, triple: 2, hr: 2, bb: 19, so: 37, hbp: 1, sb: 1, cs: 1, sec: 'RF', fld: 53, arm: 80 },
+      { id: 'romeral01', name: 'Alex Romero', pos: 'RF', bats: 'L', age: 24, pa: 142, h: 31, double: 8, triple: 2, hr: 1, bb: 3, so: 20, hbp: 1, sb: 4, cs: 0, sec: 'LF', fld: 45, arm: 56, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'hammoro01', name: 'Robby Hammock', pos: 'C', bats: 'R', age: 31, pa: 48, h: 9, double: 2, triple: 0, hr: 0, bb: 4, so: 8, hbp: 1, sb: 0, cs: 0, sec: '1B' },
+    ],
+    pitchers: [
+      { id: 'webbbr01', name: 'Brandon Webb', role: 'SP', throws: 'R', age: 29, g: 34, gs: 34, outs: 680, h: 206, hr: 13, bb: 64, so: 183, hbp: 9, er: 80, w: 22, l: 7, sv: 0, fld: 88 },
+      { id: 'harenda01', name: 'Dan Haren', role: 'SP', throws: 'R', age: 27, g: 33, gs: 33, outs: 648, h: 206, hr: 22, bb: 45, so: 192, hbp: 6, er: 80, w: 16, l: 8, sv: 0, fld: 65 },
+      { id: 'johnsra05', name: 'Randy Johnson', role: 'SP', throws: 'L', age: 44, g: 30, gs: 30, outs: 552, h: 180, hr: 24, bb: 46, so: 177, hbp: 8, er: 85, w: 11, l: 10, sv: 0, fld: 46 },
+      { id: 'davisdo02', name: 'Doug Davis', role: 'SP', throws: 'L', age: 32, g: 26, gs: 26, outs: 438, h: 157, hr: 14, bb: 69, so: 111, hbp: 4, er: 71, w: 6, l: 8, sv: 0, fld: 76 },
+      { id: 'owingmi01', name: 'Micah Owings', role: 'SP', throws: 'R', age: 25, g: 22, gs: 18, outs: 314, h: 103, hr: 14, bb: 38, so: 81, hbp: 11, er: 60, w: 6, l: 9, sv: 0 },
+      { id: 'lyonbr01', name: 'Brandon Lyon', role: 'CL', throws: 'R', age: 28, g: 61, gs: 0, outs: 178, h: 67, hr: 5, bb: 16, so: 40, hbp: 0, er: 26, w: 3, l: 5, sv: 26 },
+      { id: 'quallch01', name: 'Chad Qualls', role: 'RP', throws: 'R', age: 29, g: 77, gs: 0, outs: 221, h: 65, hr: 6, bb: 20, so: 64, hbp: 3, er: 24, w: 4, l: 8, sv: 9 },
+      { id: 'penato03', name: 'Tony Pena', role: 'RP', throws: 'R', age: 26, g: 72, gs: 0, outs: 218, h: 71, hr: 7, bb: 21, so: 54, hbp: 3, er: 33, w: 3, l: 2, sv: 3 },
+      { id: 'petityu01', name: 'Yusmeiro Petit', role: 'RP', throws: 'R', age: 23, g: 19, gs: 8, outs: 169, h: 52, hr: 12, bb: 15, so: 39, hbp: 1, er: 29, w: 3, l: 5, sv: 0 },
+      { id: 'scherma01', name: 'Max Scherzer', role: 'RP', throws: 'R', age: 23, g: 16, gs: 7, outs: 168, h: 48, hr: 5, bb: 21, so: 66, hbp: 5, er: 19, w: 0, l: 4, sv: 0, rk: true },
+      { id: 'cruzju02', name: 'Juan Cruz', role: 'RP', throws: 'R', age: 29, g: 57, gs: 0, outs: 155, h: 37, hr: 5, bb: 28, so: 65, hbp: 4, er: 18, w: 4, l: 0, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'gonzaed01', name: 'Edgar Gonzalez', role: 'RP', throws: 'R', age: 25, g: 17, gs: 6, outs: 144, h: 56, hr: 9, bb: 16, so: 32, hbp: 3, er: 30, w: 1, l: 3, sv: 0 },
+      { id: 'slatedo01', name: 'Doug Slaten', role: 'RP', throws: 'L', age: 28, g: 45, gs: 0, outs: 97, h: 34, hr: 4, bb: 13, so: 22, hbp: 2, er: 14, w: 0, l: 3, sv: 0, rk: true },
+      { id: 'rosalle01', name: 'Leo Rosales', role: 'RP', throws: 'R', age: 27, g: 27, gs: 0, outs: 90, h: 32, hr: 2, bb: 15, so: 18, hbp: 1, er: 14, w: 1, l: 1, sv: 0, rk: true },
+      { id: 'meddebr01', name: 'Brandon Medders', role: 'RP', throws: 'R', age: 28, g: 18, gs: 0, outs: 59, h: 19, hr: 3, bb: 10, so: 12, hbp: 1, er: 9, w: 1, l: 0, sv: 0 },
+      { id: 'bucknbi02', name: 'Billy Buckner', role: 'RP', throws: 'R', age: 24, g: 10, gs: 0, outs: 42, h: 15, hr: 2, bb: 6, so: 8, hbp: 0, er: 7, w: 1, l: 0, sv: 0, rk: true },
+    ],
+  },
+  // COL (COL 2008)
+  {
+    franchiseId: 'COL',
+    season: 2008,
+    batters: [
+      { id: 'iannech01', name: 'Chris Iannetta', pos: 'C', bats: 'R', age: 25, pa: 407, h: 85, double: 20, triple: 3, hr: 15, bb: 55, so: 93, hbp: 12, sb: 0, cs: 0, sec: '1B', fld: 77, arm: 66 },
+      { id: 'heltoto01', name: 'Todd Helton', pos: '1B', bats: 'L', age: 34, pa: 361, h: 88, double: 20, triple: 1, hr: 8, bb: 59, so: 42, hbp: 2, sb: 0, cs: 0, sec: 'LF', fld: 76 },
+      { id: 'barmecl01', name: 'Clint Barmes', pos: '2B', bats: 'R', age: 29, pa: 417, h: 104, double: 24, triple: 5, hr: 9, bb: 17, so: 68, hbp: 3, sb: 10, cs: 4, sec: 'SS', fld: 71 },
+      { id: 'atkinga01', name: 'Garrett Atkins', pos: '3B', bats: 'R', age: 28, pa: 664, h: 178, double: 35, triple: 2, hr: 23, bb: 55, so: 93, hbp: 3, sb: 2, cs: 1, sec: '1B', fld: 75 },
+      { id: 'tulowtr01', name: 'Troy Tulowitzki', pos: 'SS', bats: 'R', age: 23, pa: 421, h: 104, double: 22, triple: 2, hr: 11, bb: 37, so: 70, hbp: 4, sb: 3, cs: 5, sec: '2B', fld: 95 },
+      { id: 'hollima01', name: 'Matt Holliday', pos: 'LF', bats: 'R', age: 28, pa: 623, h: 180, double: 41, triple: 4, hr: 28, bb: 62, so: 106, hbp: 9, sb: 18, cs: 3, sec: 'RF', fld: 65, arm: 72 },
+      { id: 'taverwi01', name: 'Willy Taveras', pos: 'CF', bats: 'R', age: 26, pa: 538, h: 133, double: 16, triple: 3, hr: 1, bb: 33, so: 78, hbp: 7, sb: 54, cs: 9, sec: 'LF', fld: 65, arm: 72 },
+      { id: 'hawpebr01', name: 'Brad Hawpe', pos: 'RF', bats: 'L', age: 29, pa: 569, h: 140, double: 28, triple: 4, hr: 25, bb: 76, so: 130, hbp: 2, sb: 2, cs: 2, sec: 'LF', fld: 40, arm: 70 },
+      { id: 'bakerje03', name: 'Jeff Baker', pos: 'DH', bats: 'R', age: 27, pa: 333, h: 79, double: 19, triple: 2, hr: 12, bb: 25, so: 85, hbp: 2, sb: 3, cs: 0, sec: '1B', fld: 71 },
+    ],
+    bench: [
+      { id: 'stewaia01', name: 'Ian Stewart', pos: '3B', bats: 'L', age: 23, pa: 304, h: 68, double: 19, triple: 2, hr: 10, bb: 28, so: 96, hbp: 8, sb: 1, cs: 1, sec: '2B', fld: 74, rk: true },
+      { id: 'spilbry01', name: 'Ryan Spilborghs', pos: 'LF', bats: 'R', age: 28, pa: 275, h: 73, double: 13, triple: 2, hr: 8, bb: 31, so: 41, hbp: 1, sb: 6, cs: 3, sec: 'CF', fld: 70, arm: 58 },
+      { id: 'torreyo01', name: 'Yorvit Torrealba', pos: 'C', bats: 'R', age: 29, pa: 261, h: 59, double: 15, triple: 1, hr: 6, bb: 16, so: 45, hbp: 4, sb: 1, cs: 2, sec: '1B', fld: 74, arm: 69 },
+      { id: 'quintom01', name: 'Omar Quintanilla', pos: '2B', bats: 'L', age: 26, pa: 234, h: 49, double: 16, triple: 0, hr: 2, bb: 15, so: 47, hbp: 0, sb: 0, cs: 0, sec: 'SS', fld: 72 },
+      { id: 'podsesc01', name: 'Scott Podsednik', pos: 'CF', bats: 'L', age: 32, pa: 181, h: 41, double: 9, triple: 2, hr: 1, bb: 14, so: 28, hbp: 1, sb: 11, cs: 5, sec: 'LF', fld: 56, arm: 67 },
+    ],
+    reserveBatters: [
+      { id: 'smithse01', name: 'Seth Smith', pos: 'RF', bats: 'L', age: 25, pa: 123, h: 30, double: 7, triple: 1, hr: 4, bb: 14, so: 23, hbp: 0, sb: 1, cs: 0, sec: 'LF', fld: 84, arm: 66, rk: true },
+      { id: 'herrejo03', name: 'Jonathan Herrera', pos: '2B', bats: 'S', age: 23, pa: 66, h: 14, double: 1, triple: 1, hr: 0, bb: 4, so: 10, hbp: 0, sb: 1, cs: 1, sec: 'SS', rk: true },
+      { id: 'nixja01', name: 'Jayson Nix', pos: '2B', bats: 'R', age: 25, pa: 65, h: 7, double: 2, triple: 0, hr: 0, bb: 7, so: 17, hbp: 1, sb: 1, cs: 0, sec: 'SS', fld: 96, rk: true },
+      { id: 'koshajo01', name: 'Joe Koshansky', pos: '1B', bats: 'L', age: 26, pa: 40, h: 7, double: 3, triple: 0, hr: 2, bb: 2, so: 16, hbp: 1, sb: 0, cs: 0, sec: '3B', rk: true },
+    ],
+    pitchers: [
+      { id: 'cookaa01', name: 'Aaron Cook', role: 'SP', throws: 'R', age: 29, g: 32, gs: 32, outs: 634, h: 233, hr: 15, bb: 51, so: 90, hbp: 6, er: 95, w: 16, l: 9, sv: 0, fld: 82 },
+      { id: 'jimenub01', name: 'Ubaldo Jimenez', role: 'SP', throws: 'R', age: 24, g: 34, gs: 34, outs: 596, h: 180, hr: 14, bb: 101, so: 171, hbp: 11, er: 90, w: 12, l: 12, sv: 0, fld: 74 },
+      { id: 'francje01', name: 'Jeff Francis', role: 'SP', throws: 'L', age: 27, g: 24, gs: 24, outs: 431, h: 158, hr: 18, bb: 47, so: 100, hbp: 5, er: 73, w: 4, l: 10, sv: 0, fld: 72 },
+      { id: 'delarjo01', name: 'Jorge De La Rosa', role: 'SP', throws: 'L', age: 27, g: 28, gs: 23, outs: 390, h: 138, hr: 16, bb: 61, so: 108, hbp: 5, er: 77, w: 10, l: 8, sv: 0 },
+      { id: 'reynogr01', name: 'Greg Reynolds', role: 'SP', throws: 'R', age: 22, g: 14, gs: 13, outs: 186, h: 83, hr: 14, bb: 26, so: 22, hbp: 4, er: 56, w: 2, l: 8, sv: 0, rk: true },
+      { id: 'fuentbr01', name: 'Brian Fuentes', role: 'CL', throws: 'L', age: 32, g: 67, gs: 0, outs: 188, h: 46, hr: 5, bb: 23, so: 71, hbp: 4, er: 20, w: 1, l: 5, sv: 30 },
+      { id: 'ruschgl01', name: 'Glendon Rusch', role: 'RP', throws: 'L', age: 33, g: 35, gs: 9, outs: 251, h: 95, hr: 13, bb: 28, so: 58, hbp: 0, er: 52, w: 5, l: 5, sv: 0 },
+      { id: 'corpama01', name: 'Manny Corpas', role: 'RP', throws: 'R', age: 25, g: 76, gs: 0, outs: 239, h: 85, hr: 7, bb: 23, so: 56, hbp: 2, er: 33, w: 3, l: 4, sv: 4 },
+      { id: 'grillja01', name: 'Jason Grilli', role: 'RP', throws: 'R', age: 31, g: 60, gs: 0, outs: 225, h: 71, hr: 4, bb: 34, so: 60, hbp: 4, er: 31, w: 3, l: 3, sv: 1 },
+      { id: 'buchhta01', name: 'Taylor Buchholz', role: 'RP', throws: 'R', age: 26, g: 63, gs: 0, outs: 199, h: 57, hr: 7, bb: 16, so: 46, hbp: 2, er: 27, w: 6, l: 6, sv: 1 },
+      { id: 'hergema01', name: 'Matt Herges', role: 'RP', throws: 'R', age: 38, g: 58, gs: 0, outs: 193, h: 74, hr: 5, bb: 24, so: 43, hbp: 3, er: 32, w: 3, l: 4, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'speiery01', name: 'Ryan Speier', role: 'RP', throws: 'R', age: 28, g: 43, gs: 0, outs: 153, h: 53, hr: 3, bb: 19, so: 34, hbp: 4, er: 23, w: 2, l: 1, sv: 0, rk: true },
+      { id: 'vizcalu01', name: 'Luis Vizcaino', role: 'RP', throws: 'R', age: 33, g: 43, gs: 0, outs: 138, h: 43, hr: 7, bb: 23, so: 45, hbp: 1, er: 23, w: 1, l: 2, sv: 0 },
+      { id: 'redmama01', name: 'Mark Redman', role: 'RP', throws: 'L', age: 34, g: 10, gs: 9, outs: 136, h: 59, hr: 6, bb: 17, so: 22, hbp: 2, er: 34, w: 2, l: 5, sv: 0 },
+      { id: 'wellski01', name: 'Kip Wells', role: 'RP', throws: 'R', age: 31, g: 25, gs: 2, outs: 113, h: 44, hr: 4, bb: 21, so: 29, hbp: 2, er: 25, w: 1, l: 3, sv: 0 },
+      { id: 'moralfr01', name: 'Franklin Morales', role: 'RP', throws: 'L', age: 22, g: 5, gs: 5, outs: 76, h: 26, hr: 2, bb: 14, so: 14, hbp: 1, er: 15, w: 1, l: 2, sv: 0, rk: true },
+    ],
+  },
+  // LAD (LAN 2008)
+  {
+    franchiseId: 'LAD',
+    season: 2008,
+    batters: [
+      { id: 'martiru01', name: 'Russell Martin', pos: 'C', bats: 'R', age: 25, pa: 650, h: 160, double: 29, triple: 2, hr: 15, bb: 80, so: 86, hbp: 6, sb: 19, cs: 7, sec: '1B', fld: 71, arm: 68 },
+      { id: 'loneyja01', name: 'James Loney', pos: '1B', bats: 'L', age: 24, pa: 651, h: 179, double: 34, triple: 7, hr: 17, bb: 46, so: 84, hbp: 3, sb: 5, cs: 3, sec: '3B', fld: 74 },
+      { id: 'kentje01', name: 'Jeff Kent', pos: '2B', bats: 'R', age: 40, pa: 474, h: 123, double: 26, triple: 1, hr: 14, bb: 38, so: 54, hbp: 6, sb: 0, cs: 2, sec: '3B', fld: 55 },
+      { id: 'dewitbl01', name: 'Blake DeWitt', pos: '3B', bats: 'L', age: 22, pa: 421, h: 97, double: 13, triple: 2, hr: 9, bb: 45, so: 68, hbp: 3, sb: 3, cs: 0, sec: '2B', fld: 92, rk: true },
+      { id: 'berroan01', name: 'Angel Berroa', pos: 'SS', bats: 'R', age: 30, pa: 256, h: 53, double: 11, triple: 1, hr: 2, bb: 15, so: 43, hbp: 3, sb: 1, cs: 1, sec: '2B', fld: 76 },
+      { id: 'pierrju01', name: 'Juan Pierre', pos: 'LF', bats: 'L', age: 30, pa: 406, h: 108, double: 13, triple: 4, hr: 1, bb: 19, so: 22, hbp: 3, sb: 36, cs: 10, sec: 'CF', fld: 64, arm: 60 },
+      { id: 'kempma01', name: 'Matt Kemp', pos: 'CF', bats: 'R', age: 23, pa: 657, h: 183, double: 35, triple: 6, hr: 19, bb: 43, so: 153, hbp: 1, sb: 31, cs: 10, sec: 'RF', fld: 55, arm: 88 },
+      { id: 'ethiean01', name: 'Andre Ethier', pos: 'RF', bats: 'L', age: 26, pa: 596, h: 158, double: 36, triple: 5, hr: 18, bb: 56, so: 88, hbp: 5, sb: 4, cs: 4, sec: 'LF', fld: 57, arm: 76 },
+      { id: 'jonesan01', name: 'Andruw Jones', pos: 'DH', bats: 'R', age: 31, pa: 238, h: 44, double: 9, triple: 1, hr: 9, bb: 27, so: 56, hbp: 3, sb: 1, cs: 1, sec: 'RF', fld: 65, arm: 61 },
+    ],
+    bench: [
+      { id: 'garcino01', name: 'Nomar Garciaparra', pos: 'SS', bats: 'R', age: 34, pa: 181, h: 47, double: 8, triple: 0, hr: 5, bb: 13, so: 13, hbp: 1, sb: 1, cs: 0, sec: '3B', fld: 66 },
+      { id: 'furcara01', name: 'Rafael Furcal', pos: 'SS', bats: 'S', age: 30, pa: 164, h: 43, double: 7, triple: 2, hr: 3, bb: 16, so: 19, hbp: 0, sb: 7, cs: 2, sec: '2B', fld: 61 },
+      { id: 'youngde04', name: 'Delwyn Young', pos: 'LF', bats: 'S', age: 26, pa: 143, h: 34, double: 8, triple: 1, hr: 2, bb: 13, so: 32, hbp: 0, sb: 1, cs: 0, sec: 'RF', fld: 60, arm: 95, rk: true },
+      { id: 'huch01', name: 'Chin-lung Hu', pos: 'SS', bats: 'R', age: 24, pa: 129, h: 22, double: 2, triple: 2, hr: 1, bb: 9, so: 24, hbp: 0, sb: 2, cs: 0, sec: '2B', fld: 85, rk: true },
+      { id: 'sweenma01', name: 'Mark Sweeney', pos: '1B', bats: 'L', age: 38, pa: 108, h: 20, double: 5, triple: 0, hr: 1, bb: 12, so: 23, hbp: 1, sb: 0, cs: 0, sec: 'LF' },
+    ],
+    reserveBatters: [
+      { id: 'mazalu01', name: 'Luis Maza', pos: '2B', bats: 'R', age: 28, pa: 88, h: 18, double: 1, triple: 0, hr: 1, bb: 5, so: 11, hbp: 1, sb: 0, cs: 0, sec: 'SS', fld: 70, rk: true },
+      { id: 'ardoida01', name: 'Danny Ardoin', pos: 'C', bats: 'R', age: 33, pa: 54, h: 11, double: 1, triple: 0, hr: 1, bb: 3, so: 11, hbp: 1, sb: 1, cs: 0, sec: '1B', fld: 66, arm: 66 },
+    ],
+    pitchers: [
+      { id: 'lowede01', name: 'Derek Lowe', role: 'SP', throws: 'R', age: 35, g: 34, gs: 34, outs: 633, h: 198, hr: 16, bb: 51, so: 142, hbp: 2, er: 81, w: 14, l: 11, sv: 0, fld: 79 },
+      { id: 'billich01', name: 'Chad Billingsley', role: 'SP', throws: 'R', age: 23, g: 35, gs: 32, outs: 602, h: 186, hr: 16, bb: 86, so: 191, hbp: 7, er: 72, w: 16, l: 10, sv: 0, fld: 63 },
+      { id: 'kurodhi01', name: 'Hiroki Kuroda', role: 'SP', throws: 'R', age: 33, g: 31, gs: 31, outs: 550, h: 181, hr: 13, bb: 42, so: 116, hbp: 7, er: 76, w: 9, l: 10, sv: 0, fld: 86, rk: true },
+      { id: 'kershcl01', name: 'Clayton Kershaw', role: 'SP', throws: 'L', age: 20, g: 22, gs: 21, outs: 323, h: 109, hr: 11, bb: 52, so: 100, hbp: 1, er: 51, w: 5, l: 5, sv: 0, rk: true },
+      { id: 'pennybr01', name: 'Brad Penny', role: 'SP', throws: 'R', age: 30, g: 19, gs: 17, outs: 284, h: 105, hr: 8, bb: 36, so: 64, hbp: 3, er: 48, w: 6, l: 9, sv: 0 },
+      { id: 'saitota01', name: 'Takashi Saito', role: 'CL', throws: 'R', age: 38, g: 45, gs: 0, outs: 141, h: 34, hr: 2, bb: 14, so: 63, hbp: 2, er: 11, w: 4, l: 4, sv: 18 },
+      { id: 'parkch01', name: 'Chan Ho Park', role: 'RP', throws: 'R', age: 35, g: 54, gs: 5, outs: 286, h: 99, hr: 13, bb: 34, so: 75, hbp: 5, er: 43, w: 4, l: 4, sv: 2 },
+      { id: 'kuoho01', name: 'Hung-Chih Kuo', role: 'RP', throws: 'L', age: 26, g: 42, gs: 3, outs: 240, h: 65, hr: 4, bb: 26, so: 88, hbp: 3, er: 29, w: 5, l: 3, sv: 1 },
+      { id: 'wadeco01', name: 'Cory Wade', role: 'RP', throws: 'R', age: 25, g: 55, gs: 0, outs: 214, h: 51, hr: 7, bb: 15, so: 51, hbp: 4, er: 18, w: 2, l: 1, sv: 0, rk: true },
+      { id: 'broxtjo01', name: 'Jonathan Broxton', role: 'RP', throws: 'R', age: 24, g: 70, gs: 0, outs: 207, h: 56, hr: 4, bb: 25, so: 87, hbp: 2, er: 23, w: 3, l: 5, sv: 14 },
+      { id: 'beimejo01', name: 'Joe Beimel', role: 'RP', throws: 'L', age: 31, g: 71, gs: 0, outs: 147, h: 50, hr: 1, bb: 19, so: 29, hbp: 2, er: 16, w: 5, l: 1, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'proctsc01', name: 'Scott Proctor', role: 'RP', throws: 'R', age: 31, g: 41, gs: 0, outs: 116, h: 38, hr: 6, bb: 20, so: 37, hbp: 1, er: 19, w: 2, l: 0, sv: 0 },
+      { id: 'stulter01', name: 'Eric Stults', role: 'RP', throws: 'L', age: 28, g: 7, gs: 7, outs: 116, h: 41, hr: 6, bb: 14, so: 27, hbp: 1, er: 19, w: 2, l: 3, sv: 0 },
+      { id: 'troncra01', name: 'Ramon Troncoso', role: 'RP', throws: 'R', age: 25, g: 32, gs: 0, outs: 114, h: 37, hr: 2, bb: 12, so: 38, hbp: 3, er: 18, w: 1, l: 1, sv: 0, rk: true },
+      { id: 'johnsja02', name: 'Jason Johnson', role: 'RP', throws: 'R', age: 34, g: 16, gs: 2, outs: 88, h: 36, hr: 4, bb: 10, so: 16, hbp: 2, er: 18, w: 1, l: 2, sv: 0 },
+      { id: 'loaizes01', name: 'Esteban Loaiza', role: 'RP', throws: 'R', age: 36, g: 10, gs: 3, outs: 81, h: 28, hr: 4, bb: 8, so: 14, hbp: 1, er: 15, w: 1, l: 2, sv: 0 },
+    ],
+  },
+  // SDP (SDN 2008)
+  {
+    franchiseId: 'SDP',
+    season: 2008,
+    batters: [
+      { id: 'hundlni01', name: 'Nick Hundley', pos: 'C', bats: 'R', age: 24, pa: 216, h: 47, double: 7, triple: 1, hr: 5, bb: 11, so: 52, hbp: 2, sb: 0, cs: 0, sec: '1B', fld: 68, arm: 68, rk: true },
+      { id: 'gonzaad01', name: 'Adrian Gonzalez', pos: '1B', bats: 'L', age: 26, pa: 700, h: 177, double: 38, triple: 2, hr: 32, bb: 68, so: 137, hbp: 5, sb: 0, cs: 0, sec: '3B', fld: 80 },
+      { id: 'gonzaed02', name: 'Edgar Gonzalez', pos: '2B', bats: 'R', age: 30, pa: 353, h: 89, double: 15, triple: 0, hr: 7, bb: 25, so: 76, hbp: 2, sb: 1, cs: 3, sec: 'SS', fld: 59, rk: true },
+      { id: 'kouzmke01', name: 'Kevin Kouzmanoff', pos: '3B', bats: 'R', age: 26, pa: 668, h: 163, double: 33, triple: 3, hr: 23, bb: 29, so: 132, hbp: 14, sb: 0, cs: 0, sec: '1B', fld: 72 },
+      { id: 'greenkh01', name: 'Khalil Greene', pos: 'SS', bats: 'R', age: 28, pa: 423, h: 92, double: 22, triple: 2, hr: 14, bb: 23, so: 89, hbp: 4, sb: 4, cs: 1, sec: '2B', fld: 65 },
+      { id: 'headlch01', name: 'Chase Headley', pos: 'LF', bats: 'S', age: 24, pa: 368, h: 88, double: 19, triple: 2, hr: 9, bb: 30, so: 103, hbp: 5, sb: 4, cs: 1, sec: 'RF', fld: 66, arm: 63, rk: true },
+      { id: 'gerutjo01', name: 'Jody Gerut', pos: 'CF', bats: 'L', age: 30, pa: 356, h: 97, double: 15, triple: 4, hr: 14, bb: 28, so: 52, hbp: 0, sb: 6, cs: 4, sec: 'RF', fld: 80, arm: 64 },
+      { id: 'gilesbr02', name: 'Brian Giles', pos: 'RF', bats: 'L', age: 37, pa: 653, h: 161, double: 36, triple: 3, hr: 13, bb: 85, so: 58, hbp: 3, sb: 4, cs: 4, sec: 'LF', fld: 60, arm: 52 },
+      { id: 'clarkto02', name: 'Tony Clark', pos: 'DH', bats: 'S', age: 36, pa: 184, h: 37, double: 4, triple: 0, hr: 8, bb: 23, so: 50, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 74 },
+    ],
+    bench: [
+      { id: 'hairssc01', name: 'Scott Hairston', pos: 'CF', bats: 'R', age: 28, pa: 362, h: 81, double: 20, triple: 3, hr: 16, bb: 29, so: 79, hbp: 2, sb: 3, cs: 1, sec: 'LF', fld: 65, arm: 71 },
+      { id: 'iguchta01', name: 'Tadahito Iguchi', pos: '2B', bats: 'R', age: 33, pa: 337, h: 77, double: 15, triple: 1, hr: 5, bb: 31, so: 64, hbp: 1, sb: 8, cs: 1, sec: 'SS', fld: 70 },
+      { id: 'rodrilu01', name: 'Luis Rodriguez', pos: 'SS', bats: 'S', age: 28, pa: 225, h: 52, double: 9, triple: 1, hr: 1, bb: 15, so: 16, hbp: 1, sb: 1, cs: 1, sec: '3B', fld: 79 },
+      { id: 'bardjo01', name: 'Josh Bard', pos: 'C', bats: 'S', age: 30, pa: 198, h: 46, double: 11, triple: 0, hr: 2, bb: 21, so: 26, hbp: 0, sb: 0, cs: 0, sec: '1B', fld: 74, arm: 59 },
+      { id: 'mcanupa01', name: 'Paul McAnulty', pos: 'LF', bats: 'L', age: 27, pa: 164, h: 28, double: 7, triple: 1, hr: 3, bb: 24, so: 41, hbp: 2, sb: 0, cs: 0, sec: 'RF', fld: 71, arm: 64, rk: true },
+    ],
+    reserveBatters: [
+      { id: 'venabwi01', name: 'Will Venable', pos: 'CF', bats: 'L', age: 25, pa: 124, h: 29, double: 4, triple: 2, hr: 2, bb: 13, so: 21, hbp: 0, sb: 1, cs: 1, sec: 'LF', fld: 100, arm: 67, rk: true },
+      { id: 'barremi01', name: 'Michael Barrett', pos: 'C', bats: 'R', age: 31, pa: 107, h: 25, double: 5, triple: 0, hr: 3, bb: 7, so: 15, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 66, arm: 56 },
+      { id: 'carlilu01', name: 'Luke Carlin', pos: 'C', bats: 'S', age: 27, pa: 105, h: 14, double: 3, triple: 1, hr: 1, bb: 10, so: 34, hbp: 1, sb: 0, cs: 0, sec: '1B', fld: 63, arm: 65, rk: true },
+      { id: 'huberju01', name: 'Justin Huber', pos: 'LF', bats: 'R', age: 25, pa: 67, h: 14, double: 3, triple: 0, hr: 2, bb: 3, so: 19, hbp: 2, sb: 0, cs: 0, sec: '1B', fld: 56, arm: 58, rk: true },
+      { id: 'antonma01', name: 'Matt Antonelli', pos: '2B', bats: 'R', age: 23, pa: 65, h: 11, double: 2, triple: 0, hr: 1, bb: 5, so: 11, hbp: 3, sb: 0, cs: 0, sec: 'SS', fld: 59, rk: true },
+    ],
+    pitchers: [
+      { id: 'maddugr01', name: 'Greg Maddux', role: 'SP', throws: 'R', age: 42, g: 33, gs: 33, outs: 582, h: 207, hr: 18, bb: 29, so: 101, hbp: 5, er: 90, w: 8, l: 13, sv: 0, fld: 92 },
+      { id: 'wolfra02', name: 'Randy Wolf', role: 'SP', throws: 'L', age: 31, g: 33, gs: 33, outs: 571, h: 194, hr: 22, bb: 73, so: 163, hbp: 11, er: 94, w: 12, l: 12, sv: 0, fld: 66 },
+      { id: 'peavyja01', name: 'Jake Peavy', role: 'SP', throws: 'R', age: 27, g: 27, gs: 27, outs: 521, h: 144, hr: 15, bb: 56, so: 179, hbp: 5, er: 57, w: 10, l: 11, sv: 0, fld: 73 },
+      { id: 'baekch01', name: 'Cha-Seung Baek', role: 'SP', throws: 'R', age: 28, g: 32, gs: 21, outs: 423, h: 149, hr: 17, bb: 40, so: 93, hbp: 4, er: 75, w: 6, l: 10, sv: 0, fld: 72 },
+      { id: 'youngch03', name: 'Chris Young', role: 'SP', throws: 'R', age: 29, g: 18, gs: 18, outs: 307, h: 78, hr: 11, bb: 45, so: 98, hbp: 3, er: 41, w: 7, l: 6, sv: 0 },
+      { id: 'hoffmtr01', name: 'Trevor Hoffman', role: 'CL', throws: 'R', age: 40, g: 48, gs: 0, outs: 136, h: 37, hr: 5, bb: 10, so: 40, hbp: 0, er: 16, w: 3, l: 6, sv: 30 },
+      { id: 'bellhe01', name: 'Heath Bell', role: 'RP', throws: 'R', age: 30, g: 74, gs: 0, outs: 234, h: 64, hr: 5, bb: 27, so: 78, hbp: 2, er: 27, w: 6, l: 6, sv: 0 },
+      { id: 'meredcl01', name: 'Cla Meredith', role: 'RP', throws: 'R', age: 25, g: 73, gs: 0, outs: 211, h: 78, hr: 6, bb: 19, so: 52, hbp: 2, er: 28, w: 0, l: 3, sv: 0 },
+      { id: 'adamsmi03', name: 'Mike Adams', role: 'RP', throws: 'R', age: 29, g: 54, gs: 0, outs: 196, h: 50, hr: 7, bb: 19, so: 73, hbp: 0, er: 19, w: 2, l: 3, sv: 0 },
+      { id: 'ledezwi01', name: 'Wil Ledezma', role: 'RP', throws: 'L', age: 27, g: 28, gs: 6, outs: 175, h: 58, hr: 5, bb: 36, so: 48, hbp: 2, er: 29, w: 0, l: 2, sv: 0 },
+      { id: 'coreybr01', name: 'Bryan Corey', role: 'RP', throws: 'R', age: 34, g: 46, gs: 0, outs: 135, h: 49, hr: 6, bb: 14, so: 25, hbp: 0, er: 29, w: 1, l: 3, sv: 0 },
+    ],
+    reservePitchers: [
+      { id: 'banksjo01', name: 'Josh Banks', role: 'SP', throws: 'R', age: 25, g: 17, gs: 14, outs: 256, h: 96, hr: 12, bb: 31, so: 42, hbp: 3, er: 46, w: 3, l: 6, sv: 0, rk: true },
+      { id: 'estessh01', name: 'Shawn Estes', role: 'RP', throws: 'L', age: 35, g: 9, gs: 8, outs: 131, h: 49, hr: 6, bb: 18, so: 19, hbp: 2, er: 23, w: 2, l: 3, sv: 0 },
+      { id: 'germaju01', name: 'Justin Germano', role: 'RP', throws: 'R', age: 25, g: 12, gs: 6, outs: 131, h: 48, hr: 6, bb: 14, so: 24, hbp: 2, er: 25, w: 0, l: 3, sv: 0 },
+      { id: 'henslcl01', name: 'Clay Hensley', role: 'RP', throws: 'R', age: 28, g: 32, gs: 1, outs: 117, h: 39, hr: 3, bb: 21, so: 25, hbp: 1, er: 22, w: 1, l: 2, sv: 0 },
+      { id: 'hampsju01', name: 'Justin Hampson', role: 'RP', throws: 'L', age: 28, g: 35, gs: 0, outs: 92, h: 30, hr: 1, bb: 10, so: 19, hbp: 1, er: 10, w: 2, l: 1, sv: 0 },
+    ],
+  },
+  // SFG (SFN 2008)
+  {
+    franchiseId: 'SFG',
+    season: 2008,
+    batters: [
+      { id: 'molinbe01', name: 'Bengie Molina', pos: 'C', bats: 'R', age: 33, pa: 569, h: 153, double: 28, triple: 1, hr: 19, bb: 19, so: 47, hbp: 6, sb: 0, cs: 0, sec: '1B', fld: 76, arm: 77 },
+      { id: 'aurilri01', name: 'Rich Aurilia', pos: '1B', bats: 'R', age: 36, pa: 440, h: 112, double: 22, triple: 1, hr: 11, bb: 29, so: 54, hbp: 2, sb: 1, cs: 1, sec: '3B', fld: 60 },
+      { id: 'durhara01', name: 'Ray Durham', pos: '2B', bats: 'S', age: 36, pa: 426, h: 99, double: 26, triple: 2, hr: 10, bb: 47, so: 63, hbp: 2, sb: 8, cs: 3, fld: 65 },
+      { id: 'castijo02', name: 'Jose Castillo', pos: '3B', bats: 'R', age: 27, pa: 455, h: 106, double: 28, triple: 3, hr: 6, bb: 24, so: 83, hbp: 2, sb: 2, cs: 2, sec: '2B', fld: 49 },
+      { id: 'vizquom01', name: 'Omar Vizquel', pos: 'SS', bats: 'S', age: 41, pa: 300, h: 66, double: 10, triple: 2, hr: 1, bb: 24, so: 26, hbp: 1, sb: 7, cs: 3, fld: 61 },
+      { id: 'lewisfr02', name: 'Fred Lewis', pos: 'LF', bats: 'L', age: 27, pa: 521, h: 132, double: 24, triple: 10, hr: 9, bb: 51, so: 118, hbp: 2, sb: 20, cs: 6, sec: 'RF', fld: 63, arm: 79 },
+      { id: 'rowanaa01', name: 'Aaron Rowand', pos: 'CF', bats: 'R', age: 30, pa: 611, h: 156, double: 38, triple: 1, hr: 18, bb: 41, so: 116, hbp: 16, sb: 5, cs: 4, sec: 'LF', fld: 86, arm: 68 },
+      { id: 'winnra01', name: 'Randy Winn', pos: 'RF', bats: 'S', age: 34, pa: 667, h: 179, double: 39, triple: 2, hr: 12, bb: 53, so: 84, hbp: 4, sb: 19, cs: 3, sec: 'CF', fld: 87, arm: 62 },
+      { id: 'bowkejo01', name: 'John Bowker', pos: 'DH', bats: 'L', age: 24, pa: 350, h: 83, double: 14, triple: 3, hr: 10, bb: 19, so: 74, hbp: 3, sb: 1, cs: 1, sec: '1B', fld: 63, rk: true },
+    ],
+    bench: [
+      { id: 'velezeu01', name: 'Eugenio Velez', pos: '2B', bats: 'S', age: 26, pa: 292, h: 72, double: 16, triple: 8, hr: 1, bb: 15, so: 41, hbp: 1, sb: 17, cs: 6, sec: 'SS', fld: 40, rk: true },
+      { id: 'burriem01', name: 'Emmanuel Burriss', pos: 'SS', bats: 'S', age: 23, pa: 274, h: 68, double: 6, triple: 1, hr: 1, bb: 23, so: 24, hbp: 5, sb: 13, cs: 5, sec: '2B', fld: 53, rk: true },
+      { id: 'sandopa01', name: 'Pablo Sandoval', pos: '1B', bats: 'S', age: 21, pa: 154, h: 50, double: 10, triple: 1, hr: 3, bb: 4, so: 14, hbp: 1, sb: 0, cs: 0, sec: '3B', rk: true },
+      { id: 'ochoaiv01', name: 'Ivan Ochoa', pos: 'SS', bats: 'R', age: 25, pa: 134, h: 24, double: 8, triple: 0, hr: 0, bb: 4, so: 28, hbp: 3, sb: 0, cs: 1, sec: '2B', fld: 70, rk: true },
+      { id: 'roberda07', name: 'Dave Roberts', pos: 'LF', bats: 'L', age: 36, pa: 130, h: 30, double: 4, triple: 3, hr: 0, bb: 14, so: 17, hbp: 0, sb: 9, cs: 2, sec: 'CF', fld: 91, arm: 86 },
+    ],
+    reserveBatters: [
+      { id: 'ishiktr01', name: 'Travis Ishikawa', pos: '1B', bats: 'L', age: 24, pa: 104, h: 26, double: 6, triple: 0, hr: 3, bb: 9, so: 27, hbp: 0, sb: 1, cs: 0, sec: '3B', fld: 67, rk: true },
+      { id: 'holmst01', name: 'Steve Holm', pos: 'C', bats: 'R', age: 28, pa: 98, h: 22, double: 9, triple: 0, hr: 1, bb: 10, so: 16, hbp: 3, sb: 0, cs: 1, sec: '1B', fld: 79, arm: 52, rk: true },
+      { id: 'bococbr01', name: 'Brian Bocock', pos: 'SS', bats: 'R', age: 23, pa: 93, h: 11, double: 1, triple: 0, hr: 0, bb: 12, so: 29, hbp: 0, sb: 4, cs: 2, sec: '2B', fld: 70, rk: true },
+      { id: 'schiena01', name: 'Nate Schierholtz', pos: 'RF', bats: 'L', age: 24, pa: 81, h: 24, double: 6, triple: 2, hr: 1, bb: 2, so: 11, hbp: 2, sb: 1, cs: 1, sec: 'LF', fld: 79, arm: 65, rk: true },
+      { id: 'ortmeda01', name: 'Daniel Ortmeier', pos: '1B', bats: 'S', age: 27, pa: 73, h: 17, double: 4, triple: 1, hr: 2, bb: 5, so: 18, hbp: 1, sb: 1, cs: 1, sec: 'LF' },
+    ],
+    pitchers: [
+      { id: 'linceti01', name: 'Tim Lincecum', role: 'SP', throws: 'R', age: 24, g: 34, gs: 33, outs: 681, h: 183, hr: 13, bb: 88, so: 254, hbp: 5, er: 76, w: 18, l: 5, sv: 0, fld: 63 },
+      { id: 'cainma01', name: 'Matt Cain', role: 'SP', throws: 'R', age: 23, g: 34, gs: 34, outs: 653, h: 198, hr: 18, bb: 92, so: 188, hbp: 7, er: 93, w: 8, l: 14, sv: 0, fld: 71 },
+      { id: 'zitoba01', name: 'Barry Zito', role: 'SP', throws: 'L', age: 30, g: 32, gs: 32, outs: 540, h: 181, hr: 20, bb: 91, so: 124, hbp: 5, er: 96, w: 10, l: 17, sv: 0, fld: 65 },
+      { id: 'sanchjo01', name: 'Jonathan Sanchez', role: 'SP', throws: 'L', age: 25, g: 29, gs: 29, outs: 474, h: 156, hr: 15, bb: 77, so: 159, hbp: 9, er: 90, w: 9, l: 12, sv: 0, fld: 62 },
+      { id: 'correke01', name: 'Kevin Correia', role: 'SP', throws: 'R', age: 27, g: 25, gs: 19, outs: 330, h: 128, hr: 13, bb: 46, so: 79, hbp: 4, er: 62, w: 3, l: 8, sv: 0 },
+      { id: 'wilsobr01', name: 'Brian Wilson', role: 'CL', throws: 'R', age: 26, g: 63, gs: 0, outs: 187, h: 60, hr: 6, bb: 28, so: 62, hbp: 3, er: 30, w: 3, l: 2, sv: 41 },
+      { id: 'yabuke01', name: 'Keiichi Yabu', role: 'RP', throws: 'R', age: 39, g: 60, gs: 0, outs: 204, h: 63, hr: 3, bb: 32, so: 48, hbp: 8, er: 27, w: 3, l: 6, sv: 0 },
+      { id: 'walkety01', name: 'Tyler Walker', role: 'RP', throws: 'R', age: 32, g: 65, gs: 0, outs: 160, h: 48, hr: 5, bb: 21, so: 46, hbp: 1, er: 26, w: 5, l: 8, sv: 0 },
+      { id: 'mischpa01', name: 'Pat Misch', role: 'RP', throws: 'L', age: 26, g: 15, gs: 7, outs: 157, h: 57, hr: 8, bb: 15, so: 36, hbp: 3, er: 30, w: 0, l: 3, sv: 0, rk: true },
+      { id: 'taschja01', name: 'Jack Taschner', role: 'RP', throws: 'L', age: 30, g: 67, gs: 0, outs: 144, h: 54, hr: 5, bb: 25, so: 43, hbp: 2, er: 29, w: 3, l: 2, sv: 0 },
+      { id: 'sadlebi01', name: 'Billy Sadler', role: 'RP', throws: 'R', age: 26, g: 33, gs: 0, outs: 133, h: 35, hr: 6, bb: 27, so: 43, hbp: 8, er: 20, w: 0, l: 1, sv: 0, rk: true },
+    ],
+    reservePitchers: [
+      { id: 'hennebr01', name: 'Brad Hennessey', role: 'RP', throws: 'R', age: 28, g: 17, gs: 4, outs: 121, h: 50, hr: 6, bb: 16, so: 23, hbp: 2, er: 25, w: 1, l: 2, sv: 0 },
+      { id: 'hinshal01', name: 'Alex Hinshaw', role: 'RP', throws: 'L', age: 25, g: 48, gs: 0, outs: 119, h: 31, hr: 5, bb: 29, so: 47, hbp: 3, er: 15, w: 2, l: 1, sv: 0, rk: true },
+      { id: 'romose01', name: 'Sergio Romo', role: 'RP', throws: 'R', age: 25, g: 29, gs: 0, outs: 102, h: 16, hr: 3, bb: 8, so: 33, hbp: 3, er: 8, w: 3, l: 1, sv: 0, rk: true },
+      { id: 'chulkvi01', name: 'Vinnie Chulk', role: 'RP', throws: 'R', age: 29, g: 27, gs: 0, outs: 95, h: 32, hr: 4, bb: 9, so: 22, hbp: 2, er: 15, w: 0, l: 3, sv: 0 },
+      { id: 'matosos01', name: 'Osiris Matos', role: 'RP', throws: 'R', age: 23, g: 20, gs: 0, outs: 62, h: 26, hr: 3, bb: 9, so: 16, hbp: 1, er: 11, w: 1, l: 2, sv: 0, rk: true },
+    ],
+  },
+];
