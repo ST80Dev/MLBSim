@@ -479,6 +479,21 @@ function main() {
     return roundR(70 + 8 * z(d.rf, pfRf) - 3 * z(d.err, pfErr));
   };
 
+  // Fallback difesa lanciatore SENZA dato affidabile (rilievi/pochi inning: il RF su
+  // 5-15 palle è puro rumore). Invece del piatto 70 — che lasciava ~70% dei
+  // lanciatori identici, mentre i generati spaziano 40-86 — un valore COERENTE e
+  // VARIO seedato dall'id: ~N(70, 9), stabile a ogni rigenerazione (stesso id →
+  // stesso rating). Non finge un dato assente, dà solo varietà plausibile.
+  const seededPitField = (pid) => {
+    const hashU = (salt) => {
+      let h = (2166136261 ^ salt) >>> 0;
+      for (let i = 0; i < pid.length; i++) { h ^= pid.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return ((h >>> 0) % 100000) / 100000;
+    };
+    const g = hashU(1) + hashU(2) + hashU(3) - 1.5; // somma di 3 uniformi → quasi-gaussiana
+    return roundR(70 + g * 18);
+  };
+
   // Assegnazione unica alla squadra primaria.
   const teamBatCand = new Map(); // teamID -> [cand battitore]
   for (const [pid, s] of batTot) {
@@ -610,12 +625,13 @@ function main() {
   function buildPitchers(teamID) {
     const cand = teamPitCand.get(teamID) ?? [];
     const line = (c, role) => {
-      const fld = derivePitField(c.pid); // difesa reale del lanciatore (null = archetipo 70)
+      // Difesa: reale (RF) se il campione regge, altrimenti seedata coerente (mai 70 piatto).
+      const fld = derivePitField(c.pid) ?? seededPitField(c.pid);
       return {
         id: c.pid, name: c.name, role, throws: c.throws, age: c.age,
         g: c.g, gs: c.gs, outs: c.outs, h: c.h, hr: c.hr, bb: c.bb, so: c.so,
         hbp: c.hbp, er: c.er, w: c.w, l: c.l, sv: c.sv,
-        ...(fld != null ? { fld } : {}),
+        fld,
         ...(isRookiePit(c.pid) ? { rk: true } : {}),
       };
     };
