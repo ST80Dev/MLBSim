@@ -22,11 +22,14 @@ import {
   prePitchEvent,
   offenseSide,
   substituteFielder,
+  swapDefensivePositions,
   pinchRun,
 } from '../game';
 import type { LiveGame } from '../game';
 import { estimatedPitches } from '../boxscore';
 import { generateMatchup } from '../../data/generator';
+import { validateFieldSet } from '../lineup';
+import { canPlay } from '../positions';
 import type { Batter, Pitcher } from '../types';
 
 /** Mette un corridore su una base (0=1a,1=2a,2=3a) per allestire situazioni. */
@@ -538,9 +541,56 @@ describe('logica di campo sugli out (avanzamenti reali oltre il motore lineare)'
     const benchBefore = def.team.bench.length;
     expect(substituteFielder(live, def, out.id, inc.id)).toBe(true);
     expect(def.team.lineup[4].id).toBe(inc.id);
-    expect(inc.position).toBe(out.position); // eredita il ruolo
+    // Riallineamento: la difesa resta uno schieramento VALIDO (9 caselle coperte
+    // una volta ciascuna) e il subentrante gioca un ruolo che PUÒ coprire — non
+    // più la casella ereditata a caso.
+    expect(validateFieldSet(def.team.lineup.map((b) => b.position)).ok).toBe(true);
+    expect(canPlay(inc, inc.position)).toBe(true);
     expect(def.team.bench.length).toBe(benchBefore - 1);
     expect(live.play[live.play.length - 1].kind).toBe('sub');
+  });
+
+  it('sostituzione difensiva SENZA riallineamento (realign=false): eredita la casella esatta', () => {
+    const { away, home } = generateMatchup(3);
+    const live = createLiveGame(away, home, 3);
+    const def = defenseSide(live);
+    const out = def.team.lineup[4];
+    const slot = out.position;
+    const inc = def.team.bench[0];
+    expect(substituteFielder(live, def, out.id, inc.id, false)).toBe(true);
+    // Nel pannello Gestione difesa il subentrante va nella casella su cui è stato
+    // droppato, ESATTA, senza spostamenti automatici degli altri.
+    expect(def.team.lineup[4].id).toBe(inc.id);
+    expect(def.team.lineup[4].position).toBe(slot);
+  });
+
+  it('scambio difensivo fra due titolari (rotazione ruoli)', () => {
+    const { away, home } = generateMatchup(3);
+    const live = createLiveGame(away, home, 3);
+    const def = defenseSide(live);
+    const ss = def.team.lineup.find((b) => b.position === 'SS')!;
+    const sb = def.team.lineup.find((b) => b.position === '2B')!;
+    // Rendo lo scambio lecito: ciascuno ha come seconda posizione la casella dell'altro.
+    ss.secondaryPosition = '2B';
+    sb.secondaryPosition = 'SS';
+    expect(swapDefensivePositions(live, def, ss.id, sb.id)).toBe(true);
+    expect(ss.position).toBe('2B');
+    expect(sb.position).toBe('SS');
+    // Lo schieramento resta valido (SS↔2B scambiati, nessun buco/doppione).
+    expect(validateFieldSet(def.team.lineup.map((x) => x.position)).ok).toBe(true);
+  });
+
+  it('scambio difensivo NON valido se uno non può coprire la casella dell’altro', () => {
+    const { away, home } = generateMatchup(3);
+    const live = createLiveGame(away, home, 3);
+    const def = defenseSide(live);
+    const fb = def.team.lineup.find((b) => b.position === '1B')!;
+    const ss = def.team.lineup.find((b) => b.position === 'SS')!;
+    delete fb.secondaryPosition; // il 1B non sa fare SS
+    ss.secondaryPosition = '2B';
+    expect(swapDefensivePositions(live, def, fb.id, ss.id)).toBe(false);
+    expect(fb.position).toBe('1B'); // invariati
+    expect(ss.position).toBe('SS');
   });
 
   it('pinch-runner: un panchinaro rileva il corridore in base', () => {

@@ -63,6 +63,7 @@ function batterFrom(l: HistBatLine, id: string, rng: Rng): Batter {
     fld: l.fld,
     arm: l.arm,
   }), l.rk);
+  recenterOffense(ratings);
   const stats = deriveBatterStats(ratings, l.pa);
   const ovr = batterOverall(ratings, l.pos);
   const nm = splitName(l.name);
@@ -154,6 +155,51 @@ function spreadPitcher(r: PitcherRatings): PitcherRatings {
   };
 }
 
+// ---------------------------------------------------------------------------
+// RI-CENTRATURA DELL'OFFESA D'EPOCA (solo import storico), applicata DOPO lo
+// stretch. L'inversione produce una popolazione di battitori più CALDA del punto
+// operativo del motore: prima di questo rientro, ri-simulata su round-robin doppio
+// dava R/G ~7.3, BA ~.299, HR/G ~1.7 — contro il ~5.9/.264/1.50 della lega GENERATA
+// e il target d'epoca (~5.0-5.4 R/G, BA ~.270-.280, HR/G 1.3-1.6). Diagnosi
+// (misurata): i battitori ri-derivati e i lanciatori (che invertono ~neutri) sono
+// internamente INCOERENTI — in una lega chiusa i rate battitore e concessi devono
+// coincidere, qui i battitori erano ~+20-35% sopra i lanciatori. Causa: la forward
+// `deriveBatterStats` è CONVESSA (Jensen) e lo stretch `HIST_SPREAD` allarga la coda,
+// così l'aggregato battitori sale sopra la media. Due leve DISACCOPPIATE riportano
+// l'ambiente in banda senza falsare i profili elite:
+//
+//  1. `recenter` — tira giù le tre doti offensive (contatto/potenza/occhio) SOLO
+//     nella parte sopra la media (`above`): le doti sotto-media non gonfiano e
+//     abbassarle punirebbe a torto i profili tutto-contatto (Ichiro C95/P49).
+//     La CIMA-gemma è PROTETTA sopra `RECENTER_FULLPROT` (Bonds P98/E98, Ichiro
+//     C95, Helton P98/C95 restano fenomeni — i test lo esigono), con sfumatura
+//     lineare `KNEE→FULLPROT`. Preserva l'ordine relativo e la varianza-squadra.
+//  2. `PITCH_MOVE` — piccolo +movimento ai lanciatori (DIPS: tocca SOLO le palle
+//     in gioco, mai HR/BB/SO) che assorbe il residuo delle annate di picco
+//     (1999-2001) portandole in linea col motore, SENZA abbassare l'OVR/le gemme
+//     dei battitori. È soppressione-VALIDE di CONTESTO d'epoca, non talento.
+//
+// Misurato dopo il rientro (round-robin doppio, tutte le annate): media d'epoca
+// ~5.4 R/G, BA ~.264, HR/G ~1.3; forma fedele al reale (2000 picco ~6.1, 2003 minimo
+// ~4.9). NON tocca la lega generata (non passa da qui). Vedi docs/engine-calibration
+// § Import storico.
+// ---------------------------------------------------------------------------
+const OFFENSE_RECENTER = 6;
+const RECENTER_RAMP = 4; // pieno shift già a rating ~74 (sopra-media della massa)
+const RECENTER_GEM_KNEE = 90; // sotto: shift pieno; sopra: sfuma…
+const RECENTER_FULLPROT = 95; // …fino a protezione totale della cima-gemma
+function recenter(v: number): number {
+  const above = clamp((v - RATING_AVG) / RECENTER_RAMP, 0, 1);
+  const gem = clamp((RECENTER_FULLPROT - v) / (RECENTER_FULLPROT - RECENTER_GEM_KNEE), 0, 1);
+  return clampRating(v - OFFENSE_RECENTER * above * gem);
+}
+function recenterOffense(r: Batter['ratings']): void {
+  r.contact = recenter(r.contact);
+  r.power = recenter(r.power);
+  r.eye = recenter(r.eye);
+}
+const PITCH_MOVE = 4;
+
 /** Bonus (punti overall) da carico-da-horse × qualità DE-CONTESTUALIZZATA.
  *  Usa il FIP (13·HR + 3·(BB+HBP) − 2·K, peripherals) invece dell'ERA: un
  *  workhorse con ottimi K/BB/HR prende il boost anche dietro una difesa scarsa
@@ -210,6 +256,12 @@ function pitcherFrom(l: HistPitLine, id: string, rng: Rng): Pitcher {
   // workload richiede inning, la regressione per campione già doma i micro-campioni)
   // e lo skip-stretch li affosserebbe (un Felix/CC dominante a poche partenze).
   const ratings = spreadPitcher(boostPitcher(raw, pitcherQualityBonus(l)));
+  // Soppressione-VALIDE d'epoca (contesto, non talento): il rientro-battitori
+  // porta l'aggregato in banda ma lascia le annate di picco (1999-2001) un filo
+  // sopra il punto operativo del motore. Un piccolo +movimento (DIPS: tocca solo
+  // le palle in gioco) porta l'ambiente-punti storico in linea con la lega
+  // generata SENZA abbassare l'OVR/le gemme dei battitori. Env-tunabile.
+  if (PITCH_MOVE) ratings.movement = clampRating(ratings.movement + PITCH_MOVE);
   const stats = derivePitcherStats(ratings, bf);
   const ovr = pitcherOverall(ratings);
   const nm = splitName(l.name);

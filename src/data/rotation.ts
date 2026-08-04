@@ -6,7 +6,9 @@ import { withRotationStarter } from './generator';
 //
 // Dopo aver lanciato, ogni lanciatore matura un riposo obbligatorio in GARE, in
 // funzione del carico:
-//   - Partente / spot start ............... 4 gare  (ciclo naturale a 5 uomini)
+//   - Partente / spot start ............... 3 gare  (MINIMO: consente la rotazione
+//                                                     a 4 uomini; l'asso di gara 1
+//                                                     rientra alla gara 5)
 //   - Rilievo da 2+ IP (6+ out) ........... 1 gara  (salta la gara dopo)
 //   - Rilievo sotto le 2 IP (0-5 out) ..... 0       (disponibile la gara dopo)
 // I rilievi restano quasi sempre disponibili (bullpen corti): solo chi si carica
@@ -14,12 +16,19 @@ import { withRotationStarter } from './generator';
 // `availableFrom[id]` = prima giornata in cui il lanciatore torna disponibile
 // (per partire O per rilevare). Chi non ha ancora lanciato e' sempre disponibile.
 //
-// NEI PLAYOFF il riposo del PARTENTE si accorcia (`PLAYOFF_REST_STARTER`): piu'
-// off-day reali tra le gare + gare che contano, cosi' l'asso puo' lanciare Gara 1
-// e Gara 4 (riposo di 2 gare invece di 4). Vale solo alla REGISTRAZIONE dell'uso
+// Il riposo del partente è un **MINIMO** (3 gare), non un ciclo rigido: con 5
+// partenti sani `suggestedStarter` gira comunque a 5 uomini (sceglie il PIÙ
+// riposato, così l'asso salta la sua gara-3-di-riposo e ne fa una in più), ma con
+// 4 partenti la rotazione a 4 è lecita e l'asso rientra puntuale alla 4ª gara dopo
+// la sua. L'utente può sempre schierare manualmente l'asso appena smaltite le 3
+// gare (rotazione a 4 a comando).
+//
+// NEI PLAYOFF il riposo del PARTENTE si accorcia ancora (`PLAYOFF_REST_STARTER`):
+// piu' off-day reali tra le gare + gare che contano, cosi' l'asso puo' lanciare
+// Gara 1 e Gara 4 (riposo di 2 gare). Vale solo alla REGISTRAZIONE dell'uso
 // (`recordUsage(..., starterRest)`); le query di disponibilita' non cambiano.
 
-export const REST_STARTER = 4;
+export const REST_STARTER = 3;
 export const REST_RELIEF = 1;
 /** Riposo del partente nei playoff (piu' corto): l'asso rientra alla 3ª gara dopo. */
 export const PLAYOFF_REST_STARTER = 2;
@@ -96,12 +105,22 @@ export function restInfo(rot: RotationState, ids: string[], day: number): RestIn
 }
 
 /**
- * Partente CONSIGLIATO: il **primo in ordine di rotazione** che non e' a riposo.
- * Se nessuno e' disponibile (non dovrebbe capitare con una rotazione sana) parte
- * comunque il primo dell'ordine.
+ * Partente CONSIGLIATO: fra i disponibili (riposo smaltito), il **più riposato**
+ * — chi ha lanciato più tempo fa (o mai) — con l'ordine di rotazione a spareggio.
+ * Così, anche se il riposo minimo (3 gare) renderebbe l'asso già schierabile alla
+ * casella del 5° partente, la rotazione a 5 uomini **non collassa** a 4: parte il
+ * partente più fresco, l'asso si prende la gara di riposo extra. Con 4 partenti,
+ * invece, l'asso è l'unico disponibile al suo turno e rientra puntuale. Se nessuno
+ * è disponibile (rotazione malmessa) parte il primo dell'ordine.
  */
 export function suggestedStarter(rot: RotationState, rotationIds: string[], day: number): string {
-  return rotationIds.find((id) => isAvailable(rot, id, day)) ?? rotationIds[0];
+  const available = rotationIds.filter((id) => isAvailable(rot, id, day));
+  if (available.length === 0) return rotationIds[0];
+  // `availableFrom` più basso = ha lanciato più tempo fa (assente = mai lanciato =
+  // il più riposato). reduce in ordine di rotazione → a parità tiene il primo.
+  return available.reduce((best, id) =>
+    (rot.availableFrom[id] ?? 0) < (rot.availableFrom[best] ?? 0) ? id : best,
+  );
 }
 
 /**

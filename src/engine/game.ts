@@ -4,7 +4,7 @@ import { makeRng, clamp } from './rng';
 import { resolveAtBat, platoonAdvantage } from './atbat';
 import { TUNING } from './constants';
 import { RATING_AVG, pitcherOverall, batterOverall } from './ratings';
-import { fieldingAtPosition } from './positions';
+import { fieldingAtPosition, realignDefense, canOccupy, type DefMove } from './positions';
 import { teamSynthesis, groupDefenseSynthesis, INFIELD_POS, OUTFIELD_POS } from './teamRatings';
 import {
   BattingLine,
@@ -1091,6 +1091,16 @@ export function benchFor(l: LiveGame): Batter[] {
   return offense(l).team.bench;
 }
 
+/** Cronaca del riassetto difensivo dopo una sostituzione (se qualcuno si è
+ *  spostato). Elenca solo gli spostamenti reali; il subentrante è già annunciato
+ *  dal suo evento di ingresso. */
+function pushRealign(l: LiveGame, moves: DefMove[]): void {
+  const shifts = moves.filter((m) => m.to !== m.from);
+  if (shifts.length === 0) return;
+  const list = shifts.map((m) => `${shortName(m.b.name)} → ${m.to}`).join(', ');
+  pushPlay(l, `Riassetto difensivo: ${list}`, 0, 'sub', shortName(shifts[0].b.name));
+}
+
 /**
  * Pinch-hit: sostituisce il battitore corrente con un giocatore di panchina.
  * Non consuma il turno: dopo, il pinch-hitter batte normalmente.
@@ -1103,14 +1113,18 @@ export function pinchHit(l: LiveGame, benchId: string): boolean {
   const bi = off.team.bench.findIndex((b) => b.id === benchId);
   if (bi < 0) return false;
   const sub = off.team.bench[bi];
-  sub.position = current.position; // eredita il ruolo difensivo dello slot
-  off.team.lineup[idx] = sub;
+  // Set difensivo VALIDO pre-sostituzione (le stesse caselle da coprire dopo).
+  const slots = off.team.lineup.map((b) => b.position);
+  off.team.lineup[idx] = sub; // il subentrante conserva il PROPRIO ruolo naturale
   off.team.bench.splice(bi, 1);
   if (!off.battingLines.has(sub.id)) {
     off.battingLines.set(sub.id, newBattingLine(sub));
     off.battingOrder.push(sub.id);
   }
   pushPlay(l, `${shortName(sub.name)} entra come pinch-hitter per ${shortName(current.name)}`, 0, 'sub', shortName(sub.name));
+  // Riallinea la difesa: il subentrante va al suo ruolo, gli altri si spostano
+  // per coprire (niente casella ereditata a caso).
+  pushRealign(l, realignDefense(off.team.lineup, slots));
   return true;
 }
 
@@ -1125,6 +1139,7 @@ export function substituteFielder(
   s: SideState,
   outId: string,
   inId: string,
+  realign = true,
 ): boolean {
   if (l.status !== 'live') return false;
   const idx = s.team.lineup.findIndex((b) => b.id === outId);
@@ -1132,19 +1147,59 @@ export function substituteFielder(
   if (idx < 0 || bi < 0) return false;
   const outP = s.team.lineup[idx];
   const sub = s.team.bench[bi];
-  sub.position = outP.position; // eredita il ruolo difensivo dello slot
-  s.team.lineup[idx] = sub;
+  const slots = s.team.lineup.map((b) => b.position); // set difensivo pre-sostituzione
+  s.team.lineup[idx] = sub; // conserva il ruolo naturale del subentrante
   s.team.bench.splice(bi, 1);
   if (!s.battingLines.has(sub.id)) {
     s.battingLines.set(sub.id, newBattingLine(sub));
     s.battingOrder.push(sub.id);
   }
+  // `realign` (default): riordina la difesa perché ognuno copra un ruolo che sa
+  // giocare (per il pulsante rapido e la CPU). Il pannello Gestione difesa lo
+  // disattiva: lì l'utente piazza il subentrante in una casella PRECISA (dropla)
+  // e sistema il resto a mano, senza che il riallineamento gli sposti i giocatori.
+  if (!realign) {
+    sub.position = outP.position; // eredita la casella su cui è stato lasciato
+    pushPlay(l, `${shortName(sub.name)} entra in difesa (${sub.position}) per ${shortName(outP.name)}`, 0, 'sub', shortName(sub.name));
+    return true;
+  }
+  // Riallinea PRIMA di annunciare: così il ruolo mostrato è quello reale.
+  const moves = realignDefense(s.team.lineup, slots);
   pushPlay(
     l,
     `${shortName(sub.name)} entra in difesa (${sub.position}) per ${shortName(outP.name)}`,
     0,
     'sub',
     shortName(sub.name),
+  );
+  pushRealign(l, moves.filter((m) => m.b.id !== sub.id));
+  return true;
+}
+
+/**
+ * Scambio di ruolo fra DUE giocatori GIÀ in campo (rotazione difensiva, es. dopo
+ * un pinch-run): si scambiano la casella difensiva, mantenendo l'ordine di
+ * battuta. Lecito solo se ciascuno può coprire la casella dell'altro
+ * (`canOccupy`: naturale, secondaria o DH). Muta `lineup[].position`. Non consuma
+ * il turno. Usato dal pannello Gestione difesa (drag&drop). Ritorna false se lo
+ * scambio non è valido.
+ */
+export function swapDefensivePositions(l: LiveGame, s: SideState, idA: string, idB: string): boolean {
+  if (l.status !== 'live' || idA === idB) return false;
+  const a = s.team.lineup.find((b) => b.id === idA);
+  const b = s.team.lineup.find((x) => x.id === idB);
+  if (!a || !b) return false;
+  const posA = a.position;
+  const posB = b.position;
+  if (!canOccupy(a, posB) || !canOccupy(b, posA)) return false;
+  a.position = posB;
+  b.position = posA;
+  pushPlay(
+    l,
+    `Scambio difensivo: ${shortName(a.name)} → ${posB}, ${shortName(b.name)} → ${posA}`,
+    0,
+    'sub',
+    shortName(a.name),
   );
   return true;
 }
@@ -1163,9 +1218,11 @@ export function pinchRun(l: LiveGame, s: SideState, base: number, inId: string):
   if (bi < 0) return false;
   const sub = s.team.bench[bi];
   const idx = s.team.lineup.findIndex((b) => b.id === outP.id);
+  let moves: DefMove[] = [];
   if (idx >= 0) {
-    sub.position = outP.position;
-    s.team.lineup[idx] = sub;
+    const slots = s.team.lineup.map((b) => b.position); // set difensivo pre-sostituzione
+    s.team.lineup[idx] = sub; // conserva il ruolo naturale del subentrante
+    moves = realignDefense(s.team.lineup, slots);
   }
   s.team.bench.splice(bi, 1);
   if (!s.battingLines.has(sub.id)) {
@@ -1180,7 +1237,21 @@ export function pinchRun(l: LiveGame, s: SideState, base: number, inId: string):
     'sub',
     shortName(sub.name),
   );
+  pushRealign(l, moves);
   return true;
+}
+
+/**
+ * Riallinea automaticamente la difesa al ruolo migliore (pulsante "Riallinea auto"
+ * del pannello Gestione difesa): ognuno alla casella che copre meglio, col minimo
+ * di spostamenti. Ritorna true se qualcosa si è mosso.
+ */
+export function autoRealignDefense(l: LiveGame, s: SideState): boolean {
+  if (l.status !== 'live') return false;
+  const slots = s.team.lineup.map((b) => b.position);
+  const moves = realignDefense(s.team.lineup, slots);
+  if (moves.length) pushRealign(l, moves);
+  return moves.length > 0;
 }
 
 /** Attiva/disattiva la difesa avanzata "interni dentro" per il turno. */

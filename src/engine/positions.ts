@@ -104,6 +104,70 @@ export function applyAlignment(team: Team, al: Alignment): Team {
   return { ...team, lineup };
 }
 
+/** Uno spostamento difensivo prodotto dal riallineamento (per la cronaca). */
+export interface DefMove {
+  b: Batter;
+  from: Position;
+  to: Position;
+}
+
+/** Costo di schierare `b` nella casella `slot` (basso = più naturale). */
+function slotCost(b: Batter, slot: Position): number {
+  if (slot === b.position) return 0; // resta dov'è (naturale o casella già coperta)
+  if (b.secondaryPosition === slot) return 2; // seconda posizione: la sa giocare
+  if (slot === 'DH') return 3; // chiunque può fare il DH (non difende)
+  return 20; // fuori ruolo: ultima spiaggia
+}
+
+/**
+ * Ri-assegna le caselle `slots` (il set difensivo VALIDO pre-sostituzione: le
+ * stesse 9 posizioni di prima, così vale anche per una lega senza DH) ai titolari
+ * `lineup`, col minimo di spostamenti, così ognuno gioca un ruolo che PUÒ coprire
+ * (naturale o secondario). Serve dopo un pinch-hit/run o una sostituzione difensiva:
+ * il subentrante NON eredita più ciecamente la casella di chi esce (niente
+ * "ricevitore all'interbase"), va al suo ruolo e gli altri si spostano di
+ * conseguenza. Greedy per domanda difensiva (caselle difficili prima), a parità di
+ * costo preferisce il guanto migliore. Muta `lineup[].position` e ritorna gli
+ * spostamenti effettivi (no-op esclusi). **Deterministico** (niente RNG) e usato
+ * SOLO nel gioco interattivo (mai in `quickSim`/`autoStep`) → calibrazione intatta.
+ */
+export function realignDefense(lineup: Batter[], slots: Position[]): DefMove[] {
+  // Caselle difficili prima (SS/CF/C…), il DH per ultimo (domanda 0): così i
+  // ruoli chiave pescano il titolare giusto e l'avanzo finisce al DH.
+  const order = [...slots].sort(
+    (a, b) => (POS_FIELD_DEMAND[b] ?? 0) - (POS_FIELD_DEMAND[a] ?? 0),
+  );
+  const free = new Set(lineup);
+  const assign = new Map<Batter, Position>();
+  for (const slot of order) {
+    let best: Batter | null = null;
+    let bestCost = Infinity;
+    let bestFld = -Infinity;
+    for (const b of free) {
+      const c = slotCost(b, slot);
+      const f = fieldingAtPosition(b, slot);
+      if (c < bestCost || (c === bestCost && f > bestFld)) {
+        best = b;
+        bestCost = c;
+        bestFld = f;
+      }
+    }
+    if (best) {
+      assign.set(best, slot);
+      free.delete(best);
+    }
+  }
+  const moves: DefMove[] = [];
+  for (const b of lineup) {
+    const to = assign.get(b);
+    if (to && to !== b.position) {
+      moves.push({ b, from: b.position, to });
+      b.position = to;
+    }
+  }
+  return moves;
+}
+
 /**
  * Prova a spostare `playerId` in `targetPos` scambiandolo con chi lo occupa.
  * Ritorna il nuovo schieramento, o `null` se lo scambio non e' lecito (il
