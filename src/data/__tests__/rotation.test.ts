@@ -8,6 +8,7 @@ import {
   restInfo,
   suggestedStarter,
   withStarterId,
+  migrateRotation,
   REST_STARTER,
   REST_RELIEF,
 } from '../rotation';
@@ -41,6 +42,32 @@ describe('riposo per uso reale', () => {
     expect(isAvailable(rot, 'SP1', 3)).toBe(false);
     expect(restRemaining(rot, 'SP1', 3)).toBe(1);
     expect(isAvailable(rot, 'SP1', 4)).toBe(true);
+  });
+
+  it('il riposo si RICALCOLA con la regola corrente (cambio regola valido a stagione in corso)', () => {
+    // Un partente che ha aperto al giorno 0: col +3 corrente rientra al giorno 4.
+    let rot = recordUsage(createRotation(), started('SP1'), 0);
+    expect(restRemaining(rot, 'SP1', 1)).toBe(3); // regola regular (default)
+    // La stessa registrazione, interrogata con la regola playoff (+2), dà meno riposo.
+    expect(restRemaining(rot, 'SP1', 1, 2)).toBe(2);
+    expect(isAvailable(rot, 'SP1', 3, 2)).toBe(true); // playoff: rientra al giorno 3
+    expect(isAvailable(rot, 'SP1', 3)).toBe(false); // regular: non ancora
+  });
+
+  it('migra un vecchio stato {availableFrom} (+4 cotto) al +3 corrente', () => {
+    // Stagione iniziata sotto la vecchia regola: SP1 aperse al giorno 2 → availableFrom
+    // = 2+1+4 = 7 (a stagione in corso, giorno 3, mostrava +4). Migrato → +3.
+    const legacy = { availableFrom: { SP1: 7 } } as unknown;
+    const rot = migrateRotation(legacy);
+    expect(restRemaining(rot, 'SP1', 3)).toBe(3); // era +4, ora +3
+    // SP1 aperse al giorno 2 → col +3 rientra al giorno 6 (2+1+3), non più al 7.
+    expect(isAvailable(rot, 'SP1', 5)).toBe(false);
+    expect(isAvailable(rot, 'SP1', 6)).toBe(true);
+  });
+
+  it('migrateRotation è idempotente sul nuovo schema', () => {
+    const rot = recordUsage(createRotation(), started('SP1'), 0);
+    expect(migrateRotation(rot)).toBe(rot);
   });
 
   it('un rilievo breve è di nuovo disponibile la gara dopo', () => {

@@ -160,11 +160,15 @@ export function derivePitcherStats(r: PitcherRatings, bf = 1000): PitcherStats {
   return { bf, h, hr, bb, so, hbp };
 }
 
-/** Converte la Resistenza (rating) nel numero di battitori affrontabili. */
+/** Converte la Resistenza (rating) nel numero di battitori affrontabili.
+ *  RP: curva più ripida e tetto più alto, così la Resistenza distingue davvero il
+ *  LOOGY/finisher corto (RES bassa → 4-5 BF) dal LUNGO/swingman SP-RP (RES 60-70 →
+ *  8-12 BF, RES 75+ fino a 15): prima un rilievo restava incollato a ~6 BF anche con
+ *  ottima resistenza — un mangia-inning non poteva mai fare i suoi 2-3 inning. */
 export function deriveStamina(rating: number, role: PitcherRole): number {
   if (role === 'SP') return clamp(round(24 + ((rating - RATING_AVG) / 10) * 3), 18, 33);
   if (role === 'CL') return clamp(round(5 + ((rating - RATING_AVG) / 10) * 0.8), 3, 7);
-  return clamp(round(7 + ((rating - RATING_AVG) / 10) * 1.2), 4, 12);
+  return clamp(round(11 + ((rating - RATING_AVG) / 10) * 3), 4, 15);
 }
 
 // ---------------------------------------------------------------------------
