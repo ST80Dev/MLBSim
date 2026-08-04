@@ -2539,13 +2539,24 @@ table {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* MAI a capo: la barra resta su UNA riga (altezza invariata → gli stadi non
+     vanno ricalibrati). Su display HD il varco tra i boxscore è ampio e le
+     azioni divise ai due lati ci stanno comodamente. */
   flex-wrap: nowrap;
 }
 .actionbar.compact .ab-side.left {
   justify-self: end;
+  justify-content: flex-end;
 }
 .actionbar.compact .ab-side.right {
   justify-self: start;
+  justify-content: flex-start;
+}
+/* Pulsanti un filo più compatti nella barra comandi: più azioni per riga, meno
+   probabilità di andare a capo (e mai di sforare sui boxscore). */
+.actionbar.compact .btn.sm {
+  padding: 5px 9px;
+  font-size: 12.5px;
 }
 .actionbar.compact .ab-main {
   justify-self: center;
@@ -2564,7 +2575,10 @@ table {
   font-weight: 800;
   letter-spacing: 0.02em;
 }
-/* Piu' larghezza (una riga di comandi) e piu' spazio a casa base */
+/* La barra si dimensiona al suo contenuto su UNA riga (max-content) e resta
+   centrata. Su HD (≥1920) i boxscore laterali sono limitati a ~380px, quindi il
+   varco centrale è ampio e la barra — con le azioni divise ai due lati del
+   primario — non li tocca mai. Il cap del 92% è solo una sicurezza estrema. */
 .controls-overlay {
   width: max-content;
   max-width: 92%;
