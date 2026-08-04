@@ -55,12 +55,13 @@ export function ActionBar({
   const noRelievers = availableRelievers(defenseSide(live)).length === 0;
   const hasRunner = sit.bases.some(Boolean);
 
-  // Layout a 3 ZONE: [tag + TATTICHE] · [AZIONE PRIMARIA centrata FISSA] · [SOSTITUZIONI].
+  // Layout a 3 ZONE: [tag + SOSTITUZIONI] · [AZIONE PRIMARIA centrata FISSA] · [TATTICHE].
   // Il primario (Battuta/Lancia) è ancorato al centro (sotto casa base) e NON si
-  // sposta. Le altre azioni sono DIVISE PER TIPO ai due lati: le tattiche di gioco
-  // a sinistra (col tag di turno), le sostituzioni a destra. Così la barra resta
-  // bilanciata attorno al primario e, entro la sua larghezza massima, non sfora
-  // sui boxscore laterali (le zone vanno a capo se serve).
+  // sposta. Le altre azioni sono DIVISE PER TIPO ai due lati: a SINISTRA (col tag
+  // di turno) le azioni di giocatori/squadra = sostituzioni (pinch-hit/run;
+  // cambio lanc./gestione difesa); a DESTRA le azioni di gioco del turno = tattiche
+  // (bunt/squeeze/rubate/hit&run; base int./interni/difendi le righe). Così i
+  // pulsanti non si accumulano tutti da un lato e non finiscono sul boxscore.
   const bar = waiting ? (
     // Turno in corso: si aspetta il verdetto della telecronaca prima di mostrare
     // i comandi del turno successivo.
@@ -71,6 +72,31 @@ export function ActionBar({
     <div className="card actionbar compact">
       <div className="ab-side left">
         <span className="turn-tag off">ATTACCO · {sit.battingTeam.abbrev}</span>
+        <button
+          className="btn sm"
+          disabled={noBench}
+          onClick={() => setSub('pinchhit')}
+          title="Pinch-hit: sostituisci il battitore"
+        >
+          Pinch-hit
+        </button>
+        {hasRunner && (
+          <button
+            className="btn sm"
+            disabled={noBench}
+            onClick={() => setSub('pinchrun')}
+            title="Pinch-runner: sostituisci un corridore in base"
+          >
+            Pinch-run
+          </button>
+        )}
+      </div>
+      <div className="ab-main">
+        <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
+          Battuta
+        </button>
+      </div>
+      <div className="ab-side right">
         <button
           className="btn sm"
           disabled={!sit.canBunt}
@@ -125,36 +151,37 @@ export function ActionBar({
           </button>
         )}
       </div>
-      <div className="ab-main">
-        <button className="btn primary sm" onClick={() => act((g) => playOffense(g, 'swing'))}>
-          Battuta
-        </button>
-      </div>
-      <div className="ab-side right">
-        <button
-          className="btn sm"
-          disabled={noBench}
-          onClick={() => setSub('pinchhit')}
-          title="Pinch-hit: sostituisci il battitore"
-        >
-          Pinch-hit
-        </button>
-        {hasRunner && (
-          <button
-            className="btn sm"
-            disabled={noBench}
-            onClick={() => setSub('pinchrun')}
-            title="Pinch-runner: sostituisci un corridore in base"
-          >
-            Pinch-run
-          </button>
-        )}
-      </div>
     </div>
   ) : (
     <div className="card actionbar compact">
       <div className="ab-side left">
         <span className="turn-tag def">DIFESA · {sit.fieldingTeam.abbrev}</span>
+        <button
+          className="btn sm"
+          disabled={noRelievers}
+          onClick={() => setSub('pitcher')}
+          title="Cambio lanciatore: scegli un rilievo dal bullpen"
+        >
+          Cambio lanc.
+        </button>
+        <button
+          className="btn sm"
+          onClick={() => onOpenDefense?.()}
+          title="Gestione difesa: ruota i ruoli fra i difensori e sostituisci dalla panchina"
+        >
+          Gestione difesa
+        </button>
+      </div>
+      <div className="ab-main">
+        <button
+          className="btn primary sm"
+          onClick={() => act((g) => cpuOffenseTurn(g))}
+          title="La CPU decide la battuta (può anche rubare/buntare): premi «Lancia» per risolvere"
+        >
+          Lancia ▸
+        </button>
+      </div>
+      <div className="ab-side right">
         <button
           className="btn sm"
           onClick={() => act((g) => intentionalWalk(g))}
@@ -186,32 +213,6 @@ export function ActionBar({
           title="Difendi le righe: meno doppi/tripli concessi, al costo di qualche singolo (per proteggere un vantaggio)"
         >
           Difendi le righe
-        </button>
-      </div>
-      <div className="ab-main">
-        <button
-          className="btn primary sm"
-          onClick={() => act((g) => cpuOffenseTurn(g))}
-          title="La CPU decide la battuta (può anche rubare/buntare): premi «Lancia» per risolvere"
-        >
-          Lancia ▸
-        </button>
-      </div>
-      <div className="ab-side right">
-        <button
-          className="btn sm"
-          disabled={noRelievers}
-          onClick={() => setSub('pitcher')}
-          title="Cambio lanciatore: scegli un rilievo dal bullpen"
-        >
-          Cambio lanc.
-        </button>
-        <button
-          className="btn sm"
-          onClick={() => onOpenDefense?.()}
-          title="Gestione difesa: ruota i ruoli fra i difensori e sostituisci dalla panchina"
-        >
-          Gestione difesa
         </button>
       </div>
     </div>
