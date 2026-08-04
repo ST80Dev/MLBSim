@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { GameResult } from '../engine/game';
 import type { StatsMode } from './statlines';
+import type { GameStatCtx } from './stat-context';
 import { StatsToggle } from './game-lineup';
 import { LineScore, BoxScore } from './game-boxscore';
 
@@ -12,9 +13,13 @@ import { LineScore, BoxScore } from './game-boxscore';
 export function RecapModal({
   result,
   onClose,
+  ctxAway,
+  ctxHome,
 }: {
   result: GameResult;
   onClose: () => void;
+  ctxAway?: GameStatCtx;
+  ctxHome?: GameStatCtx;
 }) {
   const [statsMode, setStatsMode] = useState<StatsMode>('game');
   useEffect(() => {
@@ -41,8 +46,8 @@ export function RecapModal({
         <div className="modal-body">
           <LineScore result={result} />
           <div className="grid2">
-            <BoxScore team={result.away} stats={result.awayStats} mode={statsMode} />
-            <BoxScore team={result.home} stats={result.homeStats} mode={statsMode} />
+            <BoxScore team={result.away} stats={result.awayStats} mode={statsMode} ctx={ctxAway} />
+            <BoxScore team={result.home} stats={result.homeStats} mode={statsMode} ctx={ctxHome} />
           </div>
         </div>
       </div>

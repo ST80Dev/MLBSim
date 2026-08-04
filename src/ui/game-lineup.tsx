@@ -6,6 +6,7 @@ import { disambiguateLastNames } from '../engine/names';
 import type { Side } from './types';
 import { batterStatLine, pitcherStatLine, STATS_MODE_SHORT, STATS_MODE_TITLE } from './statlines';
 import type { StatsMode } from './statlines';
+import type { GameStatCtx } from './stat-context';
 import { TeamBadge, pitcherFatigue } from './widgets';
 import { PlayerLink } from './player-modal';
 import { decLabel } from './game-boxscore';
@@ -18,7 +19,7 @@ import { upperLast } from './format';
 
 const STATS_MODES: StatsMode[] = ['game', 'season', 'last'];
 
-/** Selettore modalità statistiche (Partita / Stagione / Carriera). */
+/** Selettore modalità statistiche (Partita / Stagione / Precedente). */
 export function StatsToggle({ mode, setMode }: { mode: StatsMode; setMode: (m: StatsMode) => void }) {
   return (
     <div className="stats-toggle" role="group" aria-label="Modalità statistiche">
@@ -26,7 +27,6 @@ export function StatsToggle({ mode, setMode }: { mode: StatsMode; setMode: (m: S
         <button
           key={m}
           className={`st-btn${mode === m ? ' active' : ''}`}
-          disabled={m === 'last'}
           title={STATS_MODE_TITLE[m]}
           onClick={() => setMode(m)}
         >
@@ -81,11 +81,14 @@ export function LineupSide({
   stats,
   side,
   sit,
+  ctx,
 }: {
   team: Team;
   stats: TeamGameStats;
   side: Side;
   sit: LiveSituation;
+  // Contesto per le stat di stagione/precedente (assente = solo modalità Partita).
+  ctx?: GameStatCtx;
 }) {
   // Selettori INDIPENDENTI per blocco (battitori vs lanciatori).
   const [batMode, setBatMode] = useState<StatsMode>('game');
@@ -100,7 +103,7 @@ export function LineupSide({
   const lineById = new Map(stats.batting.map((l) => [l.id, l]));
   const batRows = team.lineup.map((b) => {
     const line = lineById.get(b.id);
-    return { b, line, items: batterStatLine(batMode, line, b) };
+    return { b, line, items: batterStatLine(batMode, line, ctx?.batLine(batMode, b)) };
   });
   const batHead = batRows[0]?.items.map((i) => i.k) ?? [];
   const batLabels = disambiguateLastNames(team.lineup.map((b) => b.name));
@@ -111,8 +114,11 @@ export function LineupSide({
   const pits = stats.pitching;
   const lastPitIdx = pits.length - 1;
   const pitLabels = disambiguateLastNames(pits.map((p) => p.name));
+  const firstPit = pits.length > 0 ? pitById.get(pits[0].id) : undefined;
   const pitHead =
-    pits.length > 0 ? pitcherStatLine(pitMode, pits[0], pitById.get(pits[0].id)).map((i) => i.k) : [];
+    pits.length > 0
+      ? pitcherStatLine(pitMode, pits[0], firstPit && ctx?.pitLine(pitMode, firstPit)).map((i) => i.k)
+      : [];
   // Tabella lanciatori ad altezza fissa, scrollata sul lanciatore ATTUALE.
   const pitsRef = useRef<HTMLDivElement>(null);
   const curPitRef = useRef<HTMLTableRowElement>(null);
@@ -185,7 +191,7 @@ export function LineupSide({
               <tbody>
                 {pits.map((pl, idx) => {
                   const p = pitById.get(pl.id);
-                  const items = pitcherStatLine(pitMode, pl, p);
+                  const items = pitcherStatLine(pitMode, pl, p && ctx?.pitLine(pitMode, p));
                   const isCur = idx === lastPitIdx && sit.status === 'live';
                   const fat = p ? pitcherFatigue(p.role, p.stamina, pl.bf) : undefined;
                   const stateWord =

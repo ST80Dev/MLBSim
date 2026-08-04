@@ -1,4 +1,4 @@
-import type { Batter, Pitcher, Position } from '../engine/types';
+import type { Batter, Position } from '../engine/types';
 import type { BattingLine, PitchingLine } from '../engine/boxscore';
 import { formatAvg, formatIp } from '../engine/boxscore';
 import { RATING_AVG } from '../engine/ratings';
@@ -6,12 +6,12 @@ import type { SeasonBat, SeasonPit } from '../data/season';
 
 // Righe statistiche mostrate nella UI, in tre modalita':
 //  - 'game'   : statistiche della partita in corso (dato reale).
-//  - 'season' : proiezione di stagione derivata dalle DOTI (player.stats, ~650
-//               PA / 1000 BF). Non e' una stagione realmente giocata: e' il
-//               rendimento atteso dalle caratteristiche. L'accumulo vero arriva
-//               in Fase 4.
-//  - 'last'   : stagione precedente — NON disponibile finche' non esiste uno
-//               storico (Fase 4). La UI la tiene disabilitata.
+//  - 'season' : stagione IN CORSO, cumulata fino a questo momento. Reale per la
+//               squadra gestita, proiettata dalle doti per l'avversario. La riga
+//               accumulata (SeasonBat/SeasonPit) è passata dal chiamante (vedi
+//               stat-context.ts).
+//  - 'last'   : stagione PRECEDENTE (annata year-1), anch'essa passata dal
+//               chiamante come riga accumulata.
 export type StatsMode = 'game' | 'season' | 'last';
 
 export interface StatItem {
@@ -22,44 +22,47 @@ export interface StatItem {
 export const STATS_MODE_LABEL: Record<StatsMode, string> = {
   game: 'Partita',
   season: 'Stagione',
-  last: 'Carriera',
+  last: 'Precedente',
 };
 
-/** Iniziale per i pulsantini G/S/C. */
+/** Iniziale per i pulsantini G/S/P. */
 export const STATS_MODE_SHORT: Record<StatsMode, string> = {
   game: 'G',
   season: 'S',
-  last: 'C',
+  last: 'P',
 };
 
 export const STATS_MODE_TITLE: Record<StatsMode, string> = {
   game: 'Partita — statistiche di questa gara',
-  season: 'Stagione — proiezione dalle doti',
-  last: 'Carriera — disponibile con lo storico (Fase 4)',
+  season: 'Stagione — cumulata della stagione in corso, fino a questa gara',
+  last: 'Precedente — statistiche della stagione precedente',
 };
 
-/** Riga statistica di un battitore per la modalita' scelta. */
+/** Formatta un rateo (per 9 / whip): '—' se non ci sono inning lanciati. */
+function rate(outs: number, value: number, dec: number): string {
+  return outs > 0 ? value.toFixed(dec) : '—';
+}
+
+/** Riga statistica di un battitore per la modalita' scelta. Per 'season'/'last'
+ *  il chiamante passa la riga REALE accumulata (SeasonBat) dal contesto. */
 export function batterStatLine(
   mode: StatsMode,
   game: BattingLine | undefined,
-  b?: Batter,
+  season?: SeasonBat,
 ): StatItem[] {
-  if (mode === 'season' && b) {
-    const s = b.stats;
-    const ab = Math.max(1, s.pa - s.bb - s.hbp);
+  if (mode !== 'game' && season) {
+    const s = season;
+    const ab = Math.max(1, s.ab);
     const singles = Math.max(0, s.h - s.double - s.triple - s.hr);
     const avg = s.h / ab;
-    const obp = (s.h + s.bb + s.hbp) / Math.max(1, s.pa);
+    const obp = (s.h + s.bb) / Math.max(1, s.ab + s.bb);
     const slg = (singles + 2 * s.double + 3 * s.triple + 4 * s.hr) / ab;
-    // RBI: risultato di contesto, non un peripheral. Stima coerente con la
-    // proiezione del motore (data/projection.ts): fuoricampo + quota da valide.
-    const rbi = Math.round(s.hr * 1.65 + (s.h - s.hr) * 0.3);
     return [
       { k: 'AVG', v: formatAvg(avg) },
       { k: 'OBP', v: formatAvg(obp) },
       { k: 'SLG', v: formatAvg(slg) },
       { k: 'HR', v: String(s.hr) },
-      { k: 'RBI', v: String(rbi) },
+      { k: 'RBI', v: String(s.rbi) },
       { k: 'BB', v: String(s.bb) },
       { k: 'SO', v: String(s.so) },
       { k: 'SB', v: String(s.sb) },
@@ -78,21 +81,21 @@ export function batterStatLine(
   ];
 }
 
-/** Riga statistica di un lanciatore per la modalita' scelta. */
+/** Riga statistica di un lanciatore per la modalita' scelta. Per 'season'/'last'
+ *  il chiamante passa la riga REALE accumulata (SeasonPit) dal contesto. */
 export function pitcherStatLine(
   mode: StatsMode,
   game: PitchingLine | undefined,
-  p?: Pitcher,
+  season?: SeasonPit,
 ): StatItem[] {
-  if (mode === 'season' && p) {
-    const s = p.stats;
-    const outs = Math.max(1, s.bf - s.h - s.bb - s.hbp);
-    const ip = outs / 3;
+  if (mode !== 'game' && season) {
+    const s = season;
+    const ip = s.outs / 3;
     return [
-      { k: 'K/9', v: ((s.so / ip) * 9).toFixed(1) },
-      { k: 'BB/9', v: ((s.bb / ip) * 9).toFixed(1) },
-      { k: 'WHIP', v: ((s.h + s.bb) / ip).toFixed(2) },
-      { k: 'HR/9', v: ((s.hr / ip) * 9).toFixed(1) },
+      { k: 'ERA', v: rate(s.outs, (s.er / ip) * 9, 2) },
+      { k: 'WHIP', v: rate(s.outs, (s.h + s.bb) / ip, 2) },
+      { k: 'K/9', v: rate(s.outs, (s.so / ip) * 9, 1) },
+      { k: 'BB/9', v: rate(s.outs, (s.bb / ip) * 9, 1) },
       { k: 'SO', v: String(s.so) },
     ];
   }
