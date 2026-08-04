@@ -21,13 +21,34 @@ export const FIELD_SLOTS: readonly Position[] = [
  *   4 cleanup  -> potenza pura
  *   5          -> protezione: potenza secondaria
  *   6..9       -> per overall decrescente
- * Con meno di 5 battitori ripiega sul semplice overall (robustezza).
+ *
+ * ORDINE DI ASSEGNAZIONE: si reclamano PRIMA i posti da run-producer (4 → 3 → 5),
+ * poi leadoff/#2 pescano dai RESTANTI. Fondamentale: un bombardiere con OBP alto
+ * (Adam Dunn 2006: occhio 97 MA potenza 96) ha l'occhio più alto della squadra e,
+ * se il leadoff fosse scelto per primo, finirebbe assurdamente in testa. Prendendo
+ * prima il cleanup, lo slugger va al centro (dove segna), e il leadoff resta ai
+ * veri table-setter da OBP+velocità. Con meno di 5 battitori ripiega sull'overall.
  * NON muta l'input: ritorna un nuovo array.
  */
 export function autoLineup(batters: Batter[]): Batter[] {
+  return autoLineupBy(batters, (b) => b.ratings);
+}
+
+/**
+ * Come `autoLineup`, ma i punteggi si calcolano su `ratingsOf(b)` invece che su
+ * `b.ratings`. Serve al lineup "con forma" (`data/formLineup.ts`), che passa i
+ * rating MISCHIATI col rendimento in-season: la logica di ordinamento resta UNA
+ * sola (qui), il chiamante decide solo *quali rating* pesare. Le posizioni, gli
+ * id e gli oggetti Batter restituiti sono sempre quelli reali.
+ */
+export function autoLineupBy(
+  batters: Batter[],
+  ratingsOf: (b: Batter) => Batter['ratings'],
+): Batter[] {
   const pool = [...batters];
+  const ovr = (b: Batter) => batterOverall(ratingsOf(b), b.position);
   if (pool.length < 5) {
-    return pool.sort((a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position));
+    return pool.sort((a, b) => ovr(b) - ovr(a));
   }
 
   const take = (score: (b: Batter) => number): Batter => {
@@ -37,16 +58,18 @@ export function autoLineup(batters: Batter[]): Batter[] {
     }
     return pool.splice(best, 1)[0];
   };
-  const r = (b: Batter) => b.ratings;
+  const r = (b: Batter) => ratingsOf(b);
 
   const order: Batter[] = [];
-  order[0] = take((b) => r(b).eye * 1.0 + r(b).speed * 0.6); // leadoff
-  order[3] = take((b) => r(b).power * 1.0 + r(b).contact * 0.2); // cleanup
-  order[2] = take((b) => r(b).contact * 0.7 + r(b).power * 0.6 + r(b).eye * 0.3); // n.3
-  order[1] = take((b) => r(b).contact * 0.7 + r(b).eye * 0.7); // n.2
-  order[4] = take((b) => r(b).power * 0.9 + r(b).contact * 0.3); // n.5
+  // Run-producer PRIMA: i bastoni pesanti occupano il centro (4-3-5)…
+  order[3] = take((b) => r(b).power * 1.0 + r(b).contact * 0.2); // cleanup: potenza pura
+  order[2] = take((b) => r(b).contact * 0.7 + r(b).power * 0.6 + r(b).eye * 0.3); // n.3: miglior bastone
+  order[4] = take((b) => r(b).power * 0.9 + r(b).contact * 0.3); // n.5: protezione
+  // …poi i table-setter dai RESTANTI (gli slugger sono già stati presi).
+  order[0] = take((b) => r(b).eye * 1.0 + r(b).speed * 0.6); // leadoff: OBP + velocità
+  order[1] = take((b) => r(b).contact * 0.7 + r(b).eye * 0.7); // n.2: contatto + occhio
 
-  pool.sort((a, b) => batterOverall(b.ratings, b.position) - batterOverall(a.ratings, a.position));
+  pool.sort((a, b) => ovr(b) - ovr(a));
   let slot = 5;
   for (const b of pool) order[slot++] = b;
   return order;

@@ -71,10 +71,13 @@ describe('advanceWithResult', () => {
     expect(s1.bat[oppFirst.id]?.g).toBe(1);
     expect(s1.bat[myFirst.id]?.g).toBe(1);
     expect(s1.bat[oppFirst.id].hr).toBe(oppFirst.hr);
-    // Una squadra NON coinvolta ha solo il record, nessuna stat giocatore.
+    // Ora ANCHE le squadre non coinvolte nella mia partita accumulano stat reali:
+    // i loro incontri CPU-vs-CPU non sono più solo W/L, i box score (già calcolati
+    // da toGameResult, prima scartati) vengono accumulati → leaderboard reale e
+    // campione per il lineup "con forma".
     const other = teams.find((t) => t.id !== home.id && t.id !== away.id)!;
     const anyBat = other.lineup.some((b) => s1.bat[b.id] !== undefined);
-    expect(anyBat).toBe(false);
+    expect(anyBat).toBe(true);
   });
 
   it('quick-simula il resto della lega: tutte le squadre giocano', () => {

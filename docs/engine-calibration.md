@@ -607,3 +607,12 @@ Lo spread è **simmetrico attorno a 70** → allarga la varianza difensiva (tito
 (misurato ~5.98, epoca intatta). I fenomeni-da-posizionamento/framing (Vizquel,
 Andruw, Yadi-DIF) restano vicini al loro RF reale: allarghiamo il segnale che
 c'è, non ne inventiamo uno assente dai dati.
+
+**Difesa LANCIATORI — fallback seedato (mai 70 piatto).** Un lanciatore fielda
+poche palle: sopra ~400 InnOuts (i partenti) il Range Factor regge e la difesa è
+reale (Maddux 94, Kenny Rogers 86 — Gold Glove veri); sotto (i rilievi, il grosso
+dello staff) il RF su 5-15 palle è rumore. Prima ripiegavano tutti su 70 (~70% dei
+lanciatori identici, mentre i generati spaziano 40-86). Ora, chi non ha campione
+prende un valore **seedato dall'id** (`seededPitField`): ~N(70, 9), coerente e
+stabile a ogni rigenerazione (stesso id → stesso rating). Non finge un dato assente,
+dà varietà plausibile → solo ~3% resta a 70, range 49-95, come la lega generata.

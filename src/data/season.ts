@@ -3,6 +3,7 @@ import type { GameResult, TeamGameStats } from '../engine/game';
 import { createLiveGame, quickSim, toGameResult } from '../engine/game';
 import { makeRng } from '../engine/rng';
 import { withRotationStarter } from './generator';
+import { withFormLineup } from './formLineup';
 import type { RotationState, PitcherUsage } from './rotation';
 import { createRotation, recordUsage } from './rotation';
 
@@ -226,19 +227,26 @@ export function advanceWithResult(
   }));
   next.rotation = usage.length ? recordUsage(rot0, usage, season.day) : rot0;
 
-  // Resto della lega: quick-sim per una classifica reale.
+  // Resto della lega: quick-sim per una classifica reale. Ora si ACCUMULANO anche
+  // i box score di queste partite (già calcolati da toGameResult, prima scartati):
+  // così OGNI squadra ha stat in-season reali → leaderboard reale e, soprattutto,
+  // il lineup CPU "con forma" (`withFormLineup`) ha un campione vero su cui pesare
+  // il rendimento. Il lineup si ri-ordina PRIMA della simulazione, sui rating +
+  // forma accumulata FINORA (`season.bat`, snapshot pre-giornata).
   const busy = new Set([result.home.id, result.away.id]);
   for (const [a, b] of otherPairings(teams, busy, seed, season.day)) {
-    // Ruota il partente col giorno: senza, ogni squadra lancerebbe l'asso ogni
-    // partita (rotazione ordinata). Così i 5 SP girano lungo la stagione.
-    const aS = withRotationStarter(a, season.day);
-    const bS = withRotationStarter(b, season.day);
+    // Lineup con forma (CPU) poi rotazione del partente col giorno (senza, ogni
+    // squadra lancerebbe l'asso ogni partita). I due wrap sono indipendenti.
+    const aS = withRotationStarter(withFormLineup(a, season.bat), season.day);
+    const bS = withRotationStarter(withFormLineup(b, season.bat), season.day);
     const g = createLiveGame(aS, bS, (seed ^ Math.imul(season.day + 1, a.id.length + 7)) >>> 0);
     quickSim(g);
     const r = toGameResult(g);
     const wId = r.winner === 'home' ? b.id : a.id;
     const lId = r.winner === 'home' ? a.id : b.id;
     bumpRecord(next.records, wId, lId);
+    accumulate(next, r.homeStats);
+    accumulate(next, r.awayStats);
   }
 
   next.day = season.day + 1;
