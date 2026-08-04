@@ -56,19 +56,25 @@ export function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?
   const reveal = () => revealRef.current?.();
 
   useEffect(() => {
-    if (len <= seenRef.current) {
-      seenRef.current = len;
+    const prev = seenRef.current;
+    seenRef.current = len;
+    if (len <= prev) {
       reveal(); // nessuna telecronaca da animare: marker allineati subito.
       return;
     }
-    seenRef.current = len;
-    const ev = plays[len - 1];
-    // La sostituzione (pinch-hit) non e' una giocata: niente banner.
-    if (ev.kind === 'sub') {
+    // Ultima giocata VERA del nuovo blocco: una sostituzione (es. cambio AI in
+    // coda al turno, o pinch-hit) non è una "giocata" con verdetto e NON deve
+    // nascondere la telecronaca dell'azione vera appena giocata. Cerco a ritroso
+    // l'ultima non-sub tra le giocate nuove.
+    let idx = len - 1;
+    while (idx >= prev && plays[idx].kind === 'sub') idx--;
+    if (idx < prev) {
+      // Solo sostituzioni: niente banner, rivela subito.
       setState(null);
       reveal();
       return;
     }
+    const ev = plays[idx];
     const offenseIsAway = ev.half === 'top';
     const off = offenseIsAway ? result.away : result.home;
     const def = offenseIsAway ? result.home : result.away;
