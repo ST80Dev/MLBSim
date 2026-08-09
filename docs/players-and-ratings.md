@@ -388,13 +388,25 @@ sono una stima per pilotare il motore (vedi `docs/roadmap-and-status.md` § Fase
 
 ## Evoluzione età/potenziale
 
-In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`):
+In `src/engine/aging.ts` (`advanceSeasonBatter`, `advanceSeasonPitcher`) — curva
+d'età **DILATATA** (picco e declino più tardi e più morbidi, più vicini alle
+curve reali):
 - **< 27 anni**: crescita verso il potenziale (più rapida da giovanissimi).
-- **27-30**: picco, stabile.
-- **> 30**: declino; calano **prima le doti fisiche** (Potenza, Velocità,
-  Dominio, Resistenza, Braccio) e **poi le tecniche** (Contatto, Occhio,
-  Controllo, Movimento, Difesa).
+- **27-31**: picco **stabile** (plateau esteso di un anno rispetto alla prima
+  versione, che si fermava a 30).
+- **≥ 32**: declino; la **pendenza parte più dolce** (a 34 si cede ~4 dal picco,
+  non ~8 come prima) e il **rumore cresce con l'età** (`sd` che sale con gli
+  anni): oltre una certa età le stagioni diventano **più volatili** — annate
+  ottime o pessime rispetto alla propria media, non solo un lento declino piatto.
+  Il rumore è **simmetrico/mean-neutral** (allarga le code, non sposta la media di
+  lega). Calano **prima le doti fisiche** (Potenza, Velocità, Dominio, Resistenza,
+  Braccio) e **poi le tecniche** (Contatto, Occhio, Controllo, Movimento, Difesa).
 - **Ritiro** automatico quando età alta + overall crollato.
+
+> **Vale sia per la lega generata sia per l'import storico**: l'aging gira nel
+> rollover d'off-season (`ageAndRetire`), che invecchia le squadre a prescindere
+> dall'origine. Cambia solo dal **primo rollover** (anno 2+); lo snapshot iniziale
+> di un'annata storica e la Fase 0 generata restano invariati.
 - Dopo l'evoluzione le statistiche vengono ri-derivate dalle nuove caratteristiche.
 - Lo **stipendio** viene ri-derivato con `salaryFor(overall, età)`: cala coi
   veterani in declino, sale coi giovani che maturano (doppia spinta overall +
@@ -407,9 +419,10 @@ in anno, così il futuro resta aperto e non lo si "legge" dalla rosa fin dal
 primo giorno. `driftPotential` (in `aging.ts`) muove il tetto **senza consumare
 RNG** (drift = funzione deterministica della coda già estratta + segnale di
 rendimento), per non disturbare calibrazione né stream degli avanzamenti:
-- **Breakout** → il soffitto si alza (talento emerso oltre le attese);
+- **Breakout / late_bloom** → il soffitto si alza (talento emerso oltre le
+  attese, anche **tardivo**: un guizzo a 33/34 rialza il tetto per quell'anno);
   **bust/crollo** → si abbassa (il prospetto che non sboccia). Deriva dallo
-  `shift` di `developmentTail`, che ora ritorna `{ shift, kind }`.
+  `shift` di `developmentTail`, che ritorna `{ shift, kind }`.
 - **`perf`** — parametro opzionale (default `0` = neutro): segnale di
   rendimento/utilizzo stagionale, **simmetrico** tra squadra umana (dai box score
   reali, `data/season.ts`) e 29 CPU (dalla stagione proiettata, `data/projection.ts`),
@@ -433,8 +446,10 @@ stabile per giocatore (seed sull'id) ma volutamente imprecisa:
 - **giovane con margine** → `▲lo-hi` (upside, ampiezza cresce con gioventù e
   margine; la fascia *contiene* il potenziale vero senza rivelarlo);
 - **picco / nessun margine** → numero secco;
-- **veterano (> 30)** → `▼lo-hi` **inferiore all'attuale**, stimato dalla curva di
-  declino di `seasonDelta`: la tensione si sposta sul "quanto in fretta cala?".
+- **veterano (> 31)** → `▼lo-hi` **inferiore all'attuale**, stimato dalla curva di
+  declino (dilatata) di `seasonDelta`: la tensione si sposta sul "quanto in fretta
+  cala?". La **banda si allarga con l'età** (stagioni più volatili) e il tooltip
+  ricorda che un **guizzo tardivo resta possibile** (non atteso).
 
 ### Impiego → crescita (design Fase 4, non ancora attivo)
 
@@ -462,8 +477,21 @@ non sai in anticipo quale giovane diventerà campione).
 fanno **divergere la carriera** dalla media (e dalla realtà storica):
 - giovani (< 28): ~6% **breakout** (salto inatteso), ~7% **bust/stallo** (il
   prospetto che non sboccia) → il talento *tende* a emergere, ma non è garantito;
-- veterani (≥ 31): ~8% **crollo** extra (infortunio/caduta improvvisa).
+- maturi/veterani (28-35): ~4% **tarda fioritura** (`late_bloom`) — il guizzo di
+  1-2 stagioni oltre le attese (l'annata speciale a 33/34), dopo cui il declino
+  d'età riprende a erodere il bump; dai 31 in su convive col ~8% di **crollo**;
+- oltre i 35: solo ~8% **crollo** (niente più fioriture tardive).
 
-Misurato: 400 carriere con **partenza identica** (giovane, potenziale 78) su 5
-stagioni finiscono tra ~64 e 80 di overall (sd ~2.6) — imprevedibilità reale nei
-singoli, pur mantenendo il **trend medio** corretto (il talento cresce comunque).
+Il positivo (`late_bloom` 4%) resta **meno probabile** del negativo (`collapse`
+8% dai 31): la coda dei 30+ è **netto-negativa**, quindi **non gonfia la media di
+lega**. Misurato sulla franchigia storica 1999 su 9 anni: la forza media
+*declina* (bat 71→64, pit 70→65) e — decisivo — l'ambiente-punti **R/G resta
+invariato** (~5.3 → ~4.2, come col modello precedente), perché battitori e
+lanciatori si irrobustiscono/calano **insieme** e si cancellano nel Log5. La
+dilatazione della curva rende quindi le carriere più realistiche **a costo zero
+sull'epoca**. La varianza anno-su-anno dei 30+ sale (ΔOVR sd ~2.0 → ~2.3):
+stagioni ottime/pessime rispetto alla propria media diventano possibili.
+
+Misurato anche: 400 carriere con **partenza identica** (giovane, potenziale 78)
+su 5 stagioni finiscono tra ~64 e 80 di overall (sd ~2.6) — imprevedibilità reale
+nei singoli, pur mantenendo il **trend medio** corretto (il talento cresce comunque).

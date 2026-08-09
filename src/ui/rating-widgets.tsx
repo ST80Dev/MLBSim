@@ -70,17 +70,22 @@ export type Outlook = { dir: 'up' | 'flat' | 'down'; lo: number; hi: number };
 // si legge il futuro esatto in anticipo.
 //  - giovane con margine    -> ▲ verso l'alto (upside dal potenziale, offuscato)
 //  - picco / nessun margine  -> numero secco (flat)
-//  - veterano (> 30)         -> ▼ verso il basso (declino stimato dalla curva
-//    d'età: fascia inferiore all'attuale)
+//  - veterano (> 31)         -> ▼ verso il basso (declino stimato dalla curva
+//    d'età DILATATA: plateau fino a 31, poi discesa piu' morbida ma piu' VOLATILE
+//    — la fascia si allarga con l'eta'). Il bordo alto resta all'attuale: un
+//    guizzo tardivo e' possibile ma non atteso.
 // La fascia CONTIENE il valore vero (stima onesta), ma con ampiezza e posizione
 // variabili per giocatore (seed sull'id): il tetto esatto resta nascosto.
 export function growthOutlook(id: string, overall: number, potential: number, age: number): Outlook {
   const seed = hash01(id);
-  if (age > 30) {
-    // Declino: fascia INFERIORE all'attuale, dal calo atteso (~ (età-30)/anno).
-    const dec = Math.max(1, Math.min(9, Math.round((age - 30) * 0.7)));
+  if (age > 31) {
+    // Declino dai 32 (curva dilatata): pendenza dolce a inizio 30, ma banda piu'
+    // AMPIA — le stagioni dei veterani sono piu' volatili (annate ottime/pessime
+    // rispetto alla propria media). La spanna cresce con l'eta'.
+    const over = age - 31;
+    const dec = Math.max(1, Math.min(11, Math.round(over * 0.9 + 1)));
     const hi = Math.max(40, overall - Math.round(seed));
-    const lo = Math.max(40, Math.min(hi, overall - dec - Math.round(seed * 2)));
+    const lo = Math.max(40, Math.min(hi, overall - dec - Math.round(seed * 3)));
     return { dir: 'down', lo, hi };
   }
   const margin = potential - overall;
@@ -136,7 +141,7 @@ export function PotCell({ id, overall, potential, age }: { id: string; overall: 
   const title =
     o.dir === 'up'
       ? `Crescita stimata ~${o.lo}-${o.hi} (stima da scout, non il tetto esatto)`
-      : `Declino stimato ~${o.lo}-${o.hi} col progredire dell'età (stima da scout)`;
+      : `Declino stimato ~${o.lo}-${o.hi} — annate piu' volatili con l'età, un guizzo tardivo resta possibile (stima da scout)`;
   return (
     <td className="pot-c">
       <span className={`pot-num ${o.dir}`} title={title}>
