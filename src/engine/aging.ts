@@ -11,10 +11,17 @@ import {
 import type { Rng } from './rng';
 
 /**
- * Variazione stagionale di una singola dote.
+ * Variazione stagionale di una singola dote. Curva d'eta' DILATATA (picco e
+ * declino piu' tardi e piu' morbidi della prima versione, piu' vicini alle curve
+ * reali: un 34enne non e' gia' a -6 dal picco):
  *  - < 27 anni: cresce verso il potenziale (piu' in fretta da giovanissimi)
- *  - 27-30: stabile
- *  - > 30: cala; le doti FISICHE calano piu' in fretta delle TECNICHE
+ *  - 27-31: picco stabile (plateau esteso di un anno)
+ *  - >= 32: cala; le doti FISICHE calano piu' in fretta delle TECNICHE. La
+ *    pendenza parte piu' dolce (32-34 quasi piatto) e il RUMORE CRESCE con l'eta'
+ *    (sd che sale con gli anni): oltre una certa eta' le stagioni sono piu'
+ *    volatili — annate ottime o pessime rispetto alla propria media diventano
+ *    possibili, non solo un lento declino piatto. Il rumore e' simmetrico
+ *    (mean-neutral): allarga le code, non sposta la media di lega.
  */
 function seasonDelta(
   age: number,
@@ -26,33 +33,42 @@ function seasonDelta(
     const rate = age < 23 ? 0.4 : 0.22;
     return Math.max(0, overallGap * rate) + rng.gauss(0, 0.8);
   }
-  if (age <= 30) return rng.gauss(0, 0.8);
-  const factor = physical ? 0.75 : 0.35;
-  return -((age - 30) * factor) + rng.gauss(0, 0.8);
+  if (age <= 31) return rng.gauss(0, 0.8);
+  const over = age - 31;
+  const factor = physical ? 0.62 : 0.28;
+  const noise = Math.min(2.6, 0.8 + over * 0.28); // "dado" piu' largo coi veterani
+  return -(over * factor) + rng.gauss(0, noise);
 }
 
-type DevKind = 'breakout' | 'bust' | 'collapse' | 'none';
+type DevKind = 'breakout' | 'bust' | 'late_bloom' | 'collapse' | 'none';
 
 /**
  * Coda rara di sviluppo, a livello di STAGIONE (non di singola dote): fa
  * DIVERGERE la carriera dalla media e dalla realta' storica, cosi' non sai in
- * anticipo chi sara' campione.
+ * anticipo chi sara' campione — ne' chi avra' un guizzo tardivo.
  *  - giovani (< 28): ~6% BREAKOUT (salto inatteso), ~7% BUST/stallo (il
  *    prospetto che non sboccia) -> il talento *tende* a emergere, ma non e' certo.
- *  - veterani (>= 31): ~8% CROLLO extra (infortunio/caduta improvvisa).
+ *  - maturi/veterani (28-35): ~4% TARDA FIORITURA (`late_bloom`): un guizzo di
+ *    1-2 stagioni oltre le attese (l'annata speciale a 33/34), dopo la quale il
+ *    declino d'eta' riprende a erodere il bump. Dai 31 in su convive col ~8% di
+ *    CROLLO (infortunio/caduta improvvisa).
+ *  - oltre i 35: solo ~8% di CROLLO (niente piu' fioriture tardive).
+ * Il positivo (late_bloom 4%) resta MENO probabile del negativo (collapse 8%):
+ * la coda dei 30+ e' netto-negativa, quindi NON gonfia la media di lega
+ * (verificato: la franchigia deriva verso il basso, non verso l'alto).
  * Ritorna lo `shift` UNIFORME applicato a tutte le doti dell'anno (0 = anno
- * ordinario, governato solo dalla curva d'eta') e il `kind` dell'evento, che
- * serve anche a muovere il TETTO (vedi `driftPotential`). L'ordine di consumo
- * RNG (un `next()`, poi un `gauss` solo nel ramo dell'evento) e' invariato
- * rispetto alla versione precedente.
+ * ordinario) e il `kind`, che serve anche a muovere il TETTO (`driftPotential`).
  */
 function developmentTail(age: number, rng: Rng): { shift: number; kind: DevKind } {
   const roll = rng.next();
   if (age < 28) {
     if (roll < 0.06) return { shift: rng.gauss(5, 1.5), kind: 'breakout' };
     if (roll < 0.13) return { shift: -rng.gauss(4, 1.5), kind: 'bust' };
-  } else if (age >= 31) {
-    if (roll < 0.08) return { shift: -rng.gauss(5, 2), kind: 'collapse' };
+  } else if (age <= 35) {
+    if (roll < 0.04) return { shift: rng.gauss(4, 1.5), kind: 'late_bloom' };
+    if (age >= 31 && roll < 0.12) return { shift: -rng.gauss(5, 2), kind: 'collapse' };
+  } else if (roll < 0.08) {
+    return { shift: -rng.gauss(5, 2), kind: 'collapse' };
   }
   return { shift: 0, kind: 'none' };
 }
@@ -63,7 +79,8 @@ function developmentTail(age: number, rng: Rng): { shift: number; kind: DevKind 
  * lo si "legge" in anticipo dalla rosa). NON consuma RNG: il drift e' una
  * funzione DETERMINISTICA della coda gia' estratta + segnale di rendimento, per
  * non disturbare la calibrazione ne' lo stream degli avanzamenti.
- *  - **Breakout** -> il soffitto si alza (talento emerso oltre le attese).
+ *  - **Breakout / late_bloom** -> il soffitto si alza (talento emerso oltre le
+ *    attese, anche tardivo: un guizzo a 33/34 rialza il tetto per quell'anno).
  *  - **Bust / crollo** -> il soffitto sfuma (il prospetto che non sboccia).
  *  - **`perf`** (opzionale, default 0 = neutro): segnale di rendimento/utilizzo
  *    stagionale per l'aggancio futuro alle statistiche reali. `perf > 0` (sopra
