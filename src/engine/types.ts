@@ -95,6 +95,14 @@ export interface Batter extends CareerProfile {
    * `ratingsAtPosition`). L'assenza = giocatore mono-ruolo.
    */
   secondaryPosition?: Position;
+  /**
+   * Ruolo naturale ORIGINARIO, catturato quando `position` viene ri-usato come
+   * "casella attuale" da un assetto (`buildManagedTeam`) o da un riallineamento in
+   * partita (che MUTANO `position`). Serve alla UI per mostrare il ruolo naturale
+   * anche quando il giocatore è schierato altrove. Assente = mai spostato: il
+   * naturale coincide con `position`.
+   */
+  nativePosition?: Position;
   ratings: BatterRatings;
   stats: BatterStats; // derivate dalle ratings
 }

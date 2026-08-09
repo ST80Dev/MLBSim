@@ -33,11 +33,14 @@ function ratBadge(v: number) {
   );
 }
 
-/** Etichetta ruoli: casella/ruolo principale + eventuale seconda posizione. */
+/** Etichetta ruoli NATURALI: ruolo principale (naturale, non la casella attuale) +
+ *  eventuale seconda posizione. Usa `nativePosition` se il giocatore è schierato
+ *  fuori ruolo (là `position` è la casella attuale), altrimenti `position`. */
 function roles(b: Batter): string {
-  return b.secondaryPosition && b.secondaryPosition !== b.position
-    ? `${b.position} / ${b.secondaryPosition}`
-    : b.position;
+  const primary = b.nativePosition ?? b.position;
+  return b.secondaryPosition && b.secondaryPosition !== primary
+    ? `${primary} / ${b.secondaryPosition}`
+    : primary;
 }
 
 export function DefenseModal({
@@ -115,7 +118,7 @@ export function DefenseModal({
             {upperLast(b.name)}
           </PlayerLink>
         </td>
-        <td className="l def-sec">{b.secondaryPosition ?? '—'}</td>
+        <td className="l def-sec">{roles(b)}</td>
         <td className="c">
           <span className="def-ovr" style={{ background: ratingColor(batterOverall(b.ratings)) }}>
             {batterOverall(b.ratings)}
@@ -186,9 +189,11 @@ export function DefenseModal({
           <table className="def-tbl">
             <thead>
               <tr>
-                <th className="c">Casella</th>
+                <th className="c" title="Casella difensiva occupata ora">Casella</th>
                 <th className="l">Giocatore</th>
-                <th className="l">2ª pos.</th>
+                <th className="l" title="Ruoli naturali: principale / seconda posizione">
+                  Ruoli
+                </th>
                 <th className="c" title="Valore totale">OVR</th>
                 <th className="c" title="Difesa">DIF</th>
                 <th className="c" title="Braccio">BRA</th>
