@@ -27,6 +27,72 @@ interface Spot {
 
 const VB = { w: 900, h: 420 };
 
+// ---------------------------------------------------------------------------
+// Colori marker DISTINTI per le due squadre del match. I difensori prendono il
+// colore della squadra in difesa, il battitore quello dell'attacco: se i due
+// colori-squadra sono troppo simili (es. CHC blu vs COL blu/viola) uno viene
+// spinto su un colore di forte contrasto (rosso, arancio, magenta, ciano) così
+// a colpo d'occhio si distingue chi è chi. Ancora sul colore di CASA (padrone
+// dello stadio); si adatta quello ospite.
+// ---------------------------------------------------------------------------
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, l];
+}
+/** Distanza percettiva approssimata (tinta + luminosità); l'hue pesa più quando
+ *  entrambi i colori sono saturi. */
+function colorDistance(a: string, b: string): number {
+  const ra = hexToRgb(a), rb = hexToRgb(b);
+  if (!ra || !rb) return 999;
+  const [ha, sa, la] = rgbToHsl(...ra);
+  const [hb, sb, lb] = rgbToHsl(...rb);
+  let dh = Math.abs(ha - hb);
+  if (dh > 180) dh = 360 - dh; // 0..180
+  const dl = Math.abs(la - lb) * 180; // porta la luminosità su scala comparabile
+  const sat = Math.min(sa, sb);
+  return dh * (0.35 + 0.65 * sat) + dl * 0.8;
+}
+/** Scurisce un colore hex del fattore dato (0..1) per il bordo del marker. */
+function shade(hex: string, f: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const [r, g, b] = rgb.map((c) => Math.round(c * f));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+// Colori di ripiego ad alto contrasto (NO oro: è riservato ai corridori in base).
+const CONTRAST_FALLBACKS = ['#e5484d', '#e8590c', '#c026d3', '#0ea5e9', '#16a34a'];
+const MIN_CONTRAST = 55;
+/** Colori marker per le due squadre, garantiti distinti tra loro. */
+export function matchMarkerColors(home: Team, away: Team): { home: string; away: string } {
+  const anchor = home.primaryColor || '#3a7d3a';
+  const cands = [away.primaryColor, away.secondaryColor, ...CONTRAST_FALLBACKS].filter(
+    Boolean,
+  ) as string[];
+  const awayColor =
+    cands.find((c) => colorDistance(anchor, c) >= MIN_CONTRAST) ?? CONTRAST_FALLBACKS[0];
+  return { home: anchor, away: awayColor };
+}
+
+
 // Geometria BASE (calibrazione neutra). Casa base = perno.
 const BASE = {
   HOME: { x: 450, y: 394 },
@@ -270,8 +336,12 @@ export function Diamond({
   // colore della squadra in difesa, battitore e corridori con quello dell'attacco
   // (la squadra che NON difende). Così non sono più tutti fissi su casa/difesa.
   const offenseTeam = fielders.id === home.id ? away : home;
-  const defColor = fielders.primaryColor || '#e3ecff';
-  const offColor = offenseTeam.primaryColor || '#ffd15c';
+  // Colori DISTINTI garantiti: se difesa e attacco hanno colori-squadra troppo
+  // simili, uno viene spostato su un colore di forte contrasto (vedi
+  // matchMarkerColors). Ancora su casa; si adatta l'ospite.
+  const mk = matchMarkerColors(home, away);
+  const defColor = (fielders.id === home.id ? mk.home : mk.away) || '#e3ecff';
+  const offColor = (offenseTeam.id === home.id ? mk.home : mk.away) || '#ffd15c';
   const primary = home.primaryColor || '#3a7d3a';
   const secondary = home.secondaryColor || '#1b2947';
   // Foto scelta in calibrazione (variante) oppure la principale dello stadio.
