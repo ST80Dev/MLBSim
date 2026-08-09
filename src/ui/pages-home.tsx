@@ -6,6 +6,7 @@ import type { ScheduleGame, Schedule } from '../data/schedule';
 import { teamById, divisionRivals, LEAGUE_LABEL, DIVISION_LABEL } from '../data/league';
 import { rosterBatters, rosterPitchers } from '../engine/arrangement';
 import { withRotationStarter, rotationPhase } from '../data/generator';
+import { suggestedStarter } from '../data/rotation';
 import { pitcherOverall } from '../engine/ratings';
 import { ratingColor } from './format';
 import { TeamBadge } from './widgets';
@@ -374,7 +375,19 @@ function MatchCard({
   season: SeasonState;
   onPlay: (g: ScheduleGame) => void;
 }) {
-  const mySP = managedTeam.rotation[i % managedTeam.rotation.length];
+  // Partente MIO: `managedTeam` è già la squadra CON l'assetto (rotazione come l'ha
+  // sistemata l'utente). Per la gara CORRENTE uso la stessa scelta della gara reale
+  // (`suggestedStarter`: il primo in ordine non a riposo, dallo stato riposo reale);
+  // per le altre giornate una proiezione posizionale del ciclo (che rispetta il
+  // riposo di una rotazione sana e coincide col consigliato).
+  const rotIds = managedTeam.rotation.map((p) => p.id);
+  const myId =
+    rotIds.length === 0
+      ? undefined
+      : i === season.day
+        ? suggestedStarter(season.rotation, rotIds, season.day)
+        : rotIds[i % rotIds.length];
+  const mySP = managedTeam.rotation.find((p) => p.id === myId) ?? managedTeam.rotation[0];
   // Partente avversario: STESSA formula della gara reale (App.tsx `teams`), cioè
   // rotazione posizionale per giorno + lo sfasamento proprio della squadra
   // (`rotationPhase`). Senza la fase il card mostrava un partente e ne giocava un

@@ -220,6 +220,13 @@ export function App() {
   // La squadra gestita gioca in casa/trasferta secondo il calendario.
   const controlled: Side = activeGame && activeGame.home === false ? 'away' : 'home';
   const arrangement = arrangements[myId];
+  // Squadra gestita CON l'assetto applicato (rotazione/lineup/bullpen come li ha
+  // sistemati l'utente): la dashboard/calendario deve mostrare la rotazione REALE
+  // (le modifiche al roster), non l'ordine di lega di inizio stagione.
+  const managedArranged = useMemo(
+    () => applyArrangement(managedTeam, arrangement),
+    [managedTeam, arrangement],
+  );
   // Partente scelto per OGGI dalla UI (override); null = usa il consigliato dal
   // ciclo di rotazione (rispetta il riposo). Si azzera al cambio gara/giorno.
   const [todayStarter, setTodayStarter] = useState<string | null>(null);
@@ -879,7 +886,7 @@ export function App() {
       {view === 'home' && (
         <HomePage
           league={league}
-          managedTeam={managedTeam}
+          managedTeam={managedArranged}
           schedule={schedule}
           season={season}
           playoff={playoff}
