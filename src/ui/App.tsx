@@ -413,7 +413,10 @@ export function App() {
   const shownFinal = shownScore.sit.status === 'final';
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
-  const inLiveGame = view === 'game' && !!activeGame && !final;
+  // Blocco navigazione finché la partita è "in corso" per il GIOCATORE: usa lo
+  // stato RIVELATO, così le sezioni non si sbloccano (anticipando la fine) prima
+  // che la telecronaca dell'ultimo turno arrivi al verdetto.
+  const inLiveGame = view === 'game' && !!activeGame && !shownFinal;
   // Sfondo-stadio ambientale (attenuato) dietro tutta la plancia: riempie i bordi
   // e sfuma sotto testata/pannelli, per ridurre il nero. La stessa foto scelta.
   // Layout "immersivo" (100% altezza + sfondo) sia in partita sia in calibrazione.
@@ -805,7 +808,7 @@ export function App() {
               <button className="btn" onClick={() => setRecapOpen(true)}>
                 Recap
               </button>
-              {final ? (
+              {shownFinal ? (
                 <button className="btn primary" onClick={finishGame}>
                   {finishLabel}
                 </button>
@@ -862,7 +865,7 @@ export function App() {
         />
       )}
 
-      {view === 'game' && activeGame && defenseOpen && !final && (
+      {view === 'game' && activeGame && defenseOpen && !shownFinal && (
         <DefenseModal
           live={live}
           act={(fn) => {
