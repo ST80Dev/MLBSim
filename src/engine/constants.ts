@@ -348,7 +348,9 @@ export const TUNING = {
     pbPerCatch: 0.005,
     pbMin: 0.002,
     pbMax: 0.026,
-    balk: 0.003,
+    // Balk fisso, dimezzato per allinearlo alla MLB reale (~0.06/gara both, prima
+    // ~2x): su ~34-40 turni-con-corridori a gara → ~0.06/gara.
+    balk: 0.0015,
     homeBase: 0.5,
     homePerSpeed: 0.09,
     homeMin: 0.25,
