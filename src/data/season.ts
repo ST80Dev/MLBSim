@@ -2,6 +2,8 @@ import type { Team } from '../engine/types';
 import type { GameResult, TeamGameStats } from '../engine/game';
 import { createLiveGame, quickSim, toGameResult } from '../engine/game';
 import { makeRng } from '../engine/rng';
+import { synthesizeStolenBases } from '../engine/leagueSteals';
+import { rosterBatters } from '../engine/arrangement';
 import { withRotationStarter } from './generator';
 import { withFormLineup } from './formLineup';
 import type { RotationState, PitcherUsage } from './rotation';
@@ -240,9 +242,17 @@ export function advanceWithResult(
     // squadra lancerebbe l'asso ogni partita). I due wrap sono indipendenti.
     const aS = withRotationStarter(withFormLineup(a, season.bat), season.day);
     const bS = withRotationStarter(withFormLineup(b, season.bat), season.day);
-    const g = createLiveGame(aS, bS, (seed ^ Math.imul(season.day + 1, a.id.length + 7)) >>> 0);
+    const gseed = (seed ^ Math.imul(season.day + 1, a.id.length + 7)) >>> 0;
+    const g = createLiveGame(aS, bS, gseed);
     quickSim(g);
     const r = toGameResult(g);
+    // Rubate SINTETIZZATE su RNG DEDICATO: il quick-sim non modella i furti (per
+    // non alterare la calibrazione), quindi le aggiungiamo qui sopra il box score
+    // senza toccare lo stream della simulazione. Così ogni squadra CPU accumula
+    // SB/CS reali guidate dalla Velocità (leaderboard rubate sensata).
+    const stealRng = makeRng((gseed ^ 0x51ea15) >>> 0);
+    synthesizeStolenBases(rosterBatters(aS), r.awayStats, stealRng);
+    synthesizeStolenBases(rosterBatters(bS), r.homeStats, stealRng);
     const wId = r.winner === 'home' ? b.id : a.id;
     const lId = r.winner === 'home' ? a.id : b.id;
     bumpRecord(next.records, wId, lId);

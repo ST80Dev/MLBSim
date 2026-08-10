@@ -359,7 +359,6 @@ export function App() {
   }, [homeId, gnum, leagueSeed]);
   const result = toGameResult(live);
   const sit = situation(live);
-  const final = live.status === 'final';
   // Contesti stat per il boxscore: la squadra gestita usa i valori REALI
   // accumulati in stagione; l'avversario una proiezione dalle doti. La riga
   // "Precedente" è la proiezione dell'annata scorsa. Costruzione leggera: le
@@ -367,18 +366,6 @@ export function App() {
   // schermo (accessori lazy).
   const ctxAway = makeGameStatCtx(result.away, season, leagueSeed, controlled === 'away');
   const ctxHome = makeGameStatCtx(result.home, season, leagueSeed, controlled === 'home');
-
-  // Apertura automatica del pannello difesa: quando l'umano PASSA in difesa
-  // (batteva, ora schiera) dopo aver usato un pinch-hit/run, così può riorganizzare
-  // lo schieramento prima del primo lancio. `sit.controlledBatting` = l'umano batte.
-  const controlledBatting = sit.controlledBatting;
-  useEffect(() => {
-    if (prevControlledBatting.current && !controlledBatting && pendingDefReview.current && !final) {
-      pendingDefReview.current = false;
-      setDefenseOpen(true);
-    }
-    prevControlledBatting.current = controlledBatting;
-  }, [controlledBatting, final]);
 
   // --- Rivelazione ritardata dei marker sulle basi -------------------------
   // I marker (basi + corridori sul diamante) NON si spostano appena eseguito il
@@ -418,6 +405,27 @@ export function App() {
   // dell'ultimo turno ha raggiunto il verdetto (stato ritardato), non appena la
   // partita finisce nel motore. Fino ad allora la barra resta in attesa.
   const shownFinal = shownScore.sit.status === 'final';
+
+  // Apertura automatica del pannello difesa: quando l'umano PASSA in difesa
+  // (batteva, ora schiera) dopo aver usato un pinch-hit/run, così può riorganizzare
+  // lo schieramento prima del primo lancio. Si basa sullo stato RIVELATO dalla
+  // telecronaca (`shownScore`), NON su quello grezzo del motore: altrimenti il
+  // pannello comparirebbe appena il motore chiude il mezzo-inning (al click su
+  // "batti"/terzo out), coprendo la cronaca dell'ultimo turno. Così invece aspetta
+  // che il verdetto dell'ultima giocata sia stato mostrato, poi si apre.
+  const revealedBatting = shownScore.sit.controlledBatting;
+  useEffect(() => {
+    if (
+      prevControlledBatting.current &&
+      !revealedBatting &&
+      pendingDefReview.current &&
+      !shownFinal
+    ) {
+      pendingDefReview.current = false;
+      setDefenseOpen(true);
+    }
+    prevControlledBatting.current = revealedBatting;
+  }, [revealedBatting, shownFinal]);
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
   // Blocco navigazione finché la partita è "in corso" per il GIOCATORE: usa lo

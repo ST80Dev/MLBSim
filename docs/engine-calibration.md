@@ -205,10 +205,29 @@ spostano gli aggregati di lega.
   *Taratura*: `wpBase 0.019` (era `0.032`) → un lanciatore di **Controllo** medio
   concede il lancio pazzo nel ~1,9 % dei turni-con-corridori (~0,3/partita, in
   linea con la MLB, prima era ~0,5), scarso ~3,5 %, ottimo verso `wpMin`. Ridotti
-  in proporzione anche palla passata (`pbBase 0.009`) e balk (`balk 0.003`) per
-  non farli diventare l'evento dominante una volta abbassati i lanci pazzi.
+  in proporzione anche palla passata (`pbBase 0.009`) e balk per non farli
+  diventare l'evento dominante una volta abbassati i lanci pazzi. Il **balk**
+  (`balk 0.0015`, era `0.003`) è stato **dimezzato** per allinearlo alla MLB reale
+  (~0,06/gara both; a 0.003 fisso per turno-con-corridori dava ~0,11/gara, ~2×).
 - **Cambio lanciatore** (`changePitcher` manuale / `autoManagePitcher` per la CPU)
   — porta in pedana un rilievo e ne registra `enteredDiff` (per i save).
+
+### Rubate SINTETIZZATE nella sim di lega (`engine/leagueSteals.ts`)
+
+Il quick-sim (`autoStep`) è *swing puro*: non modella le tattiche, quindi **nessuna
+rubata**. Senza correttivi ogni partita CPU-vs-CPU produce 0 SB e la **leaderboard
+rubate** mostra furti solo per chi ha giocato *contro l'umano* (l'unica via in cui
+`attemptSteal` gira, dai turni interattivi). Per riempirla, `synthesizeStolenBases`
+**sintetizza** SB/CS come statistica derivata-ma-simulata **sopra il box score**,
+con un **RNG dedicato** (seedato a parte da `season.ts`): il core-sim resta
+byte-identico (punti/ERA/record invariati, calibrazione intatta), ma ogni squadra
+accumula rubate reali. Le *occasioni* sono le volte in 1ª base ricavate dal
+tabellino (singoli + BB); per ognuna si tira il tentativo (frequenza guidata dalla
+**Velocità**) e, se parte, l'esito (riuscita guidata dalla Velocità). Applicata
+**solo** alle gare quick-sim del resto della lega in `advanceWithResult` — mai alla
+partita interattiva (che ha già i furti reali di entrambe le squadre), così niente
+doppio conteggio. Costanti in `STEAL_SYNTH`. *Taratura epoca '90/2000*: leader di
+lega ~40-60 SB/162, velocisti (Vel ≥85) ~35 di media, lenti (Vel ≤ media) fissi a 0.
 
 ### Auto-gestione del bullpen (CPU / quick-sim)
 

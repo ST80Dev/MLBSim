@@ -1159,6 +1159,7 @@ export function substituteFielder(
   // disattiva: lì l'utente piazza il subentrante in una casella PRECISA (dropla)
   // e sistema il resto a mano, senza che il riallineamento gli sposti i giocatori.
   if (!realign) {
+    if (sub.nativePosition === undefined) sub.nativePosition = sub.position; // conserva il naturale
     sub.position = outP.position; // eredita la casella su cui è stato lasciato
     pushPlay(l, `${shortName(sub.name)} entra in difesa (${sub.position}) per ${shortName(outP.name)}`, 0, 'sub', shortName(sub.name));
     return true;
@@ -1192,6 +1193,9 @@ export function swapDefensivePositions(l: LiveGame, s: SideState, idA: string, i
   const posA = a.position;
   const posB = b.position;
   if (!canOccupy(a, posB) || !canOccupy(b, posA)) return false;
+  // Conserva il ruolo naturale: `position` diventa la casella scambiata.
+  if (a.nativePosition === undefined) a.nativePosition = a.position;
+  if (b.nativePosition === undefined) b.nativePosition = b.position;
   a.position = posB;
   b.position = posA;
   pushPlay(

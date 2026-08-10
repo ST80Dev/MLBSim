@@ -162,6 +162,7 @@ export function realignDefense(lineup: Batter[], slots: Position[]): DefMove[] {
     const to = assign.get(b);
     if (to && to !== b.position) {
       moves.push({ b, from: b.position, to });
+      if (b.nativePosition === undefined) b.nativePosition = b.position; // conserva il naturale
       b.position = to;
     }
   }

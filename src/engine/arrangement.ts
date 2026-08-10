@@ -101,7 +101,15 @@ export function buildManagedTeam(t: Team, arr: MatchArrangement): Team {
     seenB.add(id);
     const pos = arr.defense[id] ?? b.position;
     lineup.push(
-      pos === b.position ? b : { ...b, position: pos, ratings: ratingsAtPosition(b, pos) },
+      pos === b.position
+        ? b
+        : {
+            ...b,
+            // `position` diventa la casella schierata: conserva il ruolo naturale.
+            nativePosition: b.nativePosition ?? b.position,
+            position: pos,
+            ratings: ratingsAtPosition(b, pos),
+          },
     );
   }
 
