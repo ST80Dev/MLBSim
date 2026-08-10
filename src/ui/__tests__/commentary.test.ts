@@ -91,6 +91,103 @@ describe('cronaca — varieta’ deterministica e pesata sulle frequenze MLB', (
     }
   });
 
+  // --- Fase di SVILUPPO (preliminare) condivisa per traiettoria ---------------
+  // Il verdetto e' l'ULTIMA fase; la preliminare e' la penultima (indice 1 nelle
+  // sequenze a 3 fasi). Non deve tradire l'esito, e la stessa preliminare deve
+  // poter precedere esiti diversi.
+  const dev = (e: PlayEvent): string | null => {
+    const ph = buildCommentary(e, CTX).phases;
+    return ph.length >= 3 ? ph[ph.length - 2].text : null;
+  };
+  const devSet = (make: (i: number) => PlayEvent): Set<string> => {
+    const s = new Set<string>();
+    for (let i = 0; i < 1500; i++) {
+      const d = dev(make(i));
+      if (d) s.add(d);
+    }
+    return s;
+  };
+  const shareSome = (a: Set<string>, b: Set<string>): boolean => {
+    for (const x of a) if (b.has(x)) return true;
+    return false;
+  };
+
+  it('la preliminare NON nomina l’esito (niente spoiler prima del verdetto)', () => {
+    const forbidden: Record<string, RegExp> = {
+      single: /singolo/i,
+      double: /doppio/i,
+      triple: /triplo/i,
+      homerun: /fuoricampo|bomba|no-doubter/i,
+      strikeout: /strike|eliminat|a vuoto/i,
+    };
+    for (let i = 0; i < 800; i++) {
+      for (const kind of Object.keys(forbidden) as PlayKind[]) {
+        const d = dev(ev(kind, i));
+        expect(d).not.toBeNull();
+        expect(d!).not.toMatch(forbidden[kind]);
+      }
+      // Anche gli OUT: la presa/il rimbalzo non e' anticipato dalla preliminare.
+      for (const ball of ['ground', 'fly', 'popup'] as BallType[]) {
+        expect(dev(out(i, ball))!).not.toMatch(/eliminat|out |presa|catturat/i);
+      }
+    }
+  });
+
+  it('la stessa preliminare precede esiti DIVERSI (traiettorie condivise)', () => {
+    const singleDev = devSet((i) => ev('single', i));
+    const doubleDev = devSet((i) => ev('double', i));
+    const hrDev = devSet((i) => ev('homerun', i));
+    const groundOutDev = devSet((i) => out(i, 'ground'));
+    const flyOutDev = devSet((i) => out(i, 'fly'));
+    // Rullata: singolo e out a terra (e doppio d'angolo) condividono la stessa apertura.
+    expect(shareSome(singleDev, groundOutDev)).toBe(true);
+    expect(shareSome(singleDev, doubleDev)).toBe(true);
+    // Volata: fuoricampo "di un soffio" e volata catturata iniziano uguali.
+    expect(shareSome(hrDev, flyOutDev)).toBe(true);
+    // Bordata piena: doppio (sul muro) e fuoricampo condividono la preliminare.
+    expect(shareSome(hrDev, doubleDev)).toBe(true);
+    // Strikeout e base ball nascono dallo stesso "duello sul piatto".
+    const kDev = devSet((i) => ev('strikeout', i));
+    const bbDev = devSet((i) => ev('walk', i));
+    expect(shareSome(kDev, bbDev)).toBe(true);
+  });
+
+  it('la preliminare "conto + lancio" resta coerente con l’esito', () => {
+    // Quando la preliminare mostra un conto ball-strike, dev'essere PLAUSIBILE:
+    // uno strikeout ha già 2 strike (X-2 o "pieno"=3-2), una base ball 3 ball.
+    for (let i = 0; i < 3000; i++) {
+      const kd = dev(ev('strikeout', i))!;
+      const km = kd.match(/(\d)-(\d)/);
+      if (km) expect(km[2]).toBe('2'); // 2 strike già nel conto
+      const wd = dev(ev('walk', i))!;
+      const wm = wd.match(/(\d)-(\d)/);
+      if (wm) expect(wm[1]).toBe('3'); // 3 ball già nel conto
+    }
+  });
+
+  it('la preliminare ha molta varieta’ per lo stesso esito (>= 5 aperture)', () => {
+    for (const kind of ['single', 'double', 'homerun', 'strikeout'] as PlayKind[]) {
+      expect(devSet((i) => ev(kind, i)).size).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it('l’apertura è varia e mescola battitore + commento sulla situazione', () => {
+    const opener = (e: PlayEvent): string => buildCommentary(e, CTX).phases[0].text;
+    const openSet = (make: (i: number) => PlayEvent): Set<string> => {
+      const s = new Set<string>();
+      for (let i = 0; i < 1500; i++) s.add(opener(make(i)));
+      return s;
+    };
+    const sSingle = openSet((i) => ev('single', i));
+    const sK = openSet((i) => ev('strikeout', i));
+    // Tante aperture diverse e alcune condivise tra esiti diversi (scorrelate).
+    expect(sSingle.size).toBeGreaterThanOrEqual(8);
+    expect(shareSome(sSingle, sK)).toBe(true);
+    // Compare almeno un commento sulla situazione del match, non solo "al piatto".
+    const situational = /partita|inning|finale|equilibrio|match|atto|momento|scambi|tempo|svolgimento/i;
+    expect([...sSingle].some((t) => situational.test(t))).toBe(true);
+  });
+
   it('gli OUT seguono la VERITA’ del motore (outInfo), non un peso inventato', () => {
     // ground/fly/popup -> forma corrispondente nel testo; coerente col motore.
     expect(subtypeOf(out(1, 'ground'))).toBe('ground');

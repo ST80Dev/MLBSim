@@ -50,7 +50,10 @@ Regioni, dall'alto in basso:
   (occupate evidenziate), del battitore e del lanciatore. Sopra si sovrappongono:
   - **Banner di cronaca** (`PlayBanner` + `src/ui/commentary.ts`), overlay in
     **alto-centro** sopra la foto: telecronaca dell'ultima giocata in **2-3 fasi
-    sintetiche** (attesa «al piatto…» → sviluppo → **verdetto**), poi svanisce.
+    sintetiche** (**apertura** «al piatto…»/situazione match → **sviluppo**
+    (preliminare) → **verdetto**), poi svanisce. Solo il **verdetto** (ultima
+    fase, «climax») svela l'esito: apertura e sviluppo sono **duttili** e non lo
+    anticipano (vedi «Preliminari condivise» sotto).
     A **tema coi colori** della squadra protagonista (attacco per le battute
     valide, difesa per gli eliminati) e con **intensità crescente** (`tier 0-5`)
     per gli esiti più straordinari: singolo→doppio→triplo→**fuoricampo** in
@@ -87,6 +90,31 @@ Regioni, dall'alto in basso:
       restano **coerenti** fra loro e con gli avanzamenti reali dei corridori.
     Test: `src/ui/__tests__/commentary.test.ts` (determinismo, convergenza ai pesi,
     coerenza con `outInfo`).
+  - **Preliminari condivise (niente spoiler prima del verdetto).** Le fasi che
+    PRECEDONO il verdetto non sono più legate all'esito uno-a-uno: così vedere
+    l'apertura o lo sviluppo NON basta per indovinare come finisce, e lo stesso
+    esito ha moltissime preliminari diverse. Tre registri, tutti «duttili» e
+    scelti in modo **deterministico ma scorrelato** dall'esito (salt separati):
+    - **Sviluppo per TRAIETTORIA** (`TRAJECTORY_ACTION` + `trajectoryOf`): come
+      parte la palla — rullata / linea / flare / volata / bordata / campanile /
+      duello. La stessa traiettoria precede esiti **diversi ma plausibili**: una
+      *rullata* può diventare singolo nel buco, doppio d'angolo, out in prima,
+      scelta difensiva o **doppio gioco**; una *volata* può essere out al volo,
+      volata di sacrificio, doppio sul muro, triplo o **fuoricampo di un soffio**.
+    - **Sviluppo «conto + tipo di lancio»** (`countPitchLine`), universale:
+      «Conto sul 2-2, il lanciatore lascia partire una slider bassa…» precede
+      **qualunque** esito. UNICO vincolo di realismo: il conto è coerente con
+      l'esito — strikeout = *X-2* (2 strike), base ball = *3-X* (3 ball), palla
+      in gioco = qualunque conto. Il conto **NON è un dato del motore** (non lo
+      traccia): è sintetizzato plausibile e deterministico, pura presentazione.
+    - **Apertura per SITUAZIONE match** (`situation`), per fase di partita
+      (early/mid/late/decisivi): «Match in pieno svolgimento…», «Ultimo atto,
+      può succedere di tutto…». Dipende **solo dall'inning** (noto prima
+      dell'azione), mai dall'esito, e si mescola con «al piatto…».
+    Il **verdetto** resta invece specifico dell'esito (e i marker sul diamante si
+    muovono lì). Coperto da test dedicati (`commentary.test.ts`: la preliminare
+    non nomina l'esito, traiettorie condivise tra esiti diversi, conto coerente,
+    ≥5 aperture per esito).
     - **Coerenza cronaca ↔ codice.** Per l'out su palla in gioco (`inplayout`)
       la categoria (rimbalzo / volata / presa) NON è più scelta due volte in
       modo indipendente: viene da un'unica fonte, `inPlayOutShape(ev)` in
