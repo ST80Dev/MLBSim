@@ -365,10 +365,13 @@ export function App() {
     };
   }, [refreshSaves]);
 
-  // Il partente scelto vale per un solo giorno/gara: azzera al cambiare.
+  // Il partente scelto vale per la giornata: azzera SOLO al cambio giorno. NON al
+  // cambio di `activeGame` (entrare in prep / uscire e rientrare nella stessa
+  // giornata è lo stesso match): resettare lì cancellerebbe la scelta appena fatta
+  // proprio mentre si lancia la gara, facendo ripartire il consigliato.
   useEffect(() => {
     setTodayStarter(null);
-  }, [season.day, activeGame]);
+  }, [season.day]);
 
   // Cambia il numero di uomini della rotazione (4/5) e persiste.
   const changeRotationSize = (size: RotationSize) => {
@@ -386,8 +389,12 @@ export function App() {
     : 1;
 
   // La partita interattiva e' mutabile e vive tra i render: la ricreo solo quando
-  // cambiano lega, squadra gestita, avversario, casa/trasferta, gara o assetto.
-  const key = `${leagueSeed}|${myId}|${opponentId}|${controlled}|${gnum}|${arrangement ? JSON.stringify(arrangement) : ''}`;
+  // cambiano lega, squadra gestita, avversario, casa/trasferta, gara, assetto o il
+  // PARTENTE scelto. Il partente entra esplicitamente nel key: la scelta del giorno
+  // (`todayStarter`) non fa parte dell'assetto, quindi senza questo la partita
+  // resterebbe col partente iniziale anche dopo aver scelto un altro SP in prep.
+  const myStarterId = (controlled === 'home' ? teams.home : teams.away).rotation[0]?.id ?? '';
+  const key = `${leagueSeed}|${myId}|${opponentId}|${controlled}|${gnum}|${myStarterId}|${arrangement ? JSON.stringify(arrangement) : ''}`;
   const ref = useRef<{ key: string; game: LiveGame } | null>(null);
   if (!ref.current || ref.current.key !== key) {
     ref.current = {
