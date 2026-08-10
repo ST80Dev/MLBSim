@@ -122,15 +122,18 @@ export function LineupSide({
   // Tabella lanciatori ad altezza fissa, scrollata sul lanciatore ATTUALE.
   const pitsRef = useRef<HTMLDivElement>(null);
   const curPitRef = useRef<HTMLTableRowElement>(null);
-  // Il lanciatore corrente è SEMPRE l'ultima riga (ordine d'ingresso): quando
-  // ne entra uno nuovo (anche cambiato dalla CPU) porta il fondo in vista, così
-  // il subentrato non resta sotto la piega quando i lanciatori superano
-  // l'altezza del box. Il vecchio calcolo con `offsetTop` non scrollava
-  // (dipende dall'offsetParent) e lasciava nascosto il rilievo appena entrato.
+  // Il lanciatore corrente è SEMPRE l'ultima riga (ordine d'ingresso): porta il
+  // fondo in vista così il subentrato non resta sotto la piega quando i
+  // lanciatori superano l'altezza del box. Il vecchio calcolo con `offsetTop`
+  // non scrollava (dipende dall'offsetParent).
+  // Si ri-scrolla non solo quando entra un nuovo lanciatore, ma anche mentre il
+  // corrente lavora (bf che cresce): le righe possono RIFLUIRE più alte (badge di
+  // affaticamento che va a capo) e far uscire il corrente dalla vista.
+  const curBf = pits[lastPitIdx]?.bf ?? 0;
   useEffect(() => {
     const box = pitsRef.current;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [lastPitIdx, pits.length]);
+  }, [lastPitIdx, pits.length, curBf]);
 
   return (
     <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>

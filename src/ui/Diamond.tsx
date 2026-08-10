@@ -71,13 +71,6 @@ function colorDistance(a: string, b: string): number {
   const sat = Math.min(sa, sb);
   return dh * (0.35 + 0.65 * sat) + dl * 0.8;
 }
-/** Scurisce un colore hex del fattore dato (0..1) per il bordo del marker. */
-function shade(hex: string, f: number): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return hex;
-  const [r, g, b] = rgb.map((c) => Math.round(c * f));
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
 // Colori di ripiego ad alto contrasto (NO oro: è riservato ai corridori in base).
 const CONTRAST_FALLBACKS = ['#e5484d', '#e8590c', '#c026d3', '#0ea5e9', '#16a34a'];
 const MIN_CONTRAST = 55;
