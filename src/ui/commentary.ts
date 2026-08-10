@@ -6,10 +6,30 @@
 // varieta' delle frasi e' DETERMINISTICA (hash dell'evento), cosi' lo stesso
 // turno produce sempre la stessa telecronaca.
 //
-// --- Due sorgenti di sottotipo ----------------------------------------------
+// --- Come si racconta un turno ------------------------------------------------
+// Il banner mostra 2-3 fasi: APERTURA (il battitore al piatto) → SVILUPPO
+// (la "preliminare": contatto o duello a due strike) → VERDETTO (l'esito).
+//
+//  * L'APERTURA e' comune a QUASI TUTTI gli esiti: e' solo l'attesa, non anticipa
+//    nulla.
+//  * Lo SVILUPPO NON e' piu' legato all'esito uno-a-uno: pesca da DUE sorgenti
+//    entrambe condivise tra piu' esiti —
+//      (a) la TRAIETTORIA (rullata / linea / volata / bordata / campanile / duello):
+//          una rullata puo' diventare singolo, doppio d'angolo, out in prima,
+//          doppio gioco… (vedi `TRAJECTORY_ACTION` + `trajectoryOf`);
+//      (b) il CONTO + TIPO DI LANCIO ("Conto sul 2-2, arriva una slider bassa…"),
+//          universale: precede strikeout o valide di ogni tipo (vedi
+//          `countPitchLine`). Il conto e' sintetizzato in modo plausibile
+//          (strikeout = X-2, base ball = 3-X), NON e' un dato del motore.
+//    Cosi' vedere la preliminare NON basta per indovinare il verdetto, e lo stesso
+//    esito ha molte preliminari diverse.
+//  * Il VERDETTO (ultima fase, "climax") e' invece specifico: e' li' che l'esito
+//    viene svelato e i marker sul diamante si muovono.
+//
+// --- Due sorgenti di sottotipo (per VERDETTO e log laterale) ------------------
 // 1) OUT su palla in gioco: la FORMA (rimbalzo/volata/presa) e' VERITA' DEL
-//    MOTORE — `ev.outInfo.ball` (ground/fly/popup) — cosi' telecronaca, codice
-//    da segnapunti (`scorecode.ts`) e avanzamenti reali dei corridori concordano.
+//    MOTORE — `ev.outInfo.ball` (ground/fly/popup) — cosi' verdetto, codice da
+//    segnapunti (`scorecode.ts`) e avanzamenti reali dei corridori concordano.
 // 2) VALIDE e STRIKEOUT: il motore NON dice se un singolo passa a terra o cade
 //    come bloop, ne' se lo strikeout e' a vuoto o guardato. Quel dettaglio e'
 //    solo narrazione: lo assegniamo QUI, ma non a caso — ogni esito estrae un
@@ -154,35 +174,32 @@ const HR_TYPES: Weighted<'nodoubter' | 'deep' | 'justenough'> = [
   [20, 'justenough'],
 ];
 
-// --- Pool di frasi per sottotipo ---------------------------------------------
-// Ogni sottotipo ha: `log` (riga sintetica laterale), `action` (fase centrale
-// prima del verdetto) e `verdict` (l'esito, in coda al banner). `{b}` = nome.
+// --- Pool di frasi per sottotipo (VERDETTO + log laterale) --------------------
+// Ogni sottotipo ha `log` (riga sintetica laterale) e `verdict` (l'esito, in coda
+// al banner). La fase di SVILUPPO (preliminare) NON sta qui: e' condivisa per
+// traiettoria (vedi `TRAJECTORY_ACTION`), cosi' non anticipa il verdetto. `{b}` =
+// nome del battitore.
 
 interface Flavor {
   log: string[];
-  action: string[];
   verdict: string[];
 }
 
 const SINGLE_FLAVOR: Record<string, Flavor> = {
   grounder: {
     log: ['{b} singolo, rullata nel buco', '{b} singolo a terra tra gli interni', '{b} singolo, la palla passa a destra'],
-    action: ['Attacca a terra, la palla s’infila nel buco…', 'Rimbalzo che scivola tra gli interni…'],
     verdict: ['SINGOLO di {b}!', '{b} in prima: SINGOLO!'],
   },
   liner: {
     log: ['{b} singolo in linea nell’esterno', '{b} singolo, frustata che cade davanti', '{b} singolo su una gran linea'],
-    action: ['Frustata in linea che cade in esterno…', 'Contatto pulito, linea davanti all’esterno…'],
     verdict: ['SINGOLO di {b}!', 'Valida netta! {b} sul primo cuscino.'],
   },
   blooper: {
     log: ['{b} singolo, un bloop che cade tra le linee', '{b} singolo, palla molle che nessuno prende', '{b} singolo di fortuna nel nessun-uomo'],
-    action: ['Elevata molle a campanile… cade tra i difensori…', 'Bloop sul quadrante, nessuno ci arriva…'],
     verdict: ['Cade! {b} sul singolo.', 'SINGOLO fortunoso di {b}!'],
   },
   infield: {
     log: ['{b} singolo interno, la batte per un soffio', '{b} singolo interno, sfrutta le gambe', '{b} singolo, colpo piano e volata in prima'],
-    action: ['Colpo piano sull’interno, parte a razzo…', 'Battuta lenta, è una corsa fino alla prima…'],
     verdict: ['Bruciato in prima: SINGOLO interno di {b}!', 'Salvo per un soffio: SINGOLO!'],
   },
 };
@@ -190,22 +207,18 @@ const SINGLE_FLAVOR: Record<string, Flavor> = {
 const DOUBLE_FLAVOR: Record<string, Flavor> = {
   gap: {
     log: ['{b} doppio nella gap', '{b} doppio, la palla vola tra gli esterni', '{b} doppio in mezzo agli esterni'],
-    action: ['La palla vola nella gap, gli esterni a rincorrere…', 'Spacca la difesa in mezzo agli esterni…'],
     verdict: ['{b} in scivolata in seconda: DOPPIO!', 'DOPPIO di {b}!'],
   },
   line: {
     log: ['{b} doppio lungo la linea', '{b} doppio che pizzica la riga', '{b} doppio in angolo, sulla linea'],
-    action: ['Linea che pizzica la riga e corre in angolo…', 'La tira giù per la linea, l’esterno insegue…'],
     verdict: ['{b} si ferma in seconda: DOPPIO!', 'DOPPIO lungo la linea di {b}!'],
   },
   wall: {
     log: ['{b} doppio sul muro', '{b} doppio, la palla sbatte sul tabellone', '{b} doppio, carambola sul muro'],
-    action: ['Bordata che sbatte sul muro e torna in campo…', 'La schiaccia sul muro, rimbalzo lontano…'],
     verdict: ['DOPPIO di {b}, per un pelo non è fuori!', '{b} in seconda comodo: DOPPIO!'],
   },
   corner: {
     log: ['{b} doppio, rullata che scappa in angolo', '{b} doppio a terra fin nell’angolo'],
-    action: ['Rullata potente che sfugge nell’angolo…', 'La palla corre via lungo la riga…'],
     verdict: ['DOPPIO di {b}!', '{b} arriva in seconda: DOPPIO!'],
   },
 };
@@ -213,17 +226,14 @@ const DOUBLE_FLAVOR: Record<string, Flavor> = {
 const TRIPLE_FLAVOR: Record<string, Flavor> = {
   gap: {
     log: ['{b} triplo nella gap con le ali', '{b} triplo, spacca la gap e vola'],
-    action: ['Spacca la gap, gli esterni a rincorrere…', 'La palla rotola al muro, {b} non si ferma…'],
     verdict: ['{b} sfreccia sulle basi… TRIPLO!', 'TRIPLO di {b}!'],
   },
   corner: {
     log: ['{b} triplo, carambola d’angolo', '{b} triplo sulla riga fin nell’angolo'],
-    action: ['Carambola d’angolo imprevedibile…', 'Rimbalzo pazzo in angolo, l’esterno la perde…'],
     verdict: ['{b} in piedi in terza: TRIPLO!', 'TRIPLO di {b}!'],
   },
   misplay: {
     log: ['{b} triplo, l’esterno pasticcia', '{b} triplo su una palla persa in esterno'],
-    action: ['L’esterno la perde… la palla rotola via…', 'Presa mancata! {b} gira le basi…'],
     verdict: ['Fino in terza: TRIPLO di {b}!', 'TRIPLO! {b} sfrutta l’errore.'],
   },
 };
@@ -231,12 +241,10 @@ const TRIPLE_FLAVOR: Record<string, Flavor> = {
 const K_FLAVOR: Record<string, Flavor> = {
   swinging: {
     log: ['{b} strikeout, a vuoto sull’ultima', '{b} strikeout girando a vuoto', '{b} strikeout, non aggancia la terza'],
-    action: ['Due strike, il lanciatore va per il colpo…', 'Prepara il fuori-giri per chiudere…'],
     verdict: ['Aria! {b} eliminato a vuoto.', 'STRIKEOUT! {b} gira su una palla imprendibile.', 'Terzo strike a vuoto: {b} a sedere.'],
   },
   looking: {
     log: ['{b} strikeout guardando la terza', '{b} strikeout, terzo strike chiamato', '{b} strikeout senza togliere la mazza'],
-    action: ['Il conto si stringe, il lanciatore punta il cantone…', 'Rifinisce sull’angolo, {b} indeciso…'],
     verdict: ['Terzo strike CHIAMATO! {b} resta di sasso.', 'STRIKEOUT guardato: {b} non parte.', 'Sul cantone: terzo strike, {b} eliminato.'],
   },
 };
@@ -244,17 +252,14 @@ const K_FLAVOR: Record<string, Flavor> = {
 const HR_FLAVOR: Record<string, Flavor> = {
   nodoubter: {
     log: ['{b} FUORICAMPO, bomba senza discussioni', '{b} FUORICAMPO, la spedisce lontanissima'],
-    action: ['Contatto pieno… la palla parte come un missile…', 'La schiaccia in pieno… vola altissima…'],
     verdict: ['FUORICAMPO di {b}, no-doubter!', 'DENTRO! Che bomba di {b}!'],
   },
   deep: {
     log: ['{b} FUORICAMPO in tribuna profonda', '{b} FUORICAMPO, sale e sparisce'],
-    action: ['Gira le braccia… la palla sale, sale…', 'Vola profondissima verso le tribune…'],
     verdict: ['FUORICAMPO di {b}!', 'La manda sugli spalti: FUORICAMPO!'],
   },
   justenough: {
     log: ['{b} FUORICAMPO, la scavalca di un soffio', '{b} FUORICAMPO, quanto basta oltre il muro'],
-    action: ['La spinge verso il muro… ce la fa?…', 'Palla al confine… l’esterno guarda in alto…'],
     verdict: ['Oltre di un soffio: FUORICAMPO di {b}!', 'Just enough! {b} la porta di là.'],
   },
 };
@@ -269,24 +274,213 @@ const HIT_KINDS: Partial<Record<PlayKind, { table: Weighted<string>; flavor: Rec
   homerun: { table: HR_TYPES, flavor: HR_FLAVOR },
 };
 
-/** OUT su palla in gioco: frasi per forma reale (`inPlayOutShape`). */
+/** OUT su palla in gioco: frasi (log + verdetto) per forma reale (`inPlayOutShape`). */
 const OUT_FLAVOR: Record<InPlayOutShape, Flavor> = {
   ground: {
     log: ['{b} eliminato, rimbalzo e out in prima', '{b} out su rullata all’interno', '{b} groundout senza problemi'],
-    action: ['Rimbalzo comodo verso l’interno…', 'La batte a terra sull’interno…'],
     verdict: ['Raccolta e sparo in prima: {b} eliminato.', 'Out di routine in prima.'],
   },
   fly: {
     log: ['{b} eliminato, volata catturata in esterno', '{b} out su elevata all’esterno', '{b} flyout, presa in corsa'],
-    action: ['Elevata verso l’esterno, il difensore sotto…', 'La alza in esterno, l’esterno si sistema…'],
     verdict: ['Presa in corsa: {b} eliminato.', 'Volata catturata: out.'],
   },
   air: {
     log: ['{b} eliminato, pop-up sull’interno', '{b} out, campanile raccolto', '{b} popout sull’interno'],
-    action: ['Campanile altissimo sull’interno…', 'Pop-up, i difensori si chiamano…'],
     verdict: ['Sotto la palla, presa: {b} eliminato.', 'Pop-up raccolto: out.'],
   },
 };
+
+// --- Traiettorie condivise (fase di SVILUPPO / "preliminare") -----------------
+// La preliminare descrive COME la palla lascia la mazza (o il duello a due
+// strike), NON l'esito. Piu' esiti diversi ma plausibili condividono la stessa
+// traiettoria, cosi' la preliminare non tradisce il verdetto e lo stesso esito
+// ha molte aperture diverse. Frasi volutamente neutre sull'esito.
+export type Trajectory = 'grounder' | 'liner' | 'flare' | 'fly' | 'deep' | 'pop' | 'battle';
+
+const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
+  // Rullata sull'interno: singolo nel buco/interno, doppio d'angolo, out in
+  // prima, scelta difensiva, doppio gioco.
+  grounder: [
+    'Attacca a terra, la palla corre sull’interno…',
+    'Colpo secco verso il diamante…',
+    'Rimbalzo che schizza tra gli interni…',
+    'La batte giù, gli interni si muovono…',
+    'Rullata potente sull’interno…',
+    'A terra! il difensore carica sulla palla…',
+    'Palla battuta nel quadro, si gioca il rimbalzo…',
+  ],
+  // Linea tesa: singolo davanti, doppio in gap o lungo la linea.
+  liner: [
+    'Frustata in linea che taglia l’aria…',
+    'Contatto pulito, la palla parte tesa…',
+    'Bordata in linea, gli esterni scattano…',
+    'Che linea! il campo si apre…',
+    'Sventola tesa in mezzo al campo…',
+    'La schiaccia in linea verso l’esterno…',
+  ],
+  // Colpo molle/flare: bloop che puo' cadere o essere preso.
+  flare: [
+    'Elevata molle appena dietro l’interno…',
+    'Palla a campanile corto verso l’esterno…',
+    'Colpita piano, sale fiacca tra le linee…',
+    'Bloop in mezzo al nessun-uomo…',
+  ],
+  // Volata all'esterno: out al volo, volata di sacrificio, doppio sul muro,
+  // triplo d'angolo, fuoricampo di un soffio.
+  fly: [
+    'La alza verso l’esterno, il difensore indietreggia…',
+    'Vola lunga verso l’esterno…',
+    'Elevata profonda, l’esterno gira e insegue…',
+    'Contatto in aria, la palla sale verso il fondo…',
+    'La spinge alta in esterno…',
+    'Palla in cielo verso le tribune, chi la prende?…',
+  ],
+  // Bordata piena: fuoricampo, doppio sul muro, triplo in gap.
+  deep: [
+    'Contatto pieno… la palla parte come un missile…',
+    'La schiaccia in pieno, vola altissima…',
+    'Bordata devastante verso il fondo del campo…',
+    'La colpisce in pieno… sale, sale…',
+    'Legnata piena, palla spedita lontano…',
+  ],
+  // Campanile: pop-up sull'interno.
+  pop: [
+    'Campanile altissimo sull’interno…',
+    'Pop-up, i difensori si chiamano…',
+    'La alza cortissima, palla verticale…',
+    'Elevata debole nel quadro…',
+  ],
+  // Duello a due strike / al piatto: strikeout, base ball, colpito.
+  battle: [
+    'Il conto si stringe, tensione sul monte…',
+    'Duello sul piatto, arriva il lancio…',
+    'Il lanciatore carica ed esegue…',
+    'Ultimo lancio in canna…',
+    'Si gioca tutto su questo confronto…',
+    'Braccio di ferro sul piatto, ecco il lancio…',
+  ],
+};
+
+/**
+ * Traiettoria (fase di sviluppo) di un evento. NON e' l'esito: piu' esiti la
+ * condividono. Deriva da kind + sottotipo (per valide/K), o dalla forma reale
+ * del motore (per gli OUT).
+ */
+function trajectoryOf(ev: PlayEvent): Trajectory {
+  switch (ev.kind) {
+    case 'single': {
+      const sub = weighted(ev, 'sub', SINGLE_TYPES);
+      return sub === 'liner' ? 'liner' : sub === 'blooper' ? 'flare' : 'grounder';
+    }
+    case 'double': {
+      const sub = weighted(ev, 'sub', DOUBLE_TYPES);
+      return sub === 'wall' ? 'deep' : sub === 'corner' ? 'grounder' : 'liner';
+    }
+    case 'triple':
+      return weighted(ev, 'sub', TRIPLE_TYPES) === 'gap' ? 'deep' : 'fly';
+    case 'homerun':
+      return weighted(ev, 'sub', HR_TYPES) === 'justenough' ? 'fly' : 'deep';
+    case 'gidp':
+      return 'grounder';
+    case 'sacfly':
+      return 'fly';
+    case 'inplayout': {
+      if (ev.outInfo?.fc) return 'grounder';
+      const shape = inPlayOutShape(ev);
+      return shape === 'ground' ? 'grounder' : shape === 'fly' ? 'fly' : 'pop';
+    }
+    case 'strikeout':
+    case 'walk':
+    case 'ibb':
+    case 'hbp':
+      return 'battle';
+    default:
+      return 'battle';
+  }
+}
+
+// --- Preliminare "conto + tipo di lancio" (universale) ------------------------
+// Sorgente di sviluppo alternativa alla traiettoria e ANCORA piu' condivisa: il
+// conto e il lancio in arrivo. Precede QUALSIASI esito (strikeout o valida di
+// ogni tipo), quindi "Conto sul 2-2, arriva una slider bassa…" non tradisce
+// nulla. UNICO vincolo di realismo: il conto dev'essere coerente con l'esito —
+// uno strikeout ha gia' 2 strike (X-2), una base ball ha gia' 3 ball (3-X); una
+// palla in gioco puo' arrivare su qualunque conto. Il conto NON e' un dato del
+// motore (non lo traccia in `PlayEvent`): e' sintetizzato in modo plausibile e
+// deterministico, pura presentazione.
+
+/** Quota (%) di turni in cui la preliminare e' "conto + lancio" invece della
+ *  traiettoria. Il resto usa `TRAJECTORY_ACTION`. */
+const COUNT_PITCH_PCT = 45;
+
+const PITCHES = [
+  'palla veloce',
+  'veloce alta',
+  'veloce sul cantone',
+  'slider',
+  'slider bassa',
+  'curva',
+  'curva che spezza',
+  'cambio di velocità',
+  'sinker sulle ginocchia',
+  'splitter nel terreno',
+  'cutter interno',
+];
+
+const COUNT_PITCH_TMPL = [
+  'Conto sul {c}, il lanciatore lascia partire una {p}…',
+  'Sul {c}, ecco una {p}…',
+  '{c}, il monte sceglie una {p}…',
+  'Conto {c}: arriva una {p}…',
+];
+
+const FULL_COUNT_TMPL = [
+  'Conto pieno, il lanciatore lascia partire una {p}…',
+  'Sul pieno, ecco una {p}…',
+  'Conto pieno: arriva una {p}…',
+];
+
+/** Conto (ball-strike) PLAUSIBILE per l'esito. Non è verità del motore: serve
+ *  solo a non contraddire il verdetto (uno strikeout ha 2 strike, una base ball
+ *  3 ball; la palla in gioco su qualunque conto). */
+function countFor(ev: PlayEvent): { c: string; full: boolean } {
+  const h = hashStr(signature(ev) + '=cnt');
+  let balls: number;
+  let strikes: number;
+  if (ev.kind === 'strikeout') {
+    balls = h % 4; // 0..3
+    strikes = 2;
+  } else if (ev.kind === 'walk') {
+    balls = 3;
+    strikes = h % 3; // 0..2
+  } else {
+    balls = h % 4; // 0..3
+    strikes = (h >>> 2) % 3; // 0..2
+  }
+  return { c: `${balls}-${strikes}`, full: balls === 3 && strikes === 2 };
+}
+
+/** Preliminare "conto + tipo di lancio", condivisa da ogni esito. */
+function countPitchLine(ev: PlayEvent): string {
+  const { c, full } = countFor(ev);
+  const p = pickS(ev, PITCHES, 'pitch');
+  const useFull = full && hashStr(signature(ev) + '=full') % 2 === 0;
+  const tmpl = useFull ? pickS(ev, FULL_COUNT_TMPL, 'cpt') : pickS(ev, COUNT_PITCH_TMPL, 'cpt');
+  return tmpl.replace(/\{c\}/g, c).replace(/\{p\}/g, p);
+}
+
+/**
+ * Frase di SVILUPPO (preliminare). Alterna, in modo deterministico e scorrelato
+ * dall'esito, tra due sorgenti entrambe CONDIVISE tra piu' esiti: la TRAIETTORIA
+ * (come parte la palla) e il CONTO + TIPO DI LANCIO (universale). Cosi' lo stesso
+ * esito ha moltissime aperture e la stessa apertura precede esiti diversi.
+ */
+function actionPhrase(ev: PlayEvent): string {
+  if (hashStr(signature(ev) + '~devmode') % 100 < COUNT_PITCH_PCT) {
+    return countPitchLine(ev);
+  }
+  return pickS(ev, TRAJECTORY_ACTION[trajectoryOf(ev)], 'act');
+}
 
 /** Sottotipo narrativo deterministico dell'evento (etichetta descrittiva).
  *  Valide/K/HR: pesato-MLB. OUT in gioco: derivato dalla VERITA' del motore
@@ -365,25 +559,68 @@ const META: Record<
   other: { tier: 0, icon: '•', label: 'AZIONE', accent: 'offense' },
 };
 
+/** Commento di SITUAZIONE (apertura alternativa), per fase di partita. Dipende
+ *  SOLO dall'inning (dato noto prima dell'azione), mai dall'esito: e' un altro
+ *  "testo duttile" che precede i due testi di esito (sviluppo + verdetto) e non
+ *  anticipa nulla. La stessa frase puo' aprire qualunque turno. */
+function situation(ev: PlayEvent, ctx: BannerContext): string[] {
+  const off = ctx.offense.abbrev;
+  const def = ctx.defense.abbrev;
+  if (ev.inning <= 3) {
+    return [
+      'Partita ancora tutta da scrivere…',
+      'Primi scambi, ci si studia sul diamante…',
+      `${off} prova a muovere qualcosa in attacco…`,
+      'Si comincia a fare sul serio…',
+    ];
+  }
+  if (ev.inning <= 6) {
+    return [
+      'Match in pieno svolgimento, equilibrio delicato…',
+      'Fase centrale, nessuno vuole mollare…',
+      `${def} tiene la posizione, ${off} spinge…`,
+      'Si lotta punto a punto…',
+    ];
+  }
+  if (ev.inning <= 8) {
+    return [
+      'Si entra nel vivo, ogni lancio pesa…',
+      'Ultimi inning, la tensione cresce…',
+      'Verso il finale, difese sul chi vive…',
+      `Momento delicato per ${off}…`,
+    ];
+  }
+  return [
+    'Ultimo atto, può succedere di tutto…',
+    'Inning decisivi, si decide qui…',
+    'Non c’è più tempo, ogni turno vale doppio…',
+    `${off} a caccia del colpo che pesa…`,
+  ];
+}
+
 /**
- * Frase d'apertura: il battitore si presenta al piatto. Comune a quasi tutti
- * gli esiti — e' l'attesa prima che l'azione si risolva.
+ * Frase d'apertura: attesa prima che l'azione si risolva. Comune a QUASI TUTTI
+ * gli esiti e scelta in modo scorrelato dall'esito, quindi non anticipa nulla.
+ * Mescola due registri altrettanto duttili: il battitore che si presenta al
+ * piatto e un commento sulla SITUAZIONE del match (per fase di partita).
  */
 function opener(ev: PlayEvent, ctx: BannerContext): string {
   const b = ev.batter ?? 'Il battitore';
-  return pickS(
-    ev,
-    [
-      `${b} si porta in battuta per ${ctx.offense.abbrev}…`,
-      `${b} al piatto…`,
-      `Tocca a ${b}…`,
-      `${b} pronto nel box…`,
-    ],
-    'open',
-  );
+  const intro = [
+    `${b} si porta in battuta per ${ctx.offense.abbrev}…`,
+    `${b} al piatto…`,
+    `Tocca a ${b}…`,
+    `${b} pronto nel box…`,
+    `${b} scava il piede nella terra, pronto…`,
+    `Sul monte contro ${b}, tutto pronto…`,
+    `${b} stringe la mazza e aspetta il lancio…`,
+    `${ctx.defense.abbrev} in guardia, ${b} in battuta…`,
+  ];
+  return pickS(ev, [...intro, ...situation(ev, ctx)], 'open');
 }
 
-/** Fasi (apertura, azione, verdetto) per i kind con sottotipo pesato (valide/K/HR). */
+/** Fasi (apertura, sviluppo condiviso, verdetto) per i kind con sottotipo pesato
+ *  (valide/K/HR). Il verdetto e' specifico; lo sviluppo e' per traiettoria. */
 function flavoredPhases(ev: PlayEvent, ctx: BannerContext): string[] | null {
   const hk = HIT_KINDS[ev.kind];
   if (!hk) return null;
@@ -391,7 +628,7 @@ function flavoredPhases(ev: PlayEvent, ctx: BannerContext): string[] | null {
   const f = hk.flavor[weighted(ev, 'sub', hk.table)];
   return [
     opener(ev, ctx),
-    fill(pickS(ev, f.action, 'act'), b),
+    actionPhrase(ev),
     fill(pickS(ev, f.verdict, 'ver'), b) + runsTail(ev.runsScored),
   ];
 }
@@ -410,23 +647,27 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
     case 'bunthit':
       return [open, 'Smorza a sorpresa lungo la linea…', `Nessuno ci arriva: BUNT VALIDO!${t}`];
     case 'walk':
-      return [open, `${b} legge bene i lanci… BASE BALL.${t}`];
+      // Sviluppo condiviso col duello a due strike: la base ball non si vede
+      // arrivare dalla preliminare.
+      return [open, actionPhrase(ev), `${b} legge bene i lanci… BASE BALL.${t}`];
     case 'ibb':
       return [open, `Difesa che preferisce non rischiare: base intenzionale a ${b}.${t}`];
     case 'hbp':
-      return [open, `Lancio addosso: ${b} colpito, va in prima.${t}`];
+      return [open, actionPhrase(ev), `Lancio addosso: ${b} colpito, va in prima.${t}`];
     case 'sacfly':
       return [
         open,
-        'Elevata profonda verso l’esterno…',
+        actionPhrase(ev),
         `Presa, ma il corridore parte dopo il tocco… VOLATA DI SACRIFICIO!${t}`,
       ];
     case 'sacbunt':
       return [open, 'Bunt di sacrificio verso l’interno…', `${b} si immola: corridore avanzato.${t}`];
     case 'gidp':
+      // Preliminare = rullata generica (come un singolo a terra o un out in
+      // prima): il doppio gioco si scopre solo al verdetto.
       return [
         open,
-        'Rimbalzo verso l’interno con corridore in corsa…',
+        actionPhrase(ev),
         pick(ev, [
           'Presa, tocco di seconda e sparo in prima… DOPPIO GIOCO!',
           'Palla girata in un lampo: due eliminati, DOPPIO GIOCO!',
@@ -482,13 +723,15 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
       if (info?.fc) {
         return [
           open,
-          'Rimbalzo all’interno, la difesa ha una scelta…',
+          actionPhrase(ev),
           `Scelta difensiva: eliminato il corridore, ${b} salvo in prima.${t}`,
         ];
       }
       // Il verdetto concorda col codice da segnapunti (stessa `inPlayOutShape`)
       // e con gli avanzamenti reali dei corridori decisi dal motore. La FORMA è
-      // verità del motore; qui varia solo la resa testuale.
+      // verità del motore; qui varia solo la resa testuale. La preliminare
+      // (`actionPhrase`) e' condivisa con le valide di pari traiettoria, così
+      // non si capisce in anticipo se la palla cadrà o sarà presa.
       const shape = inPlayOutShape(ev);
       const adv = info?.advanced;
       const verdict =
@@ -501,7 +744,7 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
               ? pick(ev, [`Volata profonda catturata… il corridore guadagna una base.${t}`, `Presa profonda, tag-up riuscito.${t}`])
               : fill(pickS(ev, OUT_FLAVOR.fly.verdict, 'ver'), b) + t
             : fill(pickS(ev, OUT_FLAVOR.air.verdict, 'ver'), b) + t;
-      return [open, fill(pickS(ev, OUT_FLAVOR[shape].action, 'act'), b), verdict];
+      return [open, actionPhrase(ev), verdict];
     }
     case 'sub':
       return [ev.text];
