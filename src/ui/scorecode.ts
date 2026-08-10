@@ -233,8 +233,28 @@ export function scoreCode(ev: PlayEvent): ScoreCode | null {
       };
     }
     case 'error': {
-      const pos = wpick(mix(h, 12), ERROR_FIELDERS);
-      return { code: `E${pos}`, title: `errore in difesa: ${POS_NAME[pos]} (${pos})` };
+      // Difensore COERENTE col tipo di battuta (verità del motore, `ev.outInfo`):
+      // rimbalzo → interni, volata → esterni, pop → interni/ricevitore. Così il
+      // badge non attribuisce un rimbalzo a un esterno.
+      const ball = ev.outInfo?.ball;
+      const extra = !!ev.outInfo?.errorExtra;
+      const table: Array<[number, number]> =
+        ball === 'fly'
+          ? [[8, 40], [7, 30], [9, 30]]
+          : ball === 'popup'
+            ? [[3, 26], [5, 24], [4, 22], [6, 18], [2, 10]]
+            : ball === 'ground'
+              ? [[6, 30], [5, 24], [4, 22], [3, 12], [1, 12]]
+              : ERROR_FIELDERS; // fallback: eventi vecchi senza forma
+      const pos = wpick(mix(h, 12), table);
+      const how = extra
+        ? ball === 'fly'
+          ? 'volata lasciata cadere'
+          : 'errore di lancio'
+        : ball === 'fly' || ball === 'popup'
+          ? 'presa sbagliata'
+          : 'rimbalzo sbagliato';
+      return { code: `E${pos}`, title: `errore in difesa (${how}): ${POS_NAME[pos]} (${pos})` };
     }
     case 'sub':
     case 'other':

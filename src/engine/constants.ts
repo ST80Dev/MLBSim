@@ -41,8 +41,12 @@ export const LEAGUE_HIT_SPLIT = {
  * Raccolte qui per poterle regolare facilmente osservando i test di realismo.
  */
 export const TUNING = {
-  /** Prob. che un out con corridore in prima e <2 out diventi doppio gioco. */
-  gidpProb: 0.13,
+  /** Prob. che un RIMBALZO-out con corridore in prima e <2 out diventi doppio
+   *  gioco. Alzata 0.13 → 0.30: a 0.13 il DP era ~0.22/squadra/gara (~1/4 della MLB
+   *  0.7-0.9, quasi invisibile); ora ~0.5/squadra, ben visibile, senza tassare
+   *  troppo l'offesa dell'era (i DP tolgono corridori e chiudono inning). Modulata
+   *  dal RANGE interni (`dpRange`). */
+  gidpProb: 0.3,
   /** Prob. che un out con corridore in terza e <2 out faccia segnare (SF/groundout RBI). */
   runnerScoresFromThirdOnOut: 0.35,
 
@@ -213,6 +217,13 @@ export const TUNING = {
     perSigma: 0.011,
     min: 0.004,
     max: 0.06,
+    // Sottotipo dell'errore su palla IN GIOCO (avanzamento realistico, non più un
+    // "tutti +1 a palla ferma"): quota di errori che valgono una BASE IN PIÙ —
+    // battitore fino in 2ª e corridori +2 invece di +1.
+    //  - interni/pop: errore di LANCIO (tiro sbagliato) oltre al semplice bobble;
+    //  - esterni: volata LASCIATA CADERE (≈ un doppio).
+    throwShare: 0.25, // errori di interni/pop che diventano errori di lancio
+    flyExtraShare: 0.6, // volate su errore che valgono la seconda base
   },
 
   /**
