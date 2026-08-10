@@ -65,6 +65,12 @@ export interface OutInfo {
   advanced: boolean;
   /** Scelta difensiva: out su un corridore, battitore salvo in prima. */
   fc?: boolean;
+  /** L'evento è un ERRORE (reached-on-error), non un out: la forma (rimbalzo/
+   *  volata/pop) serve alla cronaca per attribuire reparto/difensore in modo
+   *  COERENTE col tipo di battuta (badge segnapunti). */
+  error?: boolean;
+  /** Errore "extra base" (lancio sbagliato / volata caduta): battitore in 2ª. */
+  errorExtra?: boolean;
 }
 
 /** Evento di play-by-play. */
@@ -338,7 +344,13 @@ function pushPlay(
 
 /** Costruisce l'OutInfo per la UI dall'esito grezzo (solo per gli out in gioco). */
 function outInfoFrom(res: EventResult): OutInfo | undefined {
-  if (res.hit || res.error || !res.ball) return undefined; // hit/errore non sono out
+  if (!res.ball) return undefined;
+  if (res.hit) return undefined; // le valide non hanno forma-out
+  // L'ERRORE non è un out, ma la forma (rimbalzo/volata/pop) serve alla cronaca e
+  // al badge segnapunti per attribuire reparto/difensore in modo coerente.
+  if (res.error) {
+    return { ball: res.ball, advanced: !!res.advanced, error: true, errorExtra: !!res.errorExtra };
+  }
   return {
     ball: res.ball,
     advanced: !!res.advanced,
@@ -1802,6 +1814,10 @@ interface EventResult {
   advanced?: boolean;
   /** L'out è saltato per un errore difensivo (reached-on-error). */
   error?: boolean;
+  /** Errore "extra base": lancio sbagliato (interni/pop) o volata caduta (esterni)
+   *  → battitore in 2ª, corridori +2. Solo per la narrazione (la dinamica è già
+   *  applicata alle basi). */
+  errorExtra?: boolean;
 }
 
 /**
@@ -2062,21 +2078,26 @@ export function resolveInPlayOut(
     const sig = ball === 'ground' ? defSig.infield : defSig.outfield;
     const pErr = clamp(E.base - sig * E.perSigma, E.min, E.max);
     if (rng.chance(pErr)) {
-      if (bases[2]) {
-        // Il punto segnato SULL'errore è unearned: lo marchiamo come tale.
-        scoreRunner({ ...bases[2], reachedViaError: true });
-        bases[2] = null;
+      // Errore su palla IN GIOCO con avanzamento realistico (non più "tutti +1 a
+      // palla ferma"). `extra` = errore di lancio (interni/pop) o volata caduta
+      // (esterni): il battitore arriva in 2ª e i corridori avanzano di 2 basi;
+      // altrimenti bobble/pop, battitore in 1ª e corridori +1. Si processa dal
+      // corridore di testa per non sovrapporre. I corridori che SEGNANO sull'errore
+      // fanno punto UNEARNED (marcati `reachedViaError`); quelli che solo avanzano
+      // mantengono il loro flag.
+      const extra = rng.chance(ball === 'fly' ? E.flyExtraShare : E.throwShare);
+      const advance = extra ? 2 : 1;
+      const runners = [bases[0], bases[1], bases[2]];
+      bases[0] = bases[1] = bases[2] = null;
+      for (let from = 2; from >= 0; from--) {
+        const r = runners[from];
+        if (!r) continue;
+        const to = from + advance;
+        if (to >= 3) scoreRunner({ ...r, reachedViaError: true });
+        else bases[to] = r;
       }
-      if (bases[1]) {
-        bases[2] = bases[1];
-        bases[1] = null;
-      }
-      if (bases[0]) {
-        bases[1] = bases[0];
-        bases[0] = null;
-      }
-      bases[0] = { ...runner, reachedViaError: true };
-      return { outsAdded: 0, hit: false, error: true, ball, advanced: true };
+      bases[extra ? 1 : 0] = { ...runner, reachedViaError: true };
+      return { outsAdded: 0, hit: false, error: true, ball, advanced: true, errorExtra: extra };
     }
   }
 
@@ -2186,6 +2207,32 @@ export function resolveInPlayOut(
   return { outsAdded: 1, hit: false, ball: 'fly', advanced, detail };
 }
 
+/**
+ * Cronaca di un errore con DINAMICA: reparto (interni/esterni), tipo (rimbalzo
+ * sbagliato / lancio sbagliato / volata caduta / pop) e avanzamento reale del
+ * battitore (1ª o 2ª). Il DIFENSORE specifico lo mostra il badge segnapunti
+ * (`scorecode`, es. "E6"), coerente con `res.ball`: qui NON si ripete il numero,
+ * per non duplicare/contraddire.
+ */
+function describeError(batter: Batter, res: EventResult, rr: string): string {
+  const name = shortName(batter.name);
+  const ball = res.ball ?? 'ground';
+  const extra = !!res.errorExtra;
+  if (ball === 'fly') {
+    return extra
+      ? `${name} in seconda: gli esterni si fanno sfuggire la volata${rr}`
+      : `${name} salvo in prima: volata pasticciata dagli esterni${rr}`;
+  }
+  if (ball === 'popup') {
+    return extra
+      ? `${name} fino in seconda su un lancio sbagliato degli interni${rr}`
+      : `${name} in prima: pop-up lasciato cadere dagli interni${rr}`;
+  }
+  return extra
+    ? `${name} fino in seconda su un lancio sbagliato degli interni${rr}`
+    : `${name} salvo in prima: rimbalzo sbagliato dagli interni${rr}`;
+}
+
 function describe(event: RawEvent, batter: Batter, runs: number, res?: EventResult): string {
   const name = shortName(batter.name);
   const rr = runs > 0 ? ` (${runs} ${runs === 1 ? 'punto' : 'punti'})` : '';
@@ -2205,7 +2252,7 @@ function describe(event: RawEvent, batter: Batter, runs: number, res?: EventResu
     case '1B':
       return `${name} singolo${rr}`;
     case 'IPO': {
-      if (res?.error) return `${name} raggiunge la prima su errore${rr}`;
+      if (res?.error) return describeError(batter, res, rr);
       if (res?.detail === 'gidp') return `${name} in doppio gioco`;
       if (res?.detail === 'infieldhit' || res?.detail === 'dphole')
         return `${name} singolo che passa gli interni${rr}`;

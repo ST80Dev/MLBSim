@@ -67,10 +67,22 @@ pesata per la domanda difensiva del ruolo (uno SS pesa più di un 1ª).
   coinvolto (interni sul **rimbalzo**, esterni **in aria**) può sbagliare:
   `pErr = clamp(base − sigmaReparto·perSigma, min, max)` (difesa scarsa = più
   errori). Il battitore raggiunge la prima (**reached-on-error**, conta come AB
-  senza valida → non intacca la BABIP/media), i corridori avanzano di una,
-  l'eventuale punto è **unearned**. A difesa **media** vale `base` (~2,2 % degli out
-  in gioco): è la **nuova baseline** dell'ambiente-punti, verso cui gli aggregati
-  sono **ricalibrati**.
+  senza valida → non intacca la BABIP/media) e l'eventuale punto è **unearned**.
+  **Dinamica su palla IN GIOCO** (non più "tutti +1 a palla ferma"): un sottotipo
+  `extra` — **errore di lancio** (interni/pop) o **volata lasciata cadere**
+  (esterni), quota `throwShare`/`flyExtraShare` — porta il battitore in **2ª** e i
+  corridori avanzano di **2** basi invece di 1 (bobble/pop restano battitore in 1ª,
+  corridori +1, identici a prima). La **cronaca** esplicita reparto + tipo +
+  avanzamento (es. *"fino in seconda su un lancio sbagliato degli interni"*); il
+  **difensore specifico** lo mostra il badge segnapunti (`ui/scorecode.ts`, es.
+  "E6"), reso **coerente col tipo di battuta** via `OutInfo.error`/`ball` (rimbalzo
+  → interni, volata → esterni). A difesa **media** vale `base` (~2,2 % degli out in
+  gioco): baseline dell'ambiente-punti verso cui gli aggregati sono **ricalibrati**.
+- **Doppio gioco** (`gidpProb`, in `resolveInPlayOut`): sul **rimbalzo**-out col
+  corridore in 1ª e `<2 out`. Alzato **0.13 → 0.30**: a 0.13 il DP valeva
+  ~0,22/squadra/gara (~1/4 della MLB ~0,7-0,9, quasi invisibile); ora ~0,5/squadra
+  (~1,0/gara both, ben visibile) al costo di sole ~0,08 R/squadra (i DP tolgono
+  corridori e chiudono inning). Cronaca "X in doppio gioco" + badge "6-4-3 DP".
 
 **Corse earned/unearned.** `makeScoreRunner` marca una corsa *unearned* se il
 corridore ha raggiunto la base per un errore **oppure** se l'inning, senza gli out
