@@ -307,7 +307,7 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
     'La batte giù, gli interni si muovono…',
     'Rullata potente sull’interno…',
     'A terra! il difensore carica sulla palla…',
-    'Palla battuta nel quadro, si gioca il rimbalzo…',
+    'Palla battuta in diamante, si gioca il rimbalzo…',
   ],
   // Linea tesa: singolo davanti, doppio in gap o lungo la linea.
   liner: [
@@ -348,7 +348,7 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
     'Campanile altissimo sull’interno…',
     'Pop-up, i difensori si chiamano…',
     'La alza cortissima, palla verticale…',
-    'Elevata debole nel quadro…',
+    'Elevata debole nel diamante…',
   ],
   // Duello a due strike / al piatto: strikeout, base ball, colpito.
   battle: [
