@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Team, Batter, Pitcher } from '../engine/types';
 import type { SeasonState, SeasonBat, SeasonPit } from '../data/season';
-import { addBat, addPit } from '../data/season';
 import { projectBatterSeason, projectPitcherSeason, SEASON_GAMES } from '../data/projection';
 import type { BatTier } from '../data/projection';
 import { seasonBatLine, seasonPitLine, pct3, ipFmt } from './statlines';
@@ -11,9 +10,11 @@ import { TeamBadge } from './widgets';
 import { rosterPitchers } from '../engine/arrangement';
 
 // --- Leaderboard di lega -----------------------------------------------------
-// La squadra gestita contribuisce con le stat REALI accumulate; le altre 29 con
-// una proiezione credibile dai rating (vedi data/projection.ts). A stagione non
-// ancora iniziata (giorno 0) si mostra la proiezione piena come anteprima.
+// A stagione IN CORSO tutte le 30 squadre mostrano le stat REALI accumulate
+// (`season.bat`/`season.pit`): le gare di lega CPU-vs-CPU sono simulate e
+// accumulate come le tue, quindi niente proiezione da sommare (sommarla creava
+// partite/aperture FANTASMA). Solo in PRESEASON (giorno 0, nessuna gara ancora)
+// si mostra la proiezione piena dai rating come anteprima (vedi data/projection.ts).
 
 interface LbBat {
   id: string;
@@ -169,8 +170,8 @@ export function LeaderboardPage({
   managedId: string;
 }) {
   const [tab, setTab] = useState<'batting' | 'pitching'>('batting');
-  // Filtro settoriale del reparto lanciatori: partenti (>=10 aperture), rilievo
-  // (<10), o tutti. Soglia robusta anche in proiezione (un SP proietta ~32 GS).
+  // Filtro settoriale del reparto lanciatori: partenti / rilievo / tutti, in base
+  // al RUOLO effettivo del lanciatore (non a una soglia di aperture).
   const [pitScope, setPitScope] = useState<'all' | 'sp' | 'rp'>('all');
   const day = season.day;
   const preseason = day === 0;
@@ -191,14 +192,12 @@ export function LeaderboardPage({
           let sb: SeasonBat | undefined;
           if (preseason) {
             sb = projectBatterSeason(b, tier, { seed, year: season.year, day: projDay });
-          } else if (managed) {
-            sb = season.bat[b.id]; // puro reale (undefined se non ha ancora giocato)
           } else {
-            // Avversario: reale nelle gare contro di me + proiezione nelle altre.
-            const real = season.bat[b.id];
-            const k = real?.g ?? 0;
-            const fill = projectBatterSeason(b, tier, { seed, year: season.year, day: Math.max(0, day - k) });
-            sb = real ? addBat(real, fill) : fill;
+            // A stagione in corso valgono le stat REALI per TUTTI: le gare di lega
+            // (CPU-vs-CPU) sono già accumulate in `season.bat`. NIENTE proiezione da
+            // sommare — prima raddoppiava i conteggi (partite/aperture FANTASMA: es.
+            // 5 gare al 3° giorno). `undefined` = non ha ancora giocato → non compare.
+            sb = season.bat[b.id];
           }
           if (!sb) continue;
           const pa = sb.ab + sb.bb;
@@ -219,13 +218,11 @@ export function LeaderboardPage({
         let sp: SeasonPit | undefined;
         if (preseason) {
           sp = projectPitcherSeason(p, { seed, year: season.year, day: projDay });
-        } else if (managed) {
-          sp = season.pit[p.id];
         } else {
-          const real = season.pit[p.id];
-          const k = real?.g ?? 0;
-          const fill = projectPitcherSeason(p, { seed, year: season.year, day: Math.max(0, day - k) });
-          sp = real ? addPit(real, fill) : fill;
+          // Stat REALI per TUTTI a stagione in corso (le gare di lega sono
+          // accumulate): niente proiezione da sommare, che prima creava aperture
+          // fantasma (GS=2 in 3 giorni, più partenti/squadra del possibile).
+          sp = season.pit[p.id];
         }
         if (!sp || sp.outs < minOuts) continue;
         out.push({ id: p.id, name: p.name, team: t, managed, line: seasonPitLine(sp), player: p });
@@ -236,7 +233,10 @@ export function LeaderboardPage({
 
   const pitShown = useMemo<LbPit[]>(() => {
     if (pitScope === 'all') return pitRows;
-    return pitRows.filter((r) => (pitScope === 'sp' ? r.line.gs >= 10 : r.line.gs < 10));
+    // Partente/Rilievo dal RUOLO effettivo del lanciatore, non da una soglia di
+    // aperture ASSOLUTE (`gs >= 10`, da fine stagione): a inizio anno nessuno ha
+    // 10 aperture e finivano TUTTI in "Rilievo" (Partenti vuoto).
+    return pitRows.filter((r) => (pitScope === 'sp' ? r.player.role === 'SP' : r.player.role !== 'SP'));
   }, [pitRows, pitScope]);
 
   return (
@@ -297,7 +297,7 @@ export function LeaderboardPage({
         <p className="muted lb-note">
           {preseason
             ? 'Proiezione da rating con varianza d’annata: la classifica prende vita giocando.'
-            : 'La tua squadra compare coi numeri REALI delle partite giocate; le altre con una proiezione credibile che si riallinea al totale d’annata a fine stagione.'}{' '}
+            : 'Numeri REALI di tutte le squadre: le tue partite e le gare di lega giocate finora.'}{' '}
           Primi {LB_LIMIT}; clic su una colonna per riordinare.
         </p>
       </div>
