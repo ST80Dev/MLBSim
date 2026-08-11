@@ -593,6 +593,23 @@ describe('logica di campo sugli out (avanzamenti reali oltre il motore lineare)'
     expect(ss.position).toBe('SS');
   });
 
+  it('scambio LIBERO (pannello Gestione difesa): il manager schiera chiunque ovunque', () => {
+    const { away, home } = generateMatchup(3);
+    const live = createLiveGame(away, home, 3);
+    const def = defenseSide(live);
+    const fb = def.team.lineup.find((b) => b.position === '1B')!;
+    const ss = def.team.lineup.find((b) => b.position === 'SS')!;
+    delete fb.secondaryPosition; // NON saprebbe fare SS…
+    delete ss.secondaryPosition; // …né viceversa
+    // Col vincolo (default) è vietato; col flag `free` è consentito.
+    expect(swapDefensivePositions(live, def, fb.id, ss.id)).toBe(false);
+    expect(swapDefensivePositions(live, def, fb.id, ss.id, true)).toBe(true);
+    expect(fb.position).toBe('SS');
+    expect(ss.position).toBe('1B');
+    // Resta una permutazione valida (niente buchi/doppioni sul diamante).
+    expect(validateFieldSet(def.team.lineup.map((x) => x.position)).ok).toBe(true);
+  });
+
   it('pinch-runner: un panchinaro rileva il corridore in base', () => {
     const { away, home } = generateMatchup(4);
     const live = createLiveGame(away, home, 4);

@@ -236,6 +236,10 @@ export function App() {
   const [defenseOpen, setDefenseOpen] = useState(false);
   const pendingDefReview = useRef(false);
   const prevControlledBatting = useRef(false);
+  // "Armato": la transizione attacco→difesa (dopo un pinch) è avvenuta, ma il
+  // pannello aspetta che la telecronaca dell'ultima giocata sia CONCLUSA (banner
+  // svanito) prima di aprirsi, per non coprire la cronaca di come finisce l'inning.
+  const defReviewArmed = useRef(false);
   const isRegularGame = !activeGame || activeGame.phase === 'regular';
   const isPlayoffGame = !!activeGame && activeGame.phase === 'playoff';
   const teams = useMemo(() => {
@@ -329,6 +333,7 @@ export function App() {
     setDefenseOpen(false);
     pendingDefReview.current = false;
     prevControlledBatting.current = false;
+    defReviewArmed.current = false;
   }, [season.day, activeGame]);
 
   // Seme di gara deterministico dalla partita di calendario scelta.
@@ -419,8 +424,13 @@ export function App() {
   // lo schieramento prima del primo lancio. Si basa sullo stato RIVELATO dalla
   // telecronaca (`shownScore`), NON su quello grezzo del motore: altrimenti il
   // pannello comparirebbe appena il motore chiude il mezzo-inning (al click su
-  // "batti"/terzo out), coprendo la cronaca dell'ultimo turno. Così invece aspetta
-  // che il verdetto dell'ultima giocata sia stato mostrato, poi si apre.
+  // "batti"/terzo out), coprendo la cronaca dell'ultimo turno.
+  //
+  // Alla transizione si ARMA soltanto: l'apertura vera avviene al `settle` del
+  // banner (`onBannerSettled`), cioè quando la telecronaca dell'ultima giocata è
+  // del tutto conclusa e la si è potuta leggere. Aprire già al verdetto lasciava
+  // il banner (che tiene ancora ~2.5s) sotto il modale: non si vedeva come finiva
+  // l'inning.
   const revealedBatting = shownScore.sit.controlledBatting;
   useEffect(() => {
     if (
@@ -430,10 +440,18 @@ export function App() {
       !shownFinal
     ) {
       pendingDefReview.current = false;
-      setDefenseOpen(true);
+      defReviewArmed.current = true;
     }
     prevControlledBatting.current = revealedBatting;
   }, [revealedBatting, shownFinal]);
+  // Banner concluso: se un riesame difesa è armato (e la gara non è finita), ora è
+  // il momento di aprire il pannello senza coprire la cronaca appena letta.
+  const onBannerSettled = useCallback(() => {
+    if (defReviewArmed.current && !shownFinal) {
+      defReviewArmed.current = false;
+      setDefenseOpen(true);
+    }
+  }, [shownFinal]);
   // Lock: a partita iniziata (in campo e non finita) le altre sezioni non sono
   // consultabili finche' non finisce la gara.
   // Blocco navigazione finché la partita è "in corso" per il GIOCATORE: usa lo
@@ -860,6 +878,7 @@ export function App() {
           batterName={shownField.batterName}
           shownPlays={shownPlays}
           onReveal={revealField}
+          onBannerSettled={onBannerSettled}
           ctxAway={ctxAway}
           ctxHome={ctxHome}
           controls={
