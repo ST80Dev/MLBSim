@@ -296,6 +296,17 @@ secondaria** non ha una colonna propria: è già nella colonna **RUOLI**
 **Ordine colonne**: `# · Giocatore · ETÀ · RUOLI · OVR · barra · MAX · stat…`
 (l'età sta **a sinistra** del ruolo).
 
+**Vista Lineup — casella e difesa attuale.** Nell'**Ordine di battuta** (vista
+`⚾ Lineup`), fra `RUOLI` e `OVR` ci sono due colonne in più — **POS** e **DIF** —
+così mentre si sistema l'attacco si vede *dove* ognuno è schierato in difesa e
+*quanto* vale lì, senza passare alla vista `🛡 Difesa`. La **POS** è la casella
+attuale (`arr.defense[id] ?? position`), colorata `moved` (ambra) se diversa dal
+ruolo naturale e con `⚠` se fuori ruolo (`!canOccupy`), come nella vista Difesa;
+la **DIF** è il fielding *sulla casella attuale* (`ratingsAtPosition(b, pos).fielding`,
+già con l'eventuale penalità fuori ruolo). Colonne sempre visibili (indipendenti
+dal toggle stat/caratteristiche). La lista **Disponibili** resta senza queste due
+colonne: le riserve non hanno una casella difensiva assegnata.
+
 ### Larghezza tabella e celle rating
 
 Le card colorate dei rating (`.rat`) hanno **larghezza fissa** (~34px, quasi
@@ -478,9 +489,40 @@ Oltre alla schermata partita, la UI è un'app a **view** commutate dall'header:
   mia squadra e **proiezione** d'annata per le altre 29.
 - **Franchigia**: monte-ingaggi, indicatore cap a due confini, valore rosa.
 - **Scambi** (`trade-screen.tsx`): tab aperta in stagione fino alla trade deadline;
-  proponi a una CPU, `evaluateTrade` decide live, `applyTrade` ricompone le rose.
+  **ricerca-prima** (filtri di lega, non squadra-prima), `evaluateTrade` decide live,
+  `applyTrade` ricompone le rose. Vedi § *Schermata scambi* sotto.
 - **Riepilogo off-season** (`rollover-recap.tsx`): a campione deciso, il modale
   `RolloverRecap` mostra ritiri/draft/mercato del passaggio all'anno successivo.
+
+### Schermata scambi — ricerca-prima + riepilogo sempre visibile
+
+Ridisegnata attorno al flusso *«trova l'obiettivo, poi pareggia con la sua
+squadra»* (non più «scegli una squadra e sfoglia»). Tre blocchi:
+
+- **Riepilogo (sempre visibile, `position: sticky` in alto)**: due lati **Cedi**
+  (arancio) / **Ricevi** (azzurro) con i giocatori come **chip removibili**, Σ
+  valore e Σ ingaggi per lato; sotto, il **saldo ingaggi** dal punto di vista
+  dell'umano — `+X.X M$ assorbi` / `−X.X M$ liberi` / *in pari* — i **payroll
+  risultanti vs cap** di entrambe (⚠ se sforano) e il **verdetto** live di
+  `evaluateTrade` (Δ grezzo · premio slot · netto) col pulsante *Conferma* (attivo
+  solo se accettato) e *Azzera*.
+- **La tua rosa (Cedi)**: pannello con la rosa gestita divisa in **Battitori** e
+  **Lanciatori** (sezioni separate), ordinate per OVR; clic = toggle nel pacchetto
+  ceduto.
+- **Mercato (Ricevi)**: toggle **Tutta la lega** / **Solo <PARTNER>**.
+  - *Tutta la lega*: barra **filtri** — tipo (Tutti/Battitori/Lanciatori) + intervalli
+    **OVR**, **età**, **ingaggio** (min–max, combinabili in AND) — e i risultati di
+    **tutta la lega** (colonna squadra), divisi Battitori/Lanciatori, con conteggio
+    e tetto per sezione (`RESULT_CAP`, sovrappiù nascosto con avviso «affina i
+    filtri»). Scegliere un giocatore ne fissa la squadra come **partner**; con un
+    partner attivo, i giocatori di **altre** squadre sono **sbiaditi** (cliccarli
+    cambia partner — uno scambio coinvolge **una sola** squadra).
+  - *Solo <PARTNER>*: la rosa completa del partner, anch'essa divisa
+    Battitori/Lanciatori, per aggiungere altri suoi giocatori e chiudere alla pari.
+
+**Intestazioni fisse**: ogni sezione (`.trade-sec-head`, titolo + colonne) è
+`position: sticky; top: 0` dentro il proprio contenitore scrollabile, quindi
+l'intestazione della sezione in vista resta ancorata mentre si scorre.
 
 ## Prossimi passi UI
 
