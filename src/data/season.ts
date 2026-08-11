@@ -4,7 +4,7 @@ import { createLiveGame, quickSim, toGameResult } from '../engine/game';
 import { makeRng } from '../engine/rng';
 import { synthesizeStolenBases } from '../engine/leagueSteals';
 import { rosterBatters } from '../engine/arrangement';
-import { withRotationStarter } from './generator';
+import { withRotationStarter, leagueRotationIndex } from './generator';
 import { withFormLineup } from './formLineup';
 import type { RotationState, PitcherUsage } from './rotation';
 import { createRotation, recordUsage, migrateRotation } from './rotation';
@@ -238,10 +238,12 @@ export function advanceWithResult(
   // forma accumulata FINORA (`season.bat`, snapshot pre-giornata).
   const busy = new Set([result.home.id, result.away.id]);
   for (const [a, b] of otherPairings(teams, busy, seed, season.day)) {
-    // Lineup con forma (CPU) poi rotazione del partente col giorno (senza, ogni
-    // squadra lancerebbe l'asso ogni partita). I due wrap sono indipendenti.
-    const aS = withRotationStarter(withFormLineup(a, season.bat), season.day);
-    const bS = withRotationStarter(withFormLineup(b, season.bat), season.day);
+    // Lineup con forma (CPU) poi rotazione del partente con l'indice CONDIVISO
+    // (`leagueRotationIndex` = giorno + sfasamento della squadra): stessa formula
+    // dell'avversario nella partita interattiva, così una squadra usa lo stesso
+    // partente per un dato giorno in ogni contesto (niente 2 aperture in 3 gare).
+    const aS = withRotationStarter(withFormLineup(a, season.bat), leagueRotationIndex(a, season.day));
+    const bS = withRotationStarter(withFormLineup(b, season.bat), leagueRotationIndex(b, season.day));
     const gseed = (seed ^ Math.imul(season.day + 1, a.id.length + 7)) >>> 0;
     const g = createLiveGame(aS, bS, gseed);
     quickSim(g);

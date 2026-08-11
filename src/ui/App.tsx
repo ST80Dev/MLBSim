@@ -35,7 +35,7 @@ import {
 } from '../data/season';
 import type { SeasonState } from '../data/season';
 import { suggestedStarter, withStarterId, PLAYOFF_REST_STARTER } from '../data/rotation';
-import { withRotationStarter, rotationPhase } from '../data/generator';
+import { withRotationStarter, leagueRotationIndex } from '../data/generator';
 import { withFormLineup } from '../data/formLineup';
 import {
   seedPlayoffs,
@@ -251,16 +251,20 @@ export function App() {
         ? todayStarter ?? suggestedStarter(playoff.rotation, rotIds, playoff.managedGames, PLAYOFF_REST_STARTER)
         : base.rotation[0]?.id;
     const applied = starterId ? withStarterId(base, starterId) : base;
-    // L'avversario ruota anch'esso il partente. Nei playoff col n° di gara nella
-    // serie (asso in Gara 1), in regular col giorno di stagione + lo sfasamento
-    // proprio della squadra (`rotationPhase`): ogni squadra AI cicla i suoi 5
-    // partenti in modo indipendente, così in una serie ne affronti 3 diversi.
-    const oppDay = isRegularGame ? season.day : isPlayoffGame ? playoffCtx?.gameNo ?? 0 : activeGame?.day ?? 0;
-    const oppPhase = isRegularGame ? rotationPhase(opponent) : 0;
+    // L'avversario ruota anch'esso il partente. In regular usa l'indice CONDIVISO
+    // `leagueRotationIndex` (giorno + sfasamento squadra) — LA STESSA formula della
+    // sim di lega, così la sua rotazione combacia nei due contesti (niente doppie
+    // aperture in pochi giorni). Nei playoff col n° di gara nella serie (asso in
+    // Gara 1), in prestagione col giorno di calendario.
+    const oppIdx = isRegularGame
+      ? leagueRotationIndex(opponent, season.day)
+      : isPlayoffGame
+        ? playoffCtx?.gameNo ?? 0
+        : activeGame?.day ?? 0;
     // Lineup AVVERSARIO "con forma": ri-ordinato pesando il rendimento in-season
     // accumulato (no-op sotto 30 partite o senza dati). SOLO l'avversario — la MIA
     // squadra resta manuale. Poi la rotazione del partente.
-    const opp = withRotationStarter(withFormLineup(opponent, season.bat), oppDay + oppPhase);
+    const opp = withRotationStarter(withFormLineup(opponent, season.bat), oppIdx);
     return controlled === 'home'
       ? { away: opp, home: applied }
       : { away: applied, home: opp };
