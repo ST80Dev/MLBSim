@@ -301,12 +301,12 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
   // Rullata sull'interno: singolo nel buco/interno, doppio d'angolo, out in
   // prima, scelta difensiva, doppio gioco.
   grounder: [
-    'Attacca a terra, la palla corre sull’interno…',
+    'Batte una rimbalzante interna…',
     'Colpo secco verso il diamante…',
     'Rimbalzo che schizza tra gli interni…',
     'La batte giù, gli interni si muovono…',
     'Rullata potente sull’interno…',
-    'A terra! il difensore carica sulla palla…',
+    'Batte in campo interno, il difensore raccoglie la palla…',
     'Palla battuta in diamante, si gioca il rimbalzo…',
   ],
   // Linea tesa: singolo davanti, doppio in gap o lungo la linea.
@@ -320,10 +320,10 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
   ],
   // Colpo molle/flare: bloop che puo' cadere o essere preso.
   flare: [
-    'Elevata molle appena dietro l’interno…',
+    'Battuta alta debole appena dietro l’interno…',
     'Palla a campanile corto verso l’esterno…',
     'Colpita piano, sale fiacca tra le linee…',
-    'Bloop in mezzo al nessun-uomo…',
+    'Blooper dove non c’è nessuno…',
   ],
   // Volata all'esterno: out al volo, volata di sacrificio, doppio sul muro,
   // triplo d'angolo, fuoricampo di un soffio.
@@ -338,7 +338,7 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
   // Bordata piena: fuoricampo, doppio sul muro, triplo in gap.
   deep: [
     'Contatto pieno… la palla parte come un missile…',
-    'La schiaccia in pieno, vola altissima…',
+    'La batte pulita, forte…',
     'Bordata devastante verso il fondo del campo…',
     'La colpisce in pieno… sale, sale…',
     'Legnata piena, palla spedita lontano…',
