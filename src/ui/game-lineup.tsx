@@ -123,16 +123,23 @@ export function LineupSide({
   const pitsRef = useRef<HTMLDivElement>(null);
   const curPitRef = useRef<HTMLTableRowElement>(null);
   // Il lanciatore corrente è SEMPRE l'ultima riga (ordine d'ingresso): porta il
-  // fondo in vista così il subentrato non resta sotto la piega quando i
-  // lanciatori superano l'altezza del box. Il vecchio calcolo con `offsetTop`
-  // non scrollava (dipende dall'offsetParent).
-  // Si ri-scrolla non solo quando entra un nuovo lanciatore, ma anche mentre il
-  // corrente lavora (bf che cresce): le righe possono RIFLUIRE più alte (badge di
-  // affaticamento che va a capo) e far uscire il corrente dalla vista.
+  // FONDO in vista, così il subentrato non resta sotto la piega quando i
+  // lanciatori superano l'altezza del box.
+  // Robustezza:
+  //  - si ri-scrolla anche mentre il corrente lavora (`bf` che cresce): le righe
+  //    possono RIFLUIRE più alte (badge di affaticamento che va a capo su box
+  //    stretti) dopo l'ingresso, spingendo fuori il corrente;
+  //  - lo scroll è differito a `requestAnimationFrame` così `scrollHeight` viene
+  //    letto DOPO il ricalcolo del layout (le righe rifluite hanno l'altezza
+  //    definitiva), altrimenti si scrollava a un'altezza ancora vecchia.
   const curBf = pits[lastPitIdx]?.bf ?? 0;
   useEffect(() => {
     const box = pitsRef.current;
-    if (box) box.scrollTop = box.scrollHeight;
+    if (!box) return;
+    const id = requestAnimationFrame(() => {
+      box.scrollTop = box.scrollHeight;
+    });
+    return () => cancelAnimationFrame(id);
   }, [lastPitIdx, pits.length, curBf]);
 
   return (
