@@ -330,7 +330,7 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
   fly: [
     'La alza verso l’esterno, il difensore indietreggia…',
     'Vola lunga verso l’esterno…',
-    'Elevata profonda, l’esterno gira e insegue…',
+    'Palla alta profonda, l’esterno gira e insegue…',
     'Contatto in aria, la palla sale verso il fondo…',
     'La spinge alta in esterno…',
     'Palla in cielo verso le tribune, chi la prende?…',
