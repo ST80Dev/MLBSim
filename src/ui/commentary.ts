@@ -389,6 +389,13 @@ function trajectoryOf(ev: PlayEvent): Trajectory {
       const shape = inPlayOutShape(ev);
       return shape === 'ground' ? 'grounder' : shape === 'fly' ? 'fly' : 'pop';
     }
+    case 'error': {
+      // Errore = palla IN GIOCO: la traiettoria segue la forma (rimbalzo → interni,
+      // volata → esterni, pop), così la preliminare descrive la BATTUTA prima del
+      // misfatto (non un "duello" generico).
+      const shape = inPlayOutShape(ev);
+      return shape === 'ground' ? 'grounder' : shape === 'fly' ? 'fly' : 'pop';
+    }
     case 'strikeout':
     case 'walk':
     case 'ibb':
@@ -765,6 +772,28 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
               ? pick(ev, [`Volata profonda catturata… il corridore guadagna una base.${t}`, `Presa profonda, tag-up riuscito.${t}`])
               : fill(pickS(ev, OUT_FLAVOR.fly.verdict, 'ver'), b) + t
             : fill(pickS(ev, OUT_FLAVOR.air.verdict, 'ver'), b) + t;
+      return [open, actionPhrase(ev), verdict];
+    }
+    case 'error': {
+      // Errore su palla in gioco: fasi come le altre giocate — apertura, battuta
+      // che si SVILUPPA (preliminare per traiettoria), poi il MISFATTO svelato al
+      // verdetto, con reparto (interni/esterni) e avanzamento reale. Coerente col
+      // testo del motore e col badge segnapunti (Ex). Prima cadeva nel `default`
+      // → una sola fase secca (l'errore compariva istantaneo, senza dinamica).
+      const shape = inPlayOutShape(ev);
+      const extra = ev.outInfo?.errorExtra;
+      const verdict =
+        shape === 'fly'
+          ? extra
+            ? `Cade! L’esterno si fa sfuggire la volata: ERRORE, ${b} fino in seconda.${t}`
+            : `Sfugge dal guanto dell’esterno: ERRORE, ${b} salvo in prima.${t}`
+          : shape === 'air'
+            ? extra
+              ? `Pop-up lasciato cadere, poi rilancio sbagliato: ERRORE, ${b} in seconda.${t}`
+              : `Il pop-up cade tra gli interni: ERRORE, ${b} salvo in prima.${t}`
+            : extra
+              ? `Palla trattenuta e rilancio sbagliato: ERRORE degli interni, ${b} fino in seconda.${t}`
+              : `Palla che sfugge all’interno: ERRORE degli interni, ${b} salvo in prima.${t}`;
       return [open, actionPhrase(ev), verdict];
     }
     case 'sub':
