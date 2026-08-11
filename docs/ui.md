@@ -107,10 +107,13 @@ Regioni, dall'alto in basso:
       l'esito — strikeout = *X-2* (2 strike), base ball = *3-X* (3 ball), palla
       in gioco = qualunque conto. Il conto **NON è un dato del motore** (non lo
       traccia): è sintetizzato plausibile e deterministico, pura presentazione.
-    - **Apertura per SITUAZIONE match** (`situation`), per fase di partita
-      (early/mid/late/decisivi): «Match in pieno svolgimento…», «Ultimo atto,
-      può succedere di tutto…». Dipende **solo dall'inning** (noto prima
-      dell'azione), mai dall'esito, e si mescola con «al piatto…».
+    - **Apertura per SITUAZIONE match** (`situation`), da **inning + margine di
+      punteggio**: «Sfida punto a punto…» in equilibrio, «{leader} domina,
+      {trailer} in grande difficoltà…» su un divario largo. Il margine è
+      calcolato sul punteggio **pre-turno** (si sottraggono i punti del turno
+      corrente), così è noto prima dell'azione, **mai** legato all'esito, e le
+      frasi restano **coerenti col tabellone** (niente «equilibrio» su un 2-8).
+      Si mescola con «al piatto…».
     Il **verdetto** resta invece specifico dell'esito (e i marker sul diamante si
     muovono lì). Coperto da test dedicati (`commentary.test.ts`: la preliminare
     non nomina l'esito, traiettorie condivise tra esiti diversi, conto coerente,

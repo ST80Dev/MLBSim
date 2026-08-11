@@ -559,43 +559,64 @@ const META: Record<
   other: { tier: 0, icon: '•', label: 'AZIONE', accent: 'offense' },
 };
 
-/** Commento di SITUAZIONE (apertura alternativa), per fase di partita. Dipende
- *  SOLO dall'inning (dato noto prima dell'azione), mai dall'esito: e' un altro
- *  "testo duttile" che precede i due testi di esito (sviluppo + verdetto) e non
- *  anticipa nulla. La stessa frase puo' aprire qualunque turno. */
+/** Commento di SITUAZIONE (apertura alternativa). Dipende da inning E margine di
+ *  punteggio (dati noti PRIMA dell'azione: il margine è calcolato sul punteggio
+ *  pre-turno, sottraendo i punti di QUESTO turno), mai dall'esito. Così non dice
+ *  "punto a punto" su un 2-8 né "dominio" su una gara in bilico: le frasi offerte
+ *  sono sempre coerenti col tabellone. Resta un "testo duttile" che precede i due
+ *  testi di esito e non anticipa nulla. */
 function situation(ev: PlayEvent, ctx: BannerContext): string[] {
   const off = ctx.offense.abbrev;
   const def = ctx.defense.abbrev;
-  if (ev.inning <= 3) {
-    return [
-      'Partita ancora tutta da scrivere…',
-      'Primi scambi, ci si studia sul diamante…',
-      `${off} prova a muovere qualcosa in attacco…`,
-      'Si comincia a fare sul serio…',
-    ];
+  // Punteggio PRIMA del turno: i punti di questo turno vanno alla squadra in
+  // attacco (top→away batte, bottom→home batte). Evita di "leggere" l'esito.
+  const runsThis = ev.runsScored ?? 0;
+  const preAway = ev.away - (ev.half === 'top' ? runsThis : 0);
+  const preHome = ev.home - (ev.half === 'bottom' ? runsThis : 0);
+  const offScore = ev.half === 'top' ? preAway : preHome;
+  const defScore = ev.half === 'top' ? preHome : preAway;
+  const diff = offScore - defScore;
+  const m = Math.abs(diff);
+  const leader = diff > 0 ? off : def; // valido solo se m > 0
+  const trailer = diff > 0 ? def : off;
+  const early = ev.inning <= 3;
+  const late = ev.inning >= 7;
+  const veryLate = ev.inning >= 9;
+
+  const out: string[] = [];
+  if (m === 0) {
+    out.push('Punteggio in parità, partita apertissima…', 'Tutto in equilibrio, nessuno avanti…');
+    if (early) out.push(`${off} prova a muovere qualcosa in attacco…`, 'Primi scambi, ci si studia sul diamante…');
+    else if (veryLate) out.push('Inning decisivi in perfetta parità…', 'Ultimo atto in bilico, ogni lancio pesa…');
+    else if (late) out.push('Parità nel finale, si decide su un episodio…');
+    else out.push('Match in equilibrio, nessuno vuole mollare…', 'Si lotta punto a punto…');
+  } else if (m === 1) {
+    out.push(`Sfida punto a punto, ${leader} avanti di un'incollatura…`, 'Una sola incollatura divide le squadre…');
+    if (veryLate) out.push('Ultimo atto, una corsa può ribaltare tutto…');
+    else if (late) out.push('Finale tiratissimo, ogni lancio pesa…');
+  } else if (m <= 3) {
+    out.push(
+      `${leader} avanti di poco, ${trailer} resta in scia…`,
+      `Match ancora aperto, ${trailer} vuole rientrare…`,
+      `${leader} prova a gestire il vantaggio…`,
+    );
+    if (late) out.push(`${trailer} a caccia del pari nel finale…`);
+  } else if (m <= 5) {
+    out.push(
+      `${leader} in controllo, ${trailer} deve reagire…`,
+      `${trailer} insegue un margine importante…`,
+      `${leader} tiene le distanze…`,
+    );
+    if (late) out.push(`${leader} a un passo dal blindare la gara…`);
+  } else {
+    out.push(
+      `${leader} domina, ${trailer} in grande difficoltà…`,
+      `${trailer} sotto pesantemente, servirebbe una scossa…`,
+      `${leader} dilaga sul tabellone…`,
+    );
+    if (late) out.push(`${leader} lanciato verso una vittoria larga…`);
   }
-  if (ev.inning <= 6) {
-    return [
-      'Match in pieno svolgimento, equilibrio delicato…',
-      'Fase centrale, nessuno vuole mollare…',
-      `${def} tiene la posizione, ${off} spinge…`,
-      'Si lotta punto a punto…',
-    ];
-  }
-  if (ev.inning <= 8) {
-    return [
-      'Si entra nel vivo, ogni lancio pesa…',
-      'Ultimi inning, la tensione cresce…',
-      'Verso il finale, difese sul chi vive…',
-      `Momento delicato per ${off}…`,
-    ];
-  }
-  return [
-    'Ultimo atto, può succedere di tutto…',
-    'Inning decisivi, si decide qui…',
-    'Non c’è più tempo, ogni turno vale doppio…',
-    `${off} a caccia del colpo che pesa…`,
-  ];
+  return out;
 }
 
 /**
