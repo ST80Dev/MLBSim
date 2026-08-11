@@ -348,7 +348,7 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
     'Campanile altissimo sull’interno…',
     'Pop-up, i difensori si chiamano…',
     'La alza cortissima, palla verticale…',
-    'Elevata debole nel diamante…',
+    'Palla alta debole in diamante…',
   ],
   // Duello a due strike / al piatto: strikeout, base ball, colpito.
   battle: [
