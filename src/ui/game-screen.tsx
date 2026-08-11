@@ -74,6 +74,11 @@ export function GameScreen({
   const dResult = displayResult ?? result;
   const dSit = displaySit ?? sit;
   const fieldBases = basesShown ?? dSit.bases;
+  // Lanciatore CORRENTE dallo stato REALE (non ritardato): la squadra in difesa è
+  // quella che NON attacca. Serve a garantire che la sua riga sia sempre nel
+  // boxscore anche se il reveal ritardato non l'ha ancora agganciata.
+  const awayLivePitcherId = sit.offenseSide === 'home' ? sit.pitcher.id : undefined;
+  const homeLivePitcherId = sit.offenseSide === 'away' ? sit.pitcher.id : undefined;
   return (
     <div className="game-screen">
       <StatBar result={dResult} sit={dSit} basesShown={fieldBases} ctxAway={ctxAway} ctxHome={ctxHome} />
@@ -104,10 +109,10 @@ export function GameScreen({
         </div>
 
         <div className="lineup-corner left">
-          <LineupSide side="away" team={dResult.away} stats={dResult.awayStats} sit={dSit} ctx={ctxAway} />
+          <LineupSide side="away" team={dResult.away} stats={dResult.awayStats} sit={dSit} ctx={ctxAway} livePitcherId={awayLivePitcherId} />
         </div>
         <div className="lineup-corner right">
-          <LineupSide side="home" team={dResult.home} stats={dResult.homeStats} sit={dSit} ctx={ctxHome} />
+          <LineupSide side="home" team={dResult.home} stats={dResult.homeStats} sit={dSit} ctx={ctxHome} livePitcherId={homeLivePitcherId} />
         </div>
 
         <div className="controls-overlay">{controls}</div>
