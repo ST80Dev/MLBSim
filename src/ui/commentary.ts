@@ -803,7 +803,7 @@ export function buildCommentary(ev: PlayEvent, ctx: BannerContext): Commentary {
 }
 
 /** Durata (ms) di permanenza di ciascuna fase prima della successiva. Tarata per
- *  leggere con calma ogni testo (non solo intravederlo). */
-export const PHASE_MS = 1500;
+ *  leggere con calma i testi di preparazione all'esito (non solo intravederli). */
+export const PHASE_MS = 1900;
 /** Tempo di permanenza del verdetto prima che il banner sparisca (ms). */
 export const HOLD_MS = 2500;
