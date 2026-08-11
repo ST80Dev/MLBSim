@@ -968,6 +968,19 @@ export function hitAndRun(l: LiveGame): boolean {
     if (l.rng.chance(save)) ev = 'IPO';
   }
 
+  // "BUCO APERTO": l'interno che copre la rubata lascia un buco — una quota dei
+  // rimbalzi in gioco passa per un SINGOLO invece di un out (guidata dal Contatto).
+  // È il beneficio-chiave dell'hit-and-run, prima non modellato. Solo interattivo.
+  if (ev === 'IPO') {
+    const contact = (batter.ratings.contact - RATING_AVG) / 10;
+    const pHole = clamp(
+      H.holeThroughBase + contact * H.holeThroughPerContact,
+      H.holeThroughMin,
+      H.holeThroughMax,
+    );
+    if (l.rng.chance(pHole)) ev = '1B';
+  }
+
   let text: string;
   let kind: PlayKind;
   let outInfo: OutInfo | undefined;
