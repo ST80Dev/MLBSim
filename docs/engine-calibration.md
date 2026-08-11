@@ -148,14 +148,21 @@ spostano gli aggregati di lega.
   gioco, `contactSave*`). Esiti:
   - **singolo** → dalla 2ª il corridore **SEGNA** (lanciato col lancio), dalla 1ª
     vola in 3ª;
-  - **rimbalzo** → o il battitore è out in prima e il corridore avanza (niente DP),
-    **oppure** la difesa prende il corridore alla base d'arrivo (RISCHIO:
-    `caughtAdvancingFrom2nd` .30 dalla 2ª, `From1st` .10 dalla 1ª) e il battitore
-    è salvo in prima (scelta difensiva);
+  - **rimbalzo (IPO)** → prima si tira il **"buco aperto"** (`holeThrough*`):
+    l'interno che copre la rubata lascia un buco, così una quota del rimbalzo
+    passa per un **SINGOLO** invece di un out (guidata dal **Contatto**:
+    `pHole = clamp(base + contact_σ·perContact, min, max)`, ~15 % a contatto medio,
+    fino a ~32 %). È il beneficio-chiave della giocata, prima **non modellato**:
+    senza, l'esito era ~52 % "out + avanzamento" e solo ~13 % valida (la giocata
+    non *creava* valide); ora il singolo sale a ~25 % e l'out+avanzamento scende a
+    ~41 %. Se non passa il buco, come prima: o battitore out in prima e corridore
+    avanza (niente DP), **oppure** la difesa prende il corridore alla base d'arrivo
+    (RISCHIO: `caughtAdvancingFrom2nd` .30 dalla 2ª, `From1st` .10 dalla 1ª) e il
+    battitore è salvo in prima (scelta difensiva);
   - **strikeout** → il corridore tenta comunque la rubata (verso la 3ª è più
     rischiosa): riuscita = furto, fallita = doppio gioco strike/tiro.
   Costanti in `TUNING.hitAndRun`. Come le altre tattiche **non entra nel quick-sim**
-  → nessun impatto sulla calibrazione.
+  → nessun impatto sulla calibrazione (test in `hitandrun.test.ts`).
 - **Base intenzionale** (`intentionalWalk`) — avanzamento forzato deterministico
   (nessun RNG); conta come BB.
 - **Interni dentro** (`setInfieldIn`, flag `LiveGame.infieldIn`) — difensiva col

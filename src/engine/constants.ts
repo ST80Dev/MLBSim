@@ -152,6 +152,16 @@ export const TUNING = {
     firstToThird: 0.3,
     caughtAdvancingFrom1st: 0.1,
     caughtAdvancingFrom2nd: 0.3,
+    // "BUCO APERTO": beneficio-chiave dell'hit-and-run. L'interbase/2B che copre
+    // la rubata lascia un buco, così una quota dei rimbalzi in gioco (IPO) passa
+    // per un SINGOLO invece di essere un out. Guidata dal Contatto del battitore
+    // (chi ha mano diventa più premiante). SOLO gioco interattivo (hit-and-run non
+    // gira mai nel quick-sim) → nessun impatto sulla calibrazione Fase 0/lega.
+    //   pHole = clamp(holeThroughBase + contact_sigma·holeThroughPerContact, min, max)
+    holeThroughBase: 0.15,
+    holeThroughPerContact: 0.06,
+    holeThroughMin: 0.06,
+    holeThroughMax: 0.32,
   },
 
   /**
