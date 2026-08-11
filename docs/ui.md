@@ -296,6 +296,17 @@ secondaria** non ha una colonna propria: è già nella colonna **RUOLI**
 **Ordine colonne**: `# · Giocatore · ETÀ · RUOLI · OVR · barra · MAX · stat…`
 (l'età sta **a sinistra** del ruolo).
 
+**Vista Lineup — casella e difesa attuale.** Nell'**Ordine di battuta** (vista
+`⚾ Lineup`), fra `RUOLI` e `OVR` ci sono due colonne in più — **POS** e **DIF** —
+così mentre si sistema l'attacco si vede *dove* ognuno è schierato in difesa e
+*quanto* vale lì, senza passare alla vista `🛡 Difesa`. La **POS** è la casella
+attuale (`arr.defense[id] ?? position`), colorata `moved` (ambra) se diversa dal
+ruolo naturale e con `⚠` se fuori ruolo (`!canOccupy`), come nella vista Difesa;
+la **DIF** è il fielding *sulla casella attuale* (`ratingsAtPosition(b, pos).fielding`,
+già con l'eventuale penalità fuori ruolo). Colonne sempre visibili (indipendenti
+dal toggle stat/caratteristiche). La lista **Disponibili** resta senza queste due
+colonne: le riserve non hanno una casella difensiva assegnata.
+
 ### Larghezza tabella e celle rating
 
 Le card colorate dei rating (`.rat`) hanno **larghezza fissa** (~34px, quasi

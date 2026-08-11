@@ -655,6 +655,8 @@ export function RosterPage({
                       <th className="l">Giocatore</th>
                       <th className="age-h" title="Età">ETÀ</th>
                       <th className="roles-h" title="Ruoli naturali">RUOLI</th>
+                      <th className="pos-h" title="Casella difensiva attuale — dove è schierato ora in difesa">POS</th>
+                      <th title="Difesa nella casella difensiva attuale">DIF</th>
                       <th title="Valore totale">OVR</th>
                       <th className="ovrbar-h" title="Barra overall (tratto chiaro = margine di crescita)"></th>
                       <th className="pot-h" title="Potenziale — tetto di crescita">MAX</th>
@@ -664,7 +666,10 @@ export function RosterPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {lineup.map((b, i) => (
+                    {lineup.map((b, i) => {
+                      const pos = arr.defense[b.id] ?? b.position;
+                      const outOfRole = !canOccupy(b, pos);
+                      return (
                       <tr
                         key={b.id}
                         className={`drow${drag?.id === b.id ? ' dragging' : ''}${over === b.id && drag?.id !== b.id ? ' over' : ''}`}
@@ -676,16 +681,22 @@ export function RosterPage({
                       >
                         <td className="n">{i + 1}</td>
                         <td className="l grip">
-                          ⠿ <PlayerLink player={b} pos={arr.defense[b.id] ?? b.position} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
+                          ⠿ <PlayerLink player={b} pos={pos} tier={batTierOf.get(b.id)}>{b.name}</PlayerLink>
                         </td>
                         <td className="age">{b.age}</td>
                         <td className="roles">{rolesOf(b)}</td>
+                        <td>
+                          <span className={`pos${pos === b.position ? '' : ' moved'}`}>{pos}</span>
+                          {outOfRole && ' ⚠'}
+                        </td>
+                        <Rating v={ratingsAtPosition(b, pos).fielding} />
                         <td className="ovr"><OvrBadge overall={batterOverall(b.ratings)} /></td>
                         <OvrBarCell id={b.id} overall={batterOverall(b.ratings)} potential={b.potential} age={b.age} />
                         <PotCell id={b.id} overall={batterOverall(b.ratings)} potential={b.potential} age={b.age} />
                         {batAtkCells(b)}
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
