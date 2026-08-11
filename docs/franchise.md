@@ -47,7 +47,11 @@ toccarne la struttura.
 **Fase 5B — UI + accoppiamento con la stagione — IN CORSO:**
 
 - **UI scambi** (proponi → *una* CPU valuta): **FATTO** (`TradeScreen`, aperta in
-  stagione fino a `TRADE_DEADLINE_GAME`).
+  stagione fino a `TRADE_DEADLINE_GAME`). Ridisegnata **ricerca-prima**: filtri di
+  lega (OVR · età · ingaggio, combinabili) per trovare l'obiettivo, poi la sua
+  squadra diventa il partner e se ne sfoglia la rosa (divisa Battitori/Lanciatori)
+  per pareggiare; riepilogo sempre visibile col **saldo ingaggi** e il verdetto.
+  Dettaglio UI in `docs/ui.md` § *Schermata scambi*.
 - **Rollover automatico + riepilogo** (`RolloverRecap` a campione deciso): **FATTO**.
 - **Schema v3 + rose persistite**: **FATTO** (`GameSave.teams?`).
 - **Manca:** off-season **interattiva a blocchi** (il motore `advanceBlock`/
