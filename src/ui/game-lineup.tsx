@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import type { Team } from '../engine/types';
 import type { GameResult, TeamGameStats, LiveSituation } from '../engine/game';
-import { estimatedPitches } from '../engine/boxscore';
+import { estimatedPitches, newPitchingLine } from '../engine/boxscore';
 import { disambiguateLastNames } from '../engine/names';
 import type { Side } from './types';
 import { batterStatLine, pitcherStatLine, STATS_MODE_SHORT, STATS_MODE_TITLE } from './statlines';
@@ -82,6 +82,7 @@ export function LineupSide({
   side,
   sit,
   ctx,
+  livePitcherId,
 }: {
   team: Team;
   stats: TeamGameStats;
@@ -89,6 +90,10 @@ export function LineupSide({
   sit: LiveSituation;
   // Contesto per le stat di stagione/precedente (assente = solo modalità Partita).
   ctx?: GameStatCtx;
+  // Id del lanciatore CORRENTE (stato reale) di questa squadra, quando difende:
+  // garantisce che la sua riga sia SEMPRE presente nel boxscore anche se la
+  // rivelazione ritardata non l'ha ancora agganciato.
+  livePitcherId?: string;
 }) {
   // Selettori INDIPENDENTI per blocco (battitori vs lanciatori).
   const [batMode, setBatMode] = useState<StatsMode>('game');
@@ -111,7 +116,15 @@ export function LineupSide({
   // TUTTI i lanciatori usati (partente + rilievi), con intestazioni proprie
   // (pitcherStatLine): tabella, non righe a-capo. Colonne dipendenti dal toggle
   // lanciatori (Partita: IP/H/R/ER/BB/SO — Stagione: K9/BB9/WHIP/HR9/SO).
-  const pits = stats.pitching;
+  // GARANZIA lanciatore corrente: se lo stato reale ha un lanciatore che il
+  // boxscore ritardato non mostra ancora (appena entrato, verdetto non arrivato),
+  // aggiungo la sua riga con stat a ZERO — non anticipa l'esito del turno e la
+  // linea reale la sostituisce al verdetto. Così non manca MAI dal boxscore.
+  const livePit = livePitcherId ? pitById.get(livePitcherId) : undefined;
+  const pits =
+    livePit && !stats.pitching.some((pl) => pl.id === livePit.id)
+      ? [...stats.pitching, newPitchingLine(livePit)]
+      : stats.pitching;
   const lastPitIdx = pits.length - 1;
   const pitLabels = disambiguateLastNames(pits.map((p) => p.name));
   const firstPit = pits.length > 0 ? pitById.get(pits[0].id) : undefined;
