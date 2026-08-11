@@ -192,21 +192,21 @@ const SINGLE_FLAVOR: Record<string, Flavor> = {
   },
   liner: {
     log: ['{b} singolo in linea nell’esterno', '{b} singolo, frustata che cade davanti', '{b} singolo su una gran linea'],
-    verdict: ['SINGOLO di {b}!', 'Valida netta! {b} sul primo cuscino.'],
+    verdict: ['SINGOLO di {b}!', 'Valida netta! {b} sul cuscino della prima.'],
   },
   blooper: {
-    log: ['{b} singolo, un bloop che cade tra le linee', '{b} singolo, palla molle che nessuno prende', '{b} singolo di fortuna nel nessun-uomo'],
-    verdict: ['Cade! {b} sul singolo.', 'SINGOLO fortunoso di {b}!'],
+    log: ['{b} singolo, un bloop che cade tra le linee', '{b} singolo, palla molle che nessuno prende', '{b} singolo di fortuna dove nessuno ci arriva'],
+    verdict: ['Cade! {b} con un singolo.', 'SINGOLO fortunoso di {b}!'],
   },
   infield: {
     log: ['{b} singolo interno, la batte per un soffio', '{b} singolo interno, sfrutta le gambe', '{b} singolo, colpo piano e volata in prima'],
-    verdict: ['Bruciato in prima: SINGOLO interno di {b}!', 'Salvo per un soffio: SINGOLO!'],
+    verdict: ['Velocissimo in prima: SINGOLO interno di {b}!', 'Salvo per un soffio: SINGOLO!'],
   },
 };
 
 const DOUBLE_FLAVOR: Record<string, Flavor> = {
   gap: {
-    log: ['{b} doppio nella gap', '{b} doppio, la palla vola tra gli esterni', '{b} doppio in mezzo agli esterni'],
+    log: ['{b} doppio nel gap', '{b} doppio, la palla vola tra gli esterni', '{b} doppio in mezzo agli esterni'],
     verdict: ['{b} in scivolata in seconda: DOPPIO!', 'DOPPIO di {b}!'],
   },
   line: {
@@ -214,7 +214,7 @@ const DOUBLE_FLAVOR: Record<string, Flavor> = {
     verdict: ['{b} si ferma in seconda: DOPPIO!', 'DOPPIO lungo la linea di {b}!'],
   },
   wall: {
-    log: ['{b} doppio sul muro', '{b} doppio, la palla sbatte sul tabellone', '{b} doppio, carambola sul muro'],
+    log: ['{b} doppio sul muro', '{b} doppio, la palla sbatte sul muro esterno', '{b} doppio, carambola sul muro'],
     verdict: ['DOPPIO di {b}, per un pelo non è fuori!', '{b} in seconda comodo: DOPPIO!'],
   },
   corner: {
@@ -225,7 +225,7 @@ const DOUBLE_FLAVOR: Record<string, Flavor> = {
 
 const TRIPLE_FLAVOR: Record<string, Flavor> = {
   gap: {
-    log: ['{b} triplo nella gap con le ali', '{b} triplo, spacca la gap e vola'],
+    log: ['{b} triplo nel gap con le ali', '{b} triplo, spacca il gap e vola'],
     verdict: ['{b} sfreccia sulle basi… TRIPLO!', 'TRIPLO di {b}!'],
   },
   corner: {
@@ -240,19 +240,19 @@ const TRIPLE_FLAVOR: Record<string, Flavor> = {
 
 const K_FLAVOR: Record<string, Flavor> = {
   swinging: {
-    log: ['{b} strikeout, a vuoto sull’ultima', '{b} strikeout girando a vuoto', '{b} strikeout, non aggancia la terza'],
-    verdict: ['Aria! {b} eliminato a vuoto.', 'STRIKEOUT! {b} gira su una palla imprendibile.', 'Terzo strike a vuoto: {b} a sedere.'],
+    log: ['{b} strikeout, a vuoto sull’ultima', '{b} strikeout girando a vuoto', '{b} strikeout, non aggancia il terzo strike'],
+    verdict: ['Swing a vuoto! {b} eliminato.', 'STRIKEOUT! {b} gira su una palla imprendibile.', 'Terzo strike a vuoto: {b} a sedere.'],
   },
   looking: {
-    log: ['{b} strikeout guardando la terza', '{b} strikeout, terzo strike chiamato', '{b} strikeout senza togliere la mazza'],
-    verdict: ['Terzo strike CHIAMATO! {b} resta di sasso.', 'STRIKEOUT guardato: {b} non parte.', 'Sul cantone: terzo strike, {b} eliminato.'],
+    log: ['{b} strikeout guardando il terzo strike', '{b} strikeout, terzo strike chiamato', '{b} strikeout senza togliere la mazza'],
+    verdict: ['Terzo strike CHIAMATO! {b} resta di sasso.', 'STRIKEOUT guardato: {b} non parte.', 'Proprio nell’angolo: terzo strike, {b} eliminato.'],
   },
 };
 
 const HR_FLAVOR: Record<string, Flavor> = {
   nodoubter: {
     log: ['{b} FUORICAMPO, bomba senza discussioni', '{b} FUORICAMPO, la spedisce lontanissima'],
-    verdict: ['FUORICAMPO di {b}, no-doubter!', 'DENTRO! Che bomba di {b}!'],
+    verdict: ['FUORICAMPO di {b}, no-doubter!', 'È ANDATA! Che bomba di {b}!'],
   },
   deep: {
     log: ['{b} FUORICAMPO in tribuna profonda', '{b} FUORICAMPO, sale e sparisce'],
@@ -260,7 +260,7 @@ const HR_FLAVOR: Record<string, Flavor> = {
   },
   justenough: {
     log: ['{b} FUORICAMPO, la scavalca di un soffio', '{b} FUORICAMPO, quanto basta oltre il muro'],
-    verdict: ['Oltre di un soffio: FUORICAMPO di {b}!', 'Just enough! {b} la porta di là.'],
+    verdict: ['Oltre di un soffio: FUORICAMPO di {b}!', 'Appena fuori! {b} la porta di là.'],
   },
 };
 
@@ -416,7 +416,7 @@ const COUNT_PITCH_PCT = 45;
 const PITCHES = [
   'palla veloce',
   'veloce alta',
-  'veloce sul cantone',
+  'fastball nell’angolo',
   'slider',
   'slider bassa',
   'curva',
@@ -436,7 +436,7 @@ const COUNT_PITCH_TMPL = [
 
 const FULL_COUNT_TMPL = [
   'Conto pieno, il lanciatore lascia partire una {p}…',
-  'Sul pieno, ecco una {p}…',
+  'Sul conto pieno, ecco una {p}…',
   'Conto pieno: arriva una {p}…',
 ];
 
@@ -758,7 +758,7 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
       const verdict =
         shape === 'ground'
           ? adv
-            ? pick(ev, [`Rimbalzo, out in prima… e i corridori avanzano.${t}`, `Out in prima, ma la corsa avanza.${t}`])
+            ? pick(ev, [`Rimbalzo, out in prima… e i corridori avanzano.${t}`, `Out in prima, ma i corridori avanzano.${t}`])
             : fill(pickS(ev, OUT_FLAVOR.ground.verdict, 'ver'), b) + t
           : shape === 'fly'
             ? adv
