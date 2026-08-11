@@ -132,21 +132,30 @@ export function LineupSide({
     pits.length > 0
       ? pitcherStatLine(pitMode, pits[0], firstPit && ctx?.pitLine(pitMode, firstPit)).map((i) => i.k)
       : [];
-  // Tabella lanciatori ad altezza fissa, scrollata sul lanciatore ATTUALE.
+  // Tabella lanciatori ad altezza fissa, scrollata sul lanciatore ATTUALE (ultima
+  // riga, ordine d'ingresso): così il subentrato non resta sotto la piega quando i
+  // lanciatori superano l'altezza del box.
   const pitsRef = useRef<HTMLDivElement>(null);
   const curPitRef = useRef<HTMLTableRowElement>(null);
-  // Il lanciatore corrente è SEMPRE l'ultima riga (ordine d'ingresso): porta il
-  // fondo in vista così il subentrato non resta sotto la piega quando i
-  // lanciatori superano l'altezza del box. Il vecchio calcolo con `offsetTop`
-  // non scrollava (dipende dall'offsetParent).
-  // Si ri-scrolla non solo quando entra un nuovo lanciatore, ma anche mentre il
-  // corrente lavora (bf che cresce): le righe possono RIFLUIRE più alte (badge di
-  // affaticamento che va a capo) e far uscire il corrente dalla vista.
-  const curBf = pits[lastPitIdx]?.bf ?? 0;
+  // Scroll ROBUSTO via ResizeObserver: il badge di affaticamento ("77PT · 21/23")
+  // va a capo su box stretti e RIFLUISCE le righe più alte DOPO il render — uno
+  // scroll fatto nell'effetto leggerebbe un'altezza ancora vecchia e lascerebbe
+  // il corrente nascosto. Osservando la tabella, ad OGNI cambio di dimensione
+  // (nuovo lanciatore, badge che va a capo, stat aggiornate) riportiamo il fondo
+  // in vista, quando il layout è ormai definitivo.
   useEffect(() => {
     const box = pitsRef.current;
-    if (box) box.scrollTop = box.scrollHeight;
-  }, [lastPitIdx, pits.length, curBf]);
+    if (!box) return;
+    const toBottom = () => {
+      box.scrollTop = box.scrollHeight;
+    };
+    toBottom();
+    const content = box.firstElementChild;
+    if (typeof ResizeObserver === 'undefined' || !content) return;
+    const ro = new ResizeObserver(toBottom);
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [lastPitIdx, pits.length]);
 
   return (
     <div className="card lineup-side" style={{ borderTopColor: team.primaryColor }}>

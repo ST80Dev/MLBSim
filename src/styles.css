@@ -1739,7 +1739,7 @@ table {
   bottom: 8px;
   width: min(460px, 37%);
   z-index: 3;
-  max-height: 62%;
+  max-height: 72%;
   overflow: hidden;
 }
 .lineup-corner.left {
@@ -1775,7 +1775,10 @@ table {
   flex: 1 1 auto;
 }
 .lineup-corner .ls-pit-scroll {
-  height: 84px; /* ~2-3 lanciatori: oltre, scroll interno centrato sul corrente */
+  /* Più alto: ~4-5 lanciatori a riga singola (o ~3 con badge di affaticamento a
+     capo) ci stanno SENZA scroll — così il caso comune (3° lanciatore) è sempre
+     visibile. Oltre, lo scroll interno (ResizeObserver) tiene in vista il corrente. */
+  height: 140px;
 }
 /* Le intestazioni restano visibili durante lo scroll interno di ogni tabella. */
 .lineup-corner .ls-table thead th {
