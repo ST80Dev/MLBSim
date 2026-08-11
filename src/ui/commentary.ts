@@ -192,21 +192,21 @@ const SINGLE_FLAVOR: Record<string, Flavor> = {
   },
   liner: {
     log: ['{b} singolo in linea nell’esterno', '{b} singolo, frustata che cade davanti', '{b} singolo su una gran linea'],
-    verdict: ['SINGOLO di {b}!', 'Valida netta! {b} sul primo cuscino.'],
+    verdict: ['SINGOLO di {b}!', 'Valida netta! {b} sul cuscino della prima.'],
   },
   blooper: {
-    log: ['{b} singolo, un bloop che cade tra le linee', '{b} singolo, palla molle che nessuno prende', '{b} singolo di fortuna nel nessun-uomo'],
-    verdict: ['Cade! {b} sul singolo.', 'SINGOLO fortunoso di {b}!'],
+    log: ['{b} singolo, un bloop che cade tra le linee', '{b} singolo, palla molle che nessuno prende', '{b} singolo di fortuna dove nessuno ci arriva'],
+    verdict: ['Cade! {b} con un singolo.', 'SINGOLO fortunoso di {b}!'],
   },
   infield: {
     log: ['{b} singolo interno, la batte per un soffio', '{b} singolo interno, sfrutta le gambe', '{b} singolo, colpo piano e volata in prima'],
-    verdict: ['Bruciato in prima: SINGOLO interno di {b}!', 'Salvo per un soffio: SINGOLO!'],
+    verdict: ['Velocissimo in prima: SINGOLO interno di {b}!', 'Salvo per un soffio: SINGOLO!'],
   },
 };
 
 const DOUBLE_FLAVOR: Record<string, Flavor> = {
   gap: {
-    log: ['{b} doppio nella gap', '{b} doppio, la palla vola tra gli esterni', '{b} doppio in mezzo agli esterni'],
+    log: ['{b} doppio nel gap', '{b} doppio, la palla vola tra gli esterni', '{b} doppio in mezzo agli esterni'],
     verdict: ['{b} in scivolata in seconda: DOPPIO!', 'DOPPIO di {b}!'],
   },
   line: {
@@ -214,7 +214,7 @@ const DOUBLE_FLAVOR: Record<string, Flavor> = {
     verdict: ['{b} si ferma in seconda: DOPPIO!', 'DOPPIO lungo la linea di {b}!'],
   },
   wall: {
-    log: ['{b} doppio sul muro', '{b} doppio, la palla sbatte sul tabellone', '{b} doppio, carambola sul muro'],
+    log: ['{b} doppio sul muro', '{b} doppio, la palla sbatte sul muro esterno', '{b} doppio, carambola sul muro'],
     verdict: ['DOPPIO di {b}, per un pelo non è fuori!', '{b} in seconda comodo: DOPPIO!'],
   },
   corner: {
@@ -225,7 +225,7 @@ const DOUBLE_FLAVOR: Record<string, Flavor> = {
 
 const TRIPLE_FLAVOR: Record<string, Flavor> = {
   gap: {
-    log: ['{b} triplo nella gap con le ali', '{b} triplo, spacca la gap e vola'],
+    log: ['{b} triplo nel gap con le ali', '{b} triplo, spacca il gap e vola'],
     verdict: ['{b} sfreccia sulle basi… TRIPLO!', 'TRIPLO di {b}!'],
   },
   corner: {
@@ -240,19 +240,19 @@ const TRIPLE_FLAVOR: Record<string, Flavor> = {
 
 const K_FLAVOR: Record<string, Flavor> = {
   swinging: {
-    log: ['{b} strikeout, a vuoto sull’ultima', '{b} strikeout girando a vuoto', '{b} strikeout, non aggancia la terza'],
-    verdict: ['Aria! {b} eliminato a vuoto.', 'STRIKEOUT! {b} gira su una palla imprendibile.', 'Terzo strike a vuoto: {b} a sedere.'],
+    log: ['{b} strikeout, a vuoto sull’ultima', '{b} strikeout girando a vuoto', '{b} strikeout, non aggancia il terzo strike'],
+    verdict: ['Swing a vuoto! {b} eliminato.', 'STRIKEOUT! {b} gira su una palla imprendibile.', 'Terzo strike a vuoto: {b} a sedere.'],
   },
   looking: {
-    log: ['{b} strikeout guardando la terza', '{b} strikeout, terzo strike chiamato', '{b} strikeout senza togliere la mazza'],
-    verdict: ['Terzo strike CHIAMATO! {b} resta di sasso.', 'STRIKEOUT guardato: {b} non parte.', 'Sul cantone: terzo strike, {b} eliminato.'],
+    log: ['{b} strikeout guardando il terzo strike', '{b} strikeout, terzo strike chiamato', '{b} strikeout senza togliere la mazza'],
+    verdict: ['Terzo strike CHIAMATO! {b} resta di sasso.', 'STRIKEOUT guardato: {b} non parte.', 'Proprio nell’angolo: terzo strike, {b} eliminato.'],
   },
 };
 
 const HR_FLAVOR: Record<string, Flavor> = {
   nodoubter: {
     log: ['{b} FUORICAMPO, bomba senza discussioni', '{b} FUORICAMPO, la spedisce lontanissima'],
-    verdict: ['FUORICAMPO di {b}, no-doubter!', 'DENTRO! Che bomba di {b}!'],
+    verdict: ['FUORICAMPO di {b}, no-doubter!', 'È ANDATA! Che bomba di {b}!'],
   },
   deep: {
     log: ['{b} FUORICAMPO in tribuna profonda', '{b} FUORICAMPO, sale e sparisce'],
@@ -260,7 +260,7 @@ const HR_FLAVOR: Record<string, Flavor> = {
   },
   justenough: {
     log: ['{b} FUORICAMPO, la scavalca di un soffio', '{b} FUORICAMPO, quanto basta oltre il muro'],
-    verdict: ['Oltre di un soffio: FUORICAMPO di {b}!', 'Just enough! {b} la porta di là.'],
+    verdict: ['Oltre di un soffio: FUORICAMPO di {b}!', 'Appena fuori! {b} la porta di là.'],
   },
 };
 
@@ -301,13 +301,13 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
   // Rullata sull'interno: singolo nel buco/interno, doppio d'angolo, out in
   // prima, scelta difensiva, doppio gioco.
   grounder: [
-    'Attacca a terra, la palla corre sull’interno…',
+    'Batte una rimbalzante interna…',
     'Colpo secco verso il diamante…',
     'Rimbalzo che schizza tra gli interni…',
     'La batte giù, gli interni si muovono…',
     'Rullata potente sull’interno…',
-    'A terra! il difensore carica sulla palla…',
-    'Palla battuta nel quadro, si gioca il rimbalzo…',
+    'Batte in campo interno, il difensore raccoglie la palla…',
+    'Palla battuta in diamante, si gioca il rimbalzo…',
   ],
   // Linea tesa: singolo davanti, doppio in gap o lungo la linea.
   liner: [
@@ -320,10 +320,10 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
   ],
   // Colpo molle/flare: bloop che puo' cadere o essere preso.
   flare: [
-    'Elevata molle appena dietro l’interno…',
+    'Battuta alta debole appena dietro l’interno…',
     'Palla a campanile corto verso l’esterno…',
     'Colpita piano, sale fiacca tra le linee…',
-    'Bloop in mezzo al nessun-uomo…',
+    'Blooper dove non c’è nessuno…',
   ],
   // Volata all'esterno: out al volo, volata di sacrificio, doppio sul muro,
   // triplo d'angolo, fuoricampo di un soffio.
@@ -338,7 +338,7 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
   // Bordata piena: fuoricampo, doppio sul muro, triplo in gap.
   deep: [
     'Contatto pieno… la palla parte come un missile…',
-    'La schiaccia in pieno, vola altissima…',
+    'La batte pulita, forte…',
     'Bordata devastante verso il fondo del campo…',
     'La colpisce in pieno… sale, sale…',
     'Legnata piena, palla spedita lontano…',
@@ -348,7 +348,7 @@ const TRAJECTORY_ACTION: Record<Trajectory, string[]> = {
     'Campanile altissimo sull’interno…',
     'Pop-up, i difensori si chiamano…',
     'La alza cortissima, palla verticale…',
-    'Elevata debole nel quadro…',
+    'Elevata debole nel diamante…',
   ],
   // Duello a due strike / al piatto: strikeout, base ball, colpito.
   battle: [
@@ -416,7 +416,7 @@ const COUNT_PITCH_PCT = 45;
 const PITCHES = [
   'palla veloce',
   'veloce alta',
-  'veloce sul cantone',
+  'fastball nell’angolo',
   'slider',
   'slider bassa',
   'curva',
@@ -436,7 +436,7 @@ const COUNT_PITCH_TMPL = [
 
 const FULL_COUNT_TMPL = [
   'Conto pieno, il lanciatore lascia partire una {p}…',
-  'Sul pieno, ecco una {p}…',
+  'Sul conto pieno, ecco una {p}…',
   'Conto pieno: arriva una {p}…',
 ];
 
@@ -559,43 +559,64 @@ const META: Record<
   other: { tier: 0, icon: '•', label: 'AZIONE', accent: 'offense' },
 };
 
-/** Commento di SITUAZIONE (apertura alternativa), per fase di partita. Dipende
- *  SOLO dall'inning (dato noto prima dell'azione), mai dall'esito: e' un altro
- *  "testo duttile" che precede i due testi di esito (sviluppo + verdetto) e non
- *  anticipa nulla. La stessa frase puo' aprire qualunque turno. */
+/** Commento di SITUAZIONE (apertura alternativa). Dipende da inning E margine di
+ *  punteggio (dati noti PRIMA dell'azione: il margine è calcolato sul punteggio
+ *  pre-turno, sottraendo i punti di QUESTO turno), mai dall'esito. Così non dice
+ *  "punto a punto" su un 2-8 né "dominio" su una gara in bilico: le frasi offerte
+ *  sono sempre coerenti col tabellone. Resta un "testo duttile" che precede i due
+ *  testi di esito e non anticipa nulla. */
 function situation(ev: PlayEvent, ctx: BannerContext): string[] {
   const off = ctx.offense.abbrev;
   const def = ctx.defense.abbrev;
-  if (ev.inning <= 3) {
-    return [
-      'Partita ancora tutta da scrivere…',
-      'Primi scambi, ci si studia sul diamante…',
-      `${off} prova a muovere qualcosa in attacco…`,
-      'Si comincia a fare sul serio…',
-    ];
+  // Punteggio PRIMA del turno: i punti di questo turno vanno alla squadra in
+  // attacco (top→away batte, bottom→home batte). Evita di "leggere" l'esito.
+  const runsThis = ev.runsScored ?? 0;
+  const preAway = ev.away - (ev.half === 'top' ? runsThis : 0);
+  const preHome = ev.home - (ev.half === 'bottom' ? runsThis : 0);
+  const offScore = ev.half === 'top' ? preAway : preHome;
+  const defScore = ev.half === 'top' ? preHome : preAway;
+  const diff = offScore - defScore;
+  const m = Math.abs(diff);
+  const leader = diff > 0 ? off : def; // valido solo se m > 0
+  const trailer = diff > 0 ? def : off;
+  const early = ev.inning <= 3;
+  const late = ev.inning >= 7;
+  const veryLate = ev.inning >= 9;
+
+  const out: string[] = [];
+  if (m === 0) {
+    out.push('Punteggio in parità, partita apertissima…', 'Tutto in equilibrio, nessuno avanti…');
+    if (early) out.push(`${off} prova a muovere qualcosa in attacco…`, 'Primi scambi, ci si studia sul diamante…');
+    else if (veryLate) out.push('Inning decisivi in perfetta parità…', 'Ultimo atto in bilico, ogni lancio pesa…');
+    else if (late) out.push('Parità nel finale, si decide su un episodio…');
+    else out.push('Match in equilibrio, nessuno vuole mollare…', 'Si lotta punto a punto…');
+  } else if (m === 1) {
+    out.push(`Sfida punto a punto, ${leader} avanti di un'incollatura…`, 'Una sola incollatura divide le squadre…');
+    if (veryLate) out.push('Ultimo atto, una corsa può ribaltare tutto…');
+    else if (late) out.push('Finale tiratissimo, ogni lancio pesa…');
+  } else if (m <= 3) {
+    out.push(
+      `${leader} avanti di poco, ${trailer} resta in scia…`,
+      `Match ancora aperto, ${trailer} vuole rientrare…`,
+      `${leader} prova a gestire il vantaggio…`,
+    );
+    if (late) out.push(`${trailer} a caccia del pari nel finale…`);
+  } else if (m <= 5) {
+    out.push(
+      `${leader} in controllo, ${trailer} deve reagire…`,
+      `${trailer} insegue un margine importante…`,
+      `${leader} tiene le distanze…`,
+    );
+    if (late) out.push(`${leader} a un passo dal blindare la gara…`);
+  } else {
+    out.push(
+      `${leader} domina, ${trailer} in grande difficoltà…`,
+      `${trailer} sotto pesantemente, servirebbe una scossa…`,
+      `${leader} dilaga sul tabellone…`,
+    );
+    if (late) out.push(`${leader} lanciato verso una vittoria larga…`);
   }
-  if (ev.inning <= 6) {
-    return [
-      'Match in pieno svolgimento, equilibrio delicato…',
-      'Fase centrale, nessuno vuole mollare…',
-      `${def} tiene la posizione, ${off} spinge…`,
-      'Si lotta punto a punto…',
-    ];
-  }
-  if (ev.inning <= 8) {
-    return [
-      'Si entra nel vivo, ogni lancio pesa…',
-      'Ultimi inning, la tensione cresce…',
-      'Verso il finale, difese sul chi vive…',
-      `Momento delicato per ${off}…`,
-    ];
-  }
-  return [
-    'Ultimo atto, può succedere di tutto…',
-    'Inning decisivi, si decide qui…',
-    'Non c’è più tempo, ogni turno vale doppio…',
-    `${off} a caccia del colpo che pesa…`,
-  ];
+  return out;
 }
 
 /**
@@ -737,7 +758,7 @@ function phasesFor(ev: PlayEvent, ctx: BannerContext): string[] {
       const verdict =
         shape === 'ground'
           ? adv
-            ? pick(ev, [`Rimbalzo, out in prima… e i corridori avanzano.${t}`, `Out in prima, ma la corsa avanza.${t}`])
+            ? pick(ev, [`Rimbalzo, out in prima… e i corridori avanzano.${t}`, `Out in prima, ma i corridori avanzano.${t}`])
             : fill(pickS(ev, OUT_FLAVOR.ground.verdict, 'ver'), b) + t
           : shape === 'fly'
             ? adv
@@ -781,7 +802,8 @@ export function buildCommentary(ev: PlayEvent, ctx: BannerContext): Commentary {
   };
 }
 
-/** Durata (ms) di permanenza di ciascuna fase prima della successiva. */
-export const PHASE_MS = 1150;
+/** Durata (ms) di permanenza di ciascuna fase prima della successiva. Tarata per
+ *  leggere con calma ogni testo (non solo intravederlo). */
+export const PHASE_MS = 1500;
 /** Tempo di permanenza del verdetto prima che il banner sparisca (ms). */
-export const HOLD_MS = 2200;
+export const HOLD_MS = 2500;

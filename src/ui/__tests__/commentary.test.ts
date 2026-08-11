@@ -188,6 +188,24 @@ describe('cronaca — varieta’ deterministica e pesata sulle frequenze MLB', (
     expect([...sSingle].some((t) => situational.test(t))).toBe(true);
   });
 
+  it('la situazione è coerente col punteggio (niente "equilibrio" su un blowout)', () => {
+    const CLOSE = /equilibr|punto a punto|parità|incollatura|tutto da scrivere|primi scambi|nessuno avanti/i;
+    const BLOW = /domina|difficolt|dilaga|margine|controllo|distanze|vittoria larga|scossa/i;
+    const opener = (e: PlayEvent): string => buildCommentary(e, CTX).phases[0].text;
+    const blow = new Set<string>();
+    for (let i = 0; i < 1500; i++) {
+      const o = opener(ev('single', i, { away: 8, home: 2 })); // margine 6, blowout
+      blow.add(o);
+      expect(o).not.toMatch(CLOSE); // mai "equilibrio/punto a punto" su 2-8
+    }
+    // Almeno un'apertura "da blowout" deve comparire (la situazione reagisce al punteggio).
+    expect([...blow].some((t) => BLOW.test(t))).toBe(true);
+    // In parità, invece, le frasi d'equilibrio possono comparire.
+    const tie = new Set<string>();
+    for (let i = 0; i < 1500; i++) tie.add(opener(ev('single', i, { away: 3, home: 3 })));
+    expect([...tie].some((t) => CLOSE.test(t))).toBe(true);
+  });
+
   it('gli OUT seguono la VERITA’ del motore (outInfo), non un peso inventato', () => {
     // ground/fly/popup -> forma corrispondente nel testo; coerente col motore.
     expect(subtypeOf(out(1, 'ground'))).toBe('ground');
