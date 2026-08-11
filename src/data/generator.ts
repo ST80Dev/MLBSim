@@ -817,6 +817,19 @@ export function rotationPhase(team: Team): number {
   return (h >>> 0) % len;
 }
 
+/**
+ * Indice di rotazione del partente di una squadra CPU al giorno di stagione `day`:
+ * `day + rotationPhase(team)` (da passare a `withRotationStarter`). **UNICA fonte**
+ * usata in tutti i contesti di regular season — sim di lega (`data/season.ts`),
+ * avversario nella partita interattiva e card del calendario (`ui/App`,
+ * `ui/pages-home`). DEVONO usare questa: se un contesto indicizzasse la rotazione
+ * in modo diverso, la stessa squadra userebbe partenti diversi nei due percorsi e
+ * lo stesso lanciatore potrebbe aprire due volte in pochi giorni.
+ */
+export function leagueRotationIndex(team: Team, day: number): number {
+  return day + rotationPhase(team);
+}
+
 /** Genera due franchigie reali distinte con rosa procedurale, dal seed. */
 export function generateMatchup(seed: number): { away: Team; home: Team } {
   const rng = makeRng(seed);

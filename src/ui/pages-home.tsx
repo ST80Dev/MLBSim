@@ -5,7 +5,7 @@ import { recordOf, sortByRecord, gamesBehind } from '../data/season';
 import type { ScheduleGame, Schedule } from '../data/schedule';
 import { teamById, divisionRivals, LEAGUE_LABEL, DIVISION_LABEL } from '../data/league';
 import { rosterBatters, rosterPitchers } from '../engine/arrangement';
-import { withRotationStarter, rotationPhase } from '../data/generator';
+import { withRotationStarter, leagueRotationIndex } from '../data/generator';
 import { suggestedStarter } from '../data/rotation';
 import { pitcherOverall } from '../engine/ratings';
 import { ratingColor } from './format';
@@ -388,11 +388,10 @@ function MatchCard({
         ? suggestedStarter(season.rotation, rotIds, season.day)
         : rotIds[i % rotIds.length];
   const mySP = managedTeam.rotation.find((p) => p.id === myId) ?? managedTeam.rotation[0];
-  // Partente avversario: STESSA formula della gara reale (App.tsx `teams`), cioè
-  // rotazione posizionale per giorno + lo sfasamento proprio della squadra
-  // (`rotationPhase`). Senza la fase il card mostrava un partente e ne giocava un
-  // altro (`i` == giorno di stagione per il card corrente).
-  const oppSP = withRotationStarter(opp, i + rotationPhase(opp)).rotation[0];
+  // Partente avversario: indice CONDIVISO `leagueRotationIndex` — la STESSA formula
+  // della gara reale (App.tsx) e della sim di lega (season.ts), così il card mostra
+  // esattamente il partente che poi giocherà (`i` = giorno del card).
+  const oppSP = withRotationStarter(opp, leagueRotationIndex(opp, i)).rotation[0];
   const won = result ? result.us > result.them : false;
   // OVR + record di stagione (W-L) del partente probabile, accanto al nome.
   const spMeta = (sp?: Pitcher) => {
