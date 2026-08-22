@@ -40,7 +40,18 @@ export function groupPlays(result: GameResult): CronacaGroup[] {
  * piu' straordinari (fuoricampo, doppio gioco…). A fine sequenza svanisce e la
  * frase sintetica resta nella cronaca laterale (dx/sx).
  */
-export function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?: () => void }) {
+export function PlayBanner({
+  result,
+  onReveal,
+  onSettled,
+}: {
+  result: GameResult;
+  onReveal?: () => void;
+  // Chiamata quando la telecronaca dell'ultima giocata è del tutto CONCLUSA (banner
+  // svanito), non solo rivelata: chi vuole aprire un overlay (es. il pannello
+  // difesa dopo un pinch) lo fa QUI, così non copre la cronaca prima che sia letta.
+  onSettled?: () => void;
+}) {
   const plays = result.play;
   const len = plays.length;
   // Non ri-animare le giocate gia' presenti al montaggio (partita ripresa).
@@ -48,18 +59,22 @@ export function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?
   const [state, setState] = useState<{ com: Commentary; phase: number; leaving: boolean } | null>(
     null,
   );
-  // `onReveal` cambia identita' quando cambia la partita: lo leggo da una ref
-  // cosi' i timer schedulati usano sempre l'ultima versione senza ri-eseguire
+  // `onReveal`/`onSettled` cambiano identita' quando cambia la partita: li leggo da
+  // ref cosi' i timer schedulati usano sempre l'ultima versione senza ri-eseguire
   // l'effetto (che dipende solo da `len`).
   const revealRef = useRef(onReveal);
   revealRef.current = onReveal;
   const reveal = () => revealRef.current?.();
+  const settledRef = useRef(onSettled);
+  settledRef.current = onSettled;
+  const settled = () => settledRef.current?.();
 
   useEffect(() => {
     const prev = seenRef.current;
     seenRef.current = len;
     if (len <= prev) {
       reveal(); // nessuna telecronaca da animare: marker allineati subito.
+      settled(); // niente banner da attendere.
       return;
     }
     // Ultima giocata VERA del nuovo blocco: una sostituzione (es. cambio AI in
@@ -72,6 +87,7 @@ export function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?
       // Solo sostituzioni: niente banner, rivela subito.
       setState(null);
       reveal();
+      settled();
       return;
     }
     const ev = plays[idx];
@@ -94,7 +110,12 @@ export function PlayBanner({ result, onReveal }: { result: GameResult; onReveal?
     timers.push(setTimeout(reveal, revealAt));
     const end = (com.phases.length - 1) * PHASE_MS + HOLD_MS;
     timers.push(setTimeout(() => setState((s) => (s ? { ...s, leaving: true } : s)), end));
-    timers.push(setTimeout(() => setState(null), end + 420));
+    timers.push(
+      setTimeout(() => {
+        setState(null);
+        settled(); // banner concluso: ora è sicuro aprire eventuali overlay.
+      }, end + 420),
+    );
     return () => timers.forEach(clearTimeout);
   }, [len]); // eslint-disable-line react-hooks/exhaustive-deps
 

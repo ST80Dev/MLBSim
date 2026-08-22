@@ -8,7 +8,6 @@ import {
   swapDefensivePositions,
   autoRealignDefense,
 } from '../engine/game';
-import { canOccupy } from '../engine/positions';
 import { batterOverall } from '../engine/ratings';
 import { ratingColor, upperLast } from './format';
 import { PlayerLink } from './player-modal';
@@ -18,8 +17,12 @@ import { PlayerLink } from './player-modal';
 // RUOTARE i ruoli fra chi è già in campo (drag&drop, come il Roster). Aperto a
 // inizio inning dopo un pinch-hit/run, o dal pulsante. Ogni riga mostra il doppio
 // ruolo e i rating difensivi (DIF/BRA). Le operazioni non consumano il turno.
-//  - trascina un titolare su un altro titolare → SCAMBIO di casella (se entrambi
-//    possono coprire quella dell'altro);
+// PIENA LIBERTÀ (come il Roster): il manager può schierare CHIUNQUE OVUNQUE, anche
+// fuori ruolo. Non c'è più il vincolo `canOccupy`: la "penalità" è strategica (la
+// sintesi DIFESA, pesata per domanda del ruolo, cala se metti un guanto scarso in
+// una casella difficile), non un blocco. Così dopo una sostituzione puoi comunque
+// continuare a ruotare tutti gli altri.
+//  - trascina un titolare su un altro titolare → SCAMBIO di casella;
 //  - trascina una riserva su un titolare → SOSTITUZIONE in quella casella.
 // ---------------------------------------------------------------------------
 
@@ -67,18 +70,14 @@ export function DefenseModal({
   const find = (id: string): Batter | undefined =>
     lineup.find((b) => b.id === id) ?? bench.find((b) => b.id === id);
 
-  // Un drop del giocatore trascinato SULLA casella `targetId` è lecito?
+  // Un drop del giocatore trascinato SULLA casella `targetId` è lecito? Piena
+  // libertà: qualunque titolare può scambiarsi con qualunque altro, e qualunque
+  // riserva può rilevare qualunque titolare (schieramento anche fuori ruolo).
+  // L'unico vincolo è che il bersaglio sia un titolare diverso dal trascinato.
   const canDropOn = (targetId: string): boolean => {
     if (!drag || drag.id === targetId) return false;
     const target = lineup.find((b) => b.id === targetId);
-    const src = find(drag.id);
-    if (!target || !src) return false;
-    if (drag.from === 'field') {
-      // Scambio: ciascuno deve poter coprire la casella dell'altro.
-      return canOccupy(src, target.position) && canOccupy(target, src.position);
-    }
-    // Panchina → casella: il subentrante deve poter coprire quella casella.
-    return canOccupy(src, target.position);
+    return !!target && !!find(drag.id);
   };
 
   const dropOn = (targetId: string) => {
@@ -87,7 +86,8 @@ export function DefenseModal({
       return;
     }
     const { id, from } = drag!;
-    if (from === 'field') act((g) => swapDefensivePositions(g, defenseSide(g), id, targetId));
+    // `free`: scambio senza vincolo di ruolo (piena libertà del manager).
+    if (from === 'field') act((g) => swapDefensivePositions(g, defenseSide(g), id, targetId, true));
     else act((g) => substituteFielder(g, defenseSide(g), targetId, id, false));
     setDrag(null);
   };
@@ -171,7 +171,8 @@ export function DefenseModal({
         </div>
         <div className="sub-hint">
           Trascina un giocatore <b>in campo</b> su un altro per <b>scambiare le caselle</b>; trascina
-          una <b>riserva</b> su un titolare per <b>sostituirlo</b>. Si evidenziano le caselle valide.
+          una <b>riserva</b> su un titolare per <b>sostituirlo</b>. Piena libertà: puoi schierare
+          chiunque ovunque (anche fuori ruolo — occhio alla sintesi <b>DIF</b>).
         </div>
 
         <div className="def-scroll">

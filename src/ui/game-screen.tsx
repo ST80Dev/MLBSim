@@ -39,6 +39,7 @@ export function GameScreen({
   batterName,
   shownPlays,
   onReveal,
+  onBannerSettled,
   controls,
   ctxAway,
   ctxHome,
@@ -65,6 +66,9 @@ export function GameScreen({
   // per non anticipare l'esito. Se omesso, si mostra tutto.
   shownPlays?: number;
   onReveal?: () => void;
+  // Chiamata quando la telecronaca dell'ultima giocata è del tutto conclusa (banner
+  // svanito): usata per aprire overlay senza coprire la cronaca.
+  onBannerSettled?: () => void;
   controls: ReactNode;
   // Contesti stat (stagione in corso / precedente) per ospite e casa. Assenti in
   // calibrazione: lì restano solo le stat di Partita.
@@ -99,7 +103,7 @@ export function GameScreen({
           onMarkerMove={onMarkerMove}
         />
 
-        {!editing && <PlayBanner result={result} onReveal={onReveal} />}
+        {!editing && <PlayBanner result={result} onReveal={onReveal} onSettled={onBannerSettled} />}
 
         <div className="cronaca-corner left">
           <CronacaTeam result={result} side="away" shownPlays={shownPlays} />

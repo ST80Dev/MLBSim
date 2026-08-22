@@ -182,6 +182,25 @@ Regioni, dall'alto in basso:
       **Deterministico** (niente RNG), solo gioco interattivo → calibrazione intatta.
     Motore in `engine/game.ts`; test in `engine/__tests__/live.test.ts` e
     `engine/__tests__/positions.test.ts`.
+  - **Pannello "Gestione difesa"** (`DefenseModal`, drag&drop stile Roster): si apre
+    dal pulsante *Gestione difesa*, oppure **da solo** a inizio della metà difensiva
+    dell'umano se nell'attacco precedente ha usato un **pinch-hit/run** (per
+    risistemare lo schieramento). **Piena libertà del manager**: qualunque titolare
+    può scambiarsi la casella con qualunque altro (`swapDefensivePositions(…, free=true)`)
+    e qualunque riserva può rilevare qualunque titolare — **anche fuori ruolo**,
+    senza il vincolo `canOccupy` che frenava le rotazioni dopo la prima sostituzione.
+    Non è un liberi-tutti gratis: la penalità è **strategica**, perché la sintesi
+    **DIFESA** (pesata per la *domanda difensiva* del ruolo) cala se metti un guanto
+    scarso in una casella difficile (SS/CF/C). Le operazioni non consumano il turno.
+    Il flag `free` vale **solo** per il pannello: CPU e mosse automatiche mantengono
+    il vincolo di ruolo.
+  - **Apertura ritardata al termine del banner (niente spoiler della cronaca).**
+    L'auto-apertura del pannello difesa non scatta al **verdetto** della telecronaca
+    (lì il banner resta ancora ~2.5s a schermo e il modale lo coprirebbe: non si
+    vedeva *come finisce* l'inning), ma quando il banner è **del tutto concluso**:
+    la transizione attacco→difesa **arma** soltanto, e l'apertura avviene sul
+    callback `onSettled` del `PlayBanner` (banner svanito). Così la cronaca
+    dell'ultima giocata si legge prima che il pannello compaia.
   - A partita finita, **overlay del risultato** con Recap/Nuova partita.
 
 Il campo generato disegna **solo il terreno di gioco** (niente tribune/cielo

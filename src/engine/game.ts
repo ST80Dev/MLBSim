@@ -1205,19 +1205,29 @@ export function substituteFielder(
 /**
  * Scambio di ruolo fra DUE giocatori GIÀ in campo (rotazione difensiva, es. dopo
  * un pinch-run): si scambiano la casella difensiva, mantenendo l'ordine di
- * battuta. Lecito solo se ciascuno può coprire la casella dell'altro
- * (`canOccupy`: naturale, secondaria o DH). Muta `lineup[].position`. Non consuma
- * il turno. Usato dal pannello Gestione difesa (drag&drop). Ritorna false se lo
- * scambio non è valido.
+ * battuta. Muta `lineup[].position`. Non consuma il turno. Usato dal pannello
+ * Gestione difesa (drag&drop). Ritorna false se lo scambio non è valido.
+ *
+ * `free` (pannello Gestione difesa): il manager ha PIENA libertà, può schierare
+ * chiunque ovunque (anche fuori ruolo) — la penalità la paga il reparto (la
+ * sintesi DIFESA, pesata per domanda del ruolo, cala se metti un guanto scarso
+ * in una casella difficile). Col default (CPU / mosse automatiche) lo scambio è
+ * lecito solo se ciascuno può coprire la casella dell'altro (`canOccupy`).
  */
-export function swapDefensivePositions(l: LiveGame, s: SideState, idA: string, idB: string): boolean {
+export function swapDefensivePositions(
+  l: LiveGame,
+  s: SideState,
+  idA: string,
+  idB: string,
+  free = false,
+): boolean {
   if (l.status !== 'live' || idA === idB) return false;
   const a = s.team.lineup.find((b) => b.id === idA);
   const b = s.team.lineup.find((x) => x.id === idB);
   if (!a || !b) return false;
   const posA = a.position;
   const posB = b.position;
-  if (!canOccupy(a, posB) || !canOccupy(b, posA)) return false;
+  if (!free && (!canOccupy(a, posB) || !canOccupy(b, posA))) return false;
   // Conserva il ruolo naturale: `position` diventa la casella scambiata.
   if (a.nativePosition === undefined) a.nativePosition = a.position;
   if (b.nativePosition === undefined) b.nativePosition = b.position;
