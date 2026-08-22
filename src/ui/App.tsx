@@ -372,8 +372,8 @@ export function App() {
   // "Precedente" è la proiezione dell'annata scorsa. Costruzione leggera: le
   // proiezioni si calcolano solo quando una modalità stagione/precedente è a
   // schermo (accessori lazy).
-  const ctxAway = makeGameStatCtx(result.away, season, leagueSeed, controlled === 'away');
-  const ctxHome = makeGameStatCtx(result.home, season, leagueSeed, controlled === 'home');
+  const ctxAway = makeGameStatCtx(result.away, season, leagueSeed);
+  const ctxHome = makeGameStatCtx(result.home, season, leagueSeed);
 
   // --- Rivelazione ritardata dei marker sulle basi -------------------------
   // I marker (basi + corridori sul diamante) NON si spostano appena eseguito il

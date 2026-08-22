@@ -3,6 +3,7 @@ import type { Team } from '../engine/types';
 import { batterStatLine, pitcherStatLine } from './statlines';
 import type { StatsMode } from './statlines';
 import type { GameStatCtx } from './stat-context';
+import { rosterBatters, rosterPitchers } from '../engine/arrangement';
 import { TeamBadge } from './widgets';
 import { upperLast } from './format';
 
@@ -80,8 +81,12 @@ export function BoxScore({
   // Contesto per le stat di stagione/precedente (assente = solo Partita).
   ctx?: GameStatCtx;
 }) {
-  const batById = new Map(team.lineup.map((b) => [b.id, b]));
-  const pitById = new Map([...team.rotation, ...team.bullpen].map((p) => [p.id, p]));
+  // Dall'INTERA rosa (titolari + panca + riserve), non solo dai titolari: così i
+  // SOSTITUTI entrati in partita (pinch-hit/run, rilievi di profondità) trovano la
+  // loro riga di stagione. Prima, non trovandoli, la riga cadeva nel ramo "Partita"
+  // (conteggi AB/R/H…) mostrata sotto l'header di stagione → colonne disallineate.
+  const batById = new Map(rosterBatters(team).map((b) => [b.id, b]));
+  const pitById = new Map(rosterPitchers(team).map((p) => [p.id, p]));
 
   const batRows = stats.batting.map((l) => {
     const b = batById.get(l.id);
